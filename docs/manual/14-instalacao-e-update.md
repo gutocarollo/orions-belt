@@ -76,6 +76,63 @@ flowchart TD
     K --> L
 ```
 
+### Árvore de decisão por componente condicional
+
+O fluxograma acima é o pipeline de orquestração. A decisão de **cada** componente stack-específico é uma REGRA determinística em [`scan_project.py`](../../templates/.harness/lib/scan_project.py) (fonte da verdade — estes diagramas espelham as regras, não as substituem). Os quatro módulos mais sensíveis:
+
+**`ui-evidence` (hook `ui-evidence-gate` + skill)** — `_rule_ui_evidence_gate`:
+
+```mermaid
+flowchart TD
+    A["ui-evidence"] --> B{"has_frontend_ui?"}
+    B -- "nao (backend/API)" --> C["NAO_APLICAVEL: nao ha UI p/ capturar -- nao instala, nao pergunta"]
+    B -- "sim" --> D{"Playwright em test_frameworks?"}
+    D -- "sim" --> E["APLICAVEL: frontend + Playwright -> instala direto"]
+    D -- "nao" --> F["CONDICIONAL: instala inerte (hook no-op) ate Playwright existir -- confirmar antes"]
+```
+
+É o caso do exemplo comum: instalar o council num **backend puro** cai no ramo `NAO_APLICAVEL` — o ui-evidence não é instalado nem perguntado, sai no relatório final com o motivo "nenhum framework FRONTEND detectado".
+
+**`ds-gate` (ratchet anti-hardcode de token)** — `_rule_ds_gate_posttool`:
+
+```mermaid
+flowchart TD
+    A["ds-gate"] --> B{"has_frontend_ui?"}
+    B -- "nao" --> C["NAO_APLICAVEL: ratchet de tokenizacao nao se aplica"]
+    B -- "sim" --> D["CONDICIONAL: fail-open (no-op sem CSS de tokens) -- so faz sentido com Tailwind + tokens CSS (--var); confirmar harness_web_app_dir/DS_GATE_CSS_PATH"]
+```
+
+**`deploy-prod-stack` + guardas de produção** — `_rule_prod_guards`:
+
+```mermaid
+flowchart TD
+    A["deploy-prod-stack"] --> B{"docker: sinal de Swarm (bloco deploy:)?"}
+    B -- "sim" --> C["CONDICIONAL: sugere stack de prod -- has_prod_stack SEMPRE exige confirmacao humana (D5)"]
+    B -- "nao" --> D{"Dockerfile ou compose?"}
+    D -- "sim" --> E["CONDICIONAL: pode ou nao ter stack gerenciada -- confirmar has_prod_stack"]
+    D -- "nao" --> F["NAO_APLICAVEL: sem sinal de stack de producao"]
+```
+
+**`understand-apps-incremental` (guard de diff do grafo)** — `_rule_understand_apps_incremental`:
+
+```mermaid
+flowchart TD
+    A["understand-apps-incremental"] --> B{"candidato a PROJECT_ROOT em subdir (monorepo)?"}
+    B -- "sim" --> C["CONDICIONAL: confirmar harness_understand_apps_root exato (armadilha PROJECT_ROOT != git-root)"]
+    B -- "nao" --> D["NAO_APLICAVEL: grafo roda direto na raiz do git, sem a armadilha"]
+```
+
+**Os demais** seguem o mesmo princípio de sinal → status:
+
+| Componente | Regra | Sinal → status |
+|---|---|---|
+| `has_e2e` | `_rule_e2e` | Playwright/Cypress detectado → **CONDICIONAL** (confirmar credenciais do admin fixo; senha nunca em texto puro) · senão **NAO_APLICAVEL** |
+| `ui-skills-bundle` / ícones Lucide / dropdown | React-like (`nextjs`/`remix`/`vite-spa`) → **CONDICIONAL** · senão **NAO_APLICAVEL** |
+| `web-dev-port` | `_rule_web_dev_port` | Qualquer framework web → **APLICAVEL** |
+| council, grill-me, adversarial-review, marathon, prova-de-conclusao, repo-wiki-curator, ref-integrity, deliverable-contract, e todos os hooks de metodologia | `_rule_generic_always_on` | Sempre **APLICAVEL** (metodologia/guarda genérica, sem dependência de stack) |
+
+Regra invariante (D5): **nada `CONDICIONAL` é ativado sem confirmação humana explícita**; **`NAO_APLICAVEL` nunca gera pergunta** (materializa `use_*=false`, A3); **`APLICAVEL` segue direto**.
+
 ## Atualizar: `copier update`
 
 ```bash

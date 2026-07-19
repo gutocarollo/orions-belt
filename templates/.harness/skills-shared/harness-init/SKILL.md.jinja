@@ -1,3 +1,17 @@
+{#-
+  Fonte única (harness-wiki) — este arquivo NÃO é copiado para o projeto-alvo
+  (excluído nominalmente em copier.yml `_exclude`); existe só para ser
+  {% raw %}{% include %}{% endraw %} pelos dois wrappers reais:
+  `.claude/skills/harness-init/SKILL.md.jinja` (Claude Code, use_claude=true) e
+  `.agents/skills/{% raw %}{% if use_codex %}{% endraw %}harness-init{% raw %}{% endif %}{% endraw %}/SKILL.md.jinja`
+  (Codex, use_codex=true). Migração do gap Codex-only declarado no README (F5):
+  antes esta skill só existia em `.claude/skills/`, então um projeto
+  use_codex=true/use_claude=false instalava o harness mas NÃO tinha invocação
+  nativa do instalador guiado — mesmo mecanismo skills-shared já usado por
+  grill-me/council/adversarial-review/etc. Corpo 100% runtime-neutro (já trata
+  AskUserQuestion como opcional "se disponível no seu runtime"); zero token
+  Jinja no corpo (nada a `{% raw %}{% endraw %}`-escapar). Editar SÓ aqui.
+-#}
 ---
 name: harness-init
 description: >-

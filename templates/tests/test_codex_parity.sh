@@ -97,7 +97,7 @@ if ! uvx copier copy "$REPO_ROOT" "$BASE_CLAUDE" --vcs-ref HEAD \
   echo "FAIL: copier copy --vcs-ref HEAD (claude-only) falhou -- $(tail -20 "$WORK/copier-claude.log")"
   FAIL=1
 else
-  for name in grill-me prova-de-conclusao marathon repo-wiki-curator ui-evidence verify; do
+  for name in grill-me harness-init prova-de-conclusao marathon repo-wiki-curator ui-evidence verify; do
     A="$BASE/.agents/skills/$name/SKILL.md"
     C="$BASE_CLAUDE/.claude/skills/$name/SKILL.md"
     if [ -f "$A" ] && [ -f "$C" ]; then

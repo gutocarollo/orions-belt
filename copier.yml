@@ -106,6 +106,7 @@ _exclude:
   # (Copier estrip a suffix `.jinja` antes de comparar) — por isso os paths
   # abaixo NÃO terminam em `.jinja`, mesmo a fonte sendo `SKILL.md.jinja`.
   - "/.harness/skills-shared/grill-me/SKILL.md"
+  - "/.harness/skills-shared/harness-init/SKILL.md"
   - "/.harness/skills-shared/prova-de-conclusao/SKILL.md"
   - "/.harness/skills-shared/marathon/SKILL.md"
   - "/.harness/skills-shared/repo-wiki-curator/SKILL.md"
