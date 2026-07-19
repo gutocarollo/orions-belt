@@ -20,7 +20,7 @@
 #      não bloqueia — confirmado via WebFetch learn.chatgpt.com/docs/hooks)
 #      em vez de PreToolUse (onde spawn_agent pode ser bloqueado de verdade).
 #
-# Requer `uvx`. Roda fora do harness-wiki (fixture em $TMPDIR).
+# Requer `uvx`. Roda fora do orions-belt (fixture em $TMPDIR).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

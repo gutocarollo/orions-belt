@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """_tooling_conf — módulo ÚNICO de carregamento da config central do harness.
 
-MATERIALIZAÇÃO (F3, harness-wiki): cópia byte-idêntica de `engine/_tooling_conf.py`
+MATERIALIZAÇÃO (F3, orions-belt): cópia byte-idêntica de `engine/_tooling_conf.py`
 (a fonte de autoria, usada pelos scripts de `engine/lint/`/`engine/contract/` DENTRO
-do repo harness-wiki). Hooks do Claude/Codex rodam como comando shell local no
+do repo orions-belt). Hooks do Claude/Codex rodam como comando shell local no
 projeto-alvo instalado — não há como referenciar um path fora do repo de forma
 portátil entre máquinas — então este módulo (sem nenhum conteúdo project-specific,
 puro parser) é copiado para `.harness/lib/` no projeto-alvo via Copier, e os hooks

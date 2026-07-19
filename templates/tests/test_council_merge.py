@@ -21,17 +21,17 @@ NÃO reativados aqui (continuam fora de escopo, não fabricados):
   (escopo F7), não ao merge do SKILL.md em si.
 - `test_historical_plan_doc_is_marked_non_canonical` — precisa de
   `docs/PLANO-SWARM.md` (doc histórico específico do agent-swarm original),
-  não portado; não há equivalente no harness-wiki.
+  não portado; não há equivalente no orions-belt.
 
 Vive em `templates/tests/` (não em `engine/contract/tests/`) de propósito:
 `engine/contract/` é documentado como pacote PORTÁTIL/self-contained (seu
 próprio README.md), e o conteúdo do council não pertence a ele — pertence
 à árvore de templates que F3 parametriza. `templates/tests/` e
 `templates/verification/` são excluídos do render real via `_exclude` do
-copier.yml (QA do PRÓPRIO harness-wiki, não conteúdo a instalar num
+copier.yml (QA do PRÓPRIO orions-belt, não conteúdo a instalar num
 projeto-alvo). Roda com:
 `python3 -m unittest discover -s templates/tests -v` a partir da raiz do
-harness-wiki, ou diretamente `python3 templates/tests/test_council_merge.py`.
+orions-belt, ou diretamente `python3 templates/tests/test_council_merge.py`.
 
 F3 (restructure pós-review do coordenador, ver docs/planning/00-plano-
 consolidado.md e o commit que corrigiu o achado arquitetural): a raiz do
@@ -229,7 +229,7 @@ class CouncilMergeRegressionTest(unittest.TestCase):
         marker inexistente (teste NEGATIVO — gate explícito do plano F1.5)."""
         import subprocess
 
-        harness_wiki_root = ROOT.parent  # templates/ -> harness-wiki/
+        harness_wiki_root = ROOT.parent  # templates/ -> orions-belt/
         verify_script = harness_wiki_root / "engine" / "contract" / "scripts" / "verify_witness.py"
         witness = ROOT / "verification" / "council-witness.json"
 

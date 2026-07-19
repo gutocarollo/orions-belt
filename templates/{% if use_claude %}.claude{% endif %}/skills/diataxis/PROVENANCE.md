@@ -16,7 +16,7 @@ outside this repo and were never checked in here. Any earlier mention of
 those three paths as if they shipped in the kit was inaccurate; treat this
 section as the corrected statement. The framework-wide, machine-readable
 provenance inventory (this skill included) is `PROVENANCE.json` at the root
-of the **harness-wiki framework repository** — not a path reachable from
+of the **orions-belt framework repository** — not a path reachable from
 inside a project this framework was installed into, since that file is
 framework tooling and is not part of what `templates/` renders downstream
 (intentionally not a clickable relative link here, for that reason: the

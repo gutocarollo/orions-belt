@@ -15,7 +15,7 @@ Três estratégias, por tipo de arquivo (B3, revisão adversarial pós-v1.0.0: o
 abaixo, .gitignore usa a 3ª):
 
   - Markdown (CLAUDE.md/AGENTS.md): bloco marcado
-    `<!-- harness-wiki:begin (vX) -->` ... `<!-- harness-wiki:end -->`.
+    `<!-- orions-belt:begin (vX) -->` ... `<!-- orions-belt:end -->`.
     Primeira instalação: bloco é ANEXADO ao fim do arquivo existente (o
     conteúdo do usuário antes do bloco nunca é tocado). Reinstalação/update:
     o CONTEÚDO DENTRO do bloco marcado é substituído (idempotente — não
@@ -62,7 +62,7 @@ import sys
 from pathlib import Path
 
 # NOME DO MARCADOR (G7, revisão adversarial pós-v1.0.0): renomeado para
-# `harness-wiki:begin/end` para acompanhar o rename do produto (ver README.md
+# `orions-belt:begin/end` para acompanhar o rename do produto (ver README.md
 # raiz — o nome anterior do repo/produto virou histórico em docs/planning/);
 # o marcador antigo só existia até aqui em código/teste do PRÓPRIO framework,
 # nunca em nenhum projeto-alvo real (produto ainda não publicado) — renomear
@@ -71,13 +71,13 @@ from pathlib import Path
 # `merge_markdown` cai no ramo "sem bloco marcado ainda" (BEGIN_RE não casa)
 # e ANEXA um novo bloco em vez de atualizar o antigo in-place — não perde
 # conteúdo, mas duplica o bloco uma vez; documentado aqui por transparência.
-BEGIN_RE = re.compile(r"<!-- harness-wiki:begin.*?-->", re.S)
-END_MARK = "<!-- harness-wiki:end -->"
+BEGIN_RE = re.compile(r"<!-- orions-belt:begin.*?-->", re.S)
+END_MARK = "<!-- orions-belt:end -->"
 
 
 def _marker_block(new_content: str, label: str) -> str:
     return (
-        f"<!-- harness-wiki:begin ({label}) — gerado por harness-wiki; "
+        f"<!-- orions-belt:begin ({label}) — gerado por orions-belt; "
         f"conteúdo entre os marcadores é reescrito em cada `harness-init`/`copier update`, "
         f"NUNCA edite dentro deste bloco (a próxima rodada sobrescreve). "
         f"Conteúdo ACIMA do bloco é do projeto e nunca é tocado. -->\n"
@@ -116,14 +116,14 @@ def merge_markdown(existing_path: Path, new_path: Path, label: str) -> dict:
 # é HTML/Markdown e um comentário `<!-- -->` cru viraria um PADRÃO de ignore
 # literal (uma linha começando com `<` não é comentário em .gitignore — só
 # linhas começando com `#` são). ---
-GITIGNORE_BEGIN_RE = re.compile(r"^# harness-wiki:begin.*$", re.M)
-GITIGNORE_END_MARK = "# harness-wiki:end"
+GITIGNORE_BEGIN_RE = re.compile(r"^# orions-belt:begin.*$", re.M)
+GITIGNORE_END_MARK = "# orions-belt:end"
 
 
 def _gitignore_block(new_content: str, label: str) -> str:
     body = new_content.rstrip("\n")
     return (
-        f"# harness-wiki:begin ({label}) — gerado por harness-wiki; conteúdo entre\n"
+        f"# orions-belt:begin ({label}) — gerado por orions-belt; conteúdo entre\n"
         f"# os marcadores é reescrito em cada harness-install/copier update, NÃO edite\n"
         f"# dentro deste bloco. Linhas ACIMA do bloco são do projeto e nunca são tocadas.\n"
         f"{body}\n"

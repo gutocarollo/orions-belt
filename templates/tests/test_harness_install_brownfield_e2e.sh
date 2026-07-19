@@ -18,7 +18,7 @@
 #   (c) hook do usuário em settings.json sobrevive E os hooks do harness são
 #       adicionados.
 #
-# Requer `uvx` (baixa/cacheia copier na 1ª vez). Roda fora do harness-wiki
+# Requer `uvx` (baixa/cacheia copier na 1ª vez). Roda fora do orions-belt
 # (fixture em $TMPDIR), nunca escreve dentro do próprio repo.
 set -uo pipefail
 
@@ -105,19 +105,19 @@ fi
 assert "AGENTS.md: linha original sobrevive verbatim" \
   'grep -q "Regra do usuario: nunca commitar segredo em claro." "$TARGET/AGENTS.md"'
 assert "AGENTS.md: conteúdo do harness foi ANEXADO (marcador presente)" \
-  'grep -q "harness-wiki:begin" "$TARGET/AGENTS.md"'
+  'grep -q "orions-belt:begin" "$TARGET/AGENTS.md"'
 assert "AGENTS.md: original aparece ANTES do bloco do harness (append, não prepend/replace)" \
-  '[ "$(grep -n "Regra do usuario: nunca commitar" "$TARGET/AGENTS.md" | cut -d: -f1)" -lt "$(grep -n "harness-wiki:begin" "$TARGET/AGENTS.md" | cut -d: -f1)" ]'
+  '[ "$(grep -n "Regra do usuario: nunca commitar" "$TARGET/AGENTS.md" | cut -d: -f1)" -lt "$(grep -n "orions-belt:begin" "$TARGET/AGENTS.md" | cut -d: -f1)" ]'
 
 assert ".claude/CLAUDE.md: linha original sobrevive verbatim" \
   'grep -q "Regra do usuario: rodar \`make test\` antes de qualquer PR." "$TARGET/.claude/CLAUDE.md"'
 assert ".claude/CLAUDE.md: conteúdo do harness foi ANEXADO" \
-  'grep -q "harness-wiki:begin" "$TARGET/.claude/CLAUDE.md"'
+  'grep -q "orions-belt:begin" "$TARGET/.claude/CLAUDE.md"'
 
 assert ".gitignore: padrão original sobrevive verbatim" \
   'grep -q "node_modules/" "$TARGET/.gitignore" && grep -q "\.env" "$TARGET/.gitignore"'
 assert ".gitignore: conteúdo do harness foi ANEXADO" \
-  'grep -q "harness-wiki:begin" "$TARGET/.gitignore"'
+  'grep -q "orions-belt:begin" "$TARGET/.gitignore"'
 
 # --- 4. Gate (b): core.hooksPath NÃO trocado de .husky ---
 assert "core.hooksPath continua .husky (nunca sobrescrito)" \
@@ -156,7 +156,7 @@ if ! "$INSTALLER" "$TARGET" --vcs-ref HEAD \
   FAIL=1
 fi
 assert "2ª rodada: AGENTS.md não duplica o marcador" \
-  '[ "$(grep -c "harness-wiki:begin" "$TARGET/AGENTS.md")" -eq 1 ]'
+  '[ "$(grep -c "orions-belt:begin" "$TARGET/AGENTS.md")" -eq 1 ]'
 assert "2ª rodada: core.hooksPath ainda .husky" \
   '[ "$(git -C "$TARGET" config --get core.hooksPath)" = ".husky" ]'
 

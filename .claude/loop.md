@@ -1,10 +1,10 @@
-# loop.md — manutenção autônoma do harness-wiki (rodar com /loop sem argumentos)
+# loop.md — manutenção autônoma do orions-belt (rodar com /loop sem argumentos)
 
 <!--
 DOGFOOD (2026-07-19): o framework roda sobre si mesmo o mesmo loop de manutenção que INSTALA
 nos projetos-alvo (templates/.claude/loop.md.jinja). Diferença de paths: aqui o motor de lint
 vive em `engine/lint/` (não `.harness/lib/`, que é o path do projeto-alvo renderizado), e o
-harness-wiki não tem frontend/understand/ds-gate sobre si — então os checks stack-específicos
+orions-belt não tem frontend/understand/ds-gate sobre si — então os checks stack-específicos
 do template não se aplicam. Governança do repo: SCHEMA.md §5.
 -->
 

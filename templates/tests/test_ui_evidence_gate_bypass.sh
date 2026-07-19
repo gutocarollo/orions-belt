@@ -18,7 +18,7 @@
 #   4. Preflight de host indisponível produzia "000000" (bug de curl `-w` +
 #      `|| echo 000` duplicando saída), nunca batia no branch de erro.
 #
-# Requer `uvx`. Roda fora do harness-wiki (fixture em $TMPDIR).
+# Requer `uvx`. Roda fora do orions-belt (fixture em $TMPDIR).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

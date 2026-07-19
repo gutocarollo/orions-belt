@@ -1,5 +1,5 @@
 {#-
-  Fonte única (harness-wiki) — este arquivo NÃO é copiado para o projeto-alvo
+  Fonte única (orions-belt) — este arquivo NÃO é copiado para o projeto-alvo
   (excluído nominalmente em copier.yml `_exclude`); existe só para ser
   {% raw %}{% include %}{% endraw %} pelos dois wrappers reais:
   `.claude/skills/harness-init/SKILL.md.jinja` (Claude Code, use_claude=true) e
@@ -15,7 +15,7 @@
 ---
 name: harness-init
 description: >-
-  Configurador semântico do harness-wiki — roda DENTRO de um projeto-alvo já
+  Configurador semântico do orions-belt — roda DENTRO de um projeto-alvo já
   bootstrapado (pós `copier copy`) para escanear a stack real, gerar um
   relatório de aplicabilidade por componente (APLICÁVEL/NÃO-APLICÁVEL/
   CONDICIONAL), confirmar com o usuário os itens CONDICIONAL, e aplicar
@@ -118,19 +118,19 @@ projeto-alvo — evita o prompt de conflito interativo do Copier E permite o
 merge controlado do Passo 4):
 
 ```bash
-uvx copier copy <path-do-harness-wiki> <scratch-dir> \
+uvx copier copy <path-do-orions-belt> <scratch-dir> \
   --data project_name=<...> --data owner_name=<...> \
   --data use_claude=<...> --data use_codex=<...> \
   --data has_prod_stack=<...> [demais --data confirmados] \
   --defaults --trust -q
 ```
 
-`<path-do-harness-wiki>` é a RAIZ do repo (não `.../templates`) — desde F8,
+`<path-do-orions-belt>` é a RAIZ do repo (não `.../templates`) — desde F8,
 `copier.yml` vive na raiz com `_subdirectory: templates` (achado real: apontar
 pra `templates/` direto QUEBRA versionamento VCS — `--vcs-ref`/tags sempre
 ignorados, "Copying from template version None"; confirmado empiricamente e
 contra `copier.readthedocs.io/en/stable/configuring/`). Se for testar contra
-uma tag específica em vez do HEAD do harness-wiki, adicione
+uma tag específica em vez do HEAD do orions-belt, adicione
 `--vcs-ref <tag>`.
 
 (`MODE=update`: se `<target>/.harness/answers.yml` já existir, leia-o primeiro
@@ -181,7 +181,7 @@ Dois grupos de arquivo, tratamento diferente:
    usuário ficam intocadas.
 
    Para instalação **não-interativa** (você já sabe as respostas ou está
-   automatizando), `harness-install.sh` na raiz do repo do harness-wiki
+   automatizando), `harness-install.sh` na raiz do repo do orions-belt
    automatiza exatamente estes passos 3-4 via `--data`; esta skill continua
    sendo a via para quando itens `CONDICIONAL` do Passo 2 precisam de
    confirmação humana em conversa — ver `docs/manual/14-instalacao-e-update.md`.

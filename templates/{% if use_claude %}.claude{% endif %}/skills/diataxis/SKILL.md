@@ -20,7 +20,7 @@ allowed-tools:
 > named patterns) are this skill's own distillation and are flagged inline.
 > See [PROVENANCE.md](./PROVENANCE.md); the framework-wide, machine-readable
 > inventory (this skill included) lives at `PROVENANCE.json` in the
-> harness-wiki framework repository's own root — not a path reachable from
+> orions-belt framework repository's own root — not a path reachable from
 > inside an installed project, since that file is framework tooling, not
 > part of what gets rendered downstream (intentionally not a clickable
 > relative link here for that reason).

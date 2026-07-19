@@ -1,5 +1,5 @@
 {
-  "$schema_note": "Machine-readable provenance inventory for harness-wiki. Produced during H5/B2 hardening (D2=A: license the whole framework as CC BY-SA 4.0). Every third-party or cross-repo-derived component is listed; components with no entry here are original work authored directly in this repo by Augusto Carollo, licensed under the repo-root LICENSE (CC BY-SA 4.0).",
+  "$schema_note": "Machine-readable provenance inventory for orions-belt. Produced during H5/B2 hardening (D2=A: license the whole framework as CC BY-SA 4.0). Every third-party or cross-repo-derived component is listed; components with no entry here are original work authored directly in this repo by Augusto Carollo, licensed under the repo-root LICENSE (CC BY-SA 4.0).",
   "generated_on": "2026-07-18",
   "verification_method": "git clone https://github.com/trailofbits/skills.git && git -C skills checkout cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af; then byte-for-byte `cmp` of every file under templates/{% if use_claude %}.claude{% endif %}/skills/<name>/ against plugins/<plugin>/skills/<name>/ in the upstream clone.",
   "components": [
@@ -181,7 +181,7 @@
       "license": "same-owner — agent-swarm has no LICENSE file and is authored solely by Augusto Carollo (same author/copyright holder as this repo); no third-party rights implicated. Relicensed into this repo under CC-BY-SA-4.0 by the same author's own decision.",
       "status": "modified",
       "files_count": 6,
-      "modifications_summary": "Ported as the 'executable enforcement layer' (schemas JSON + witness + ledger + validate_contract.py) and parametrized/generalized for the harness-wiki config surface, per README F1. Not byte-identical to the agent-swarm originals."
+      "modifications_summary": "Ported as the 'executable enforcement layer' (schemas JSON + witness + ledger + validate_contract.py) and parametrized/generalized for the orions-belt config surface, per README F1. Not byte-identical to the agent-swarm originals."
     },
     {
       "component": "templates/.harness/lib/scan_project.py",
@@ -201,7 +201,7 @@
       {
         "severity": "low-non-blocking",
         "component": "trail-of-bits-mark.svg (shipped inside 8 of the 10 trailofbits/skills directories: semgrep, codeql, sarif-parsing, variant-analysis, insecure-defaults, supply-chain-risk-auditor, agentic-actions-auditor, audit-context-building)",
-        "issue": "This is Trail of Bits' company logo/wordmark, not just prose content. CC BY-SA 4.0 covers the copyright in the file, but a company logo is also typically protected as a TRADEMARK — redistributing it inside a generic, differently-branded framework risks being read as implying Trail of Bits endorsement of harness-wiki, which the license does not grant (CC BY-SA Section 2(a)(6): 'No endorsement'). This is a trademark/passing-off consideration, not a copyright/license blocker, so it is flagged here rather than silently resolved.",
+        "issue": "This is Trail of Bits' company logo/wordmark, not just prose content. CC BY-SA 4.0 covers the copyright in the file, but a company logo is also typically protected as a TRADEMARK — redistributing it inside a generic, differently-branded framework risks being read as implying Trail of Bits endorsement of orions-belt, which the license does not grant (CC BY-SA Section 2(a)(6): 'No endorsement'). This is a trademark/passing-off consideration, not a copyright/license blocker, so it is flagged here rather than silently resolved.",
         "recommendation": "Non-blocking for this rodada (B2 scope is license+provenance, not asset removal). Coordinator/owner should decide: (a) keep as-is now that NOTICE explicitly disclaims endorsement, or (b) strip the 8 trail-of-bits-mark.svg files from the templates in a follow-up (they are decorative brand assets referenced by the SKILL.md 'assets' folder convention, not functional to the skill's logic)."
       }
     ]

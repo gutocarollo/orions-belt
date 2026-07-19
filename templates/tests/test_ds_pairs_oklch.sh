@@ -14,7 +14,7 @@
 #      "NAO AVALIADOS" no resumo -- nunca "OK em todos os pares" -- e sai
 #      com código != 0 (nunca verde falso).
 #
-# Requer `uvx`. Roda fora do harness-wiki (fixture em $TMPDIR).
+# Requer `uvx`. Roda fora do orions-belt (fixture em $TMPDIR).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

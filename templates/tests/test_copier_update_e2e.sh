@@ -10,14 +10,14 @@
 # `<<<<<<< before updating` / `=======` / `>>>>>>> after updating` em vez de
 # descartar silenciosamente um dos dois lados.
 #
-# Usa as tags v0.1.0/v0.2.0/v0.3.0 do PRÓPRIO harness-wiki como fixture —
+# Usa as tags v0.1.0/v0.2.0/v0.3.0 do PRÓPRIO orions-belt como fixture —
 # são checkpoints reais da história deste repo (criados na sessão F8):
 #   v0.1.0 = baseline (copier.yml na raiz + _subdirectory + answers-file fix)
 #   v0.2.0 = mudança upstream ORTOGONAL (mensagem de reap-leaks.sh)
 #   v0.3.0 = mudança upstream que CONFLITA com a customização de teste
 #            (comentário na linha HARNESS_DEV_API_PORT de harness.conf.jinja)
 # Não cria tags novas a cada rodada — determinístico, sem efeito colateral
-# no repo fonte. Roda inteiramente em tempdir fora do harness-wiki.
+# no repo fonte. Roda inteiramente em tempdir fora do orions-belt.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

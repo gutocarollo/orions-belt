@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # harness-install.sh — bootstrap BROWNFIELD-SAFE de instalação/atualização do
-# harness-wiki num projeto-alvo (B3, gap BLOQUEANTE da revisão adversarial
+# orions-belt num projeto-alvo (B3, gap BLOQUEANTE da revisão adversarial
 # pós-v1.0.0).
 #
-# O PROBLEMA QUE ISTO RESOLVE: `copier copy <harness-wiki> <projeto-alvo>
+# O PROBLEMA QUE ISTO RESOLVE: `copier copy <orions-belt> <projeto-alvo>
 # --trust` rodado DIRETO contra um repo que já existe (o caso comum — você
 # quase sempre está adotando o harness num projeto vivo, não criando um do
 # zero) é circular e destrutivo:
@@ -65,7 +65,7 @@ usage() {
   cat <<'EOF'
 uso: harness-install.sh <target-dir> [args do copier copy...]
 
-Instala/adota o harness-wiki num projeto-alvo (greenfield OU brownfield) sem
+Instala/adota o orions-belt num projeto-alvo (greenfield OU brownfield) sem
 sobrescrever AGENTS.md / .claude/CLAUDE.md / .claude/settings.json /
 .gitignore pré-existentes e sem clobber de core.hooksPath já customizado.
 Ver comentário no topo deste arquivo para o fluxo completo (B3).

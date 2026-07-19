@@ -16,10 +16,10 @@
 set -uo pipefail
 
 TARGET="${1:-.}"
-cd "$TARGET" 2>/dev/null || { echo "harness-wiki: set_hooks_path.sh: diretório '$TARGET' inexistente -- nada a fazer" >&2; exit 0; }
+cd "$TARGET" 2>/dev/null || { echo "orions-belt: set_hooks_path.sh: diretório '$TARGET' inexistente -- nada a fazer" >&2; exit 0; }
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "harness-wiki: '$TARGET' ainda nao e repo git -- rode 'git init && git config core.hooksPath .githooks' manualmente para ativar o pre-commit de ref-integrity" >&2
+  echo "orions-belt: '$TARGET' ainda nao e repo git -- rode 'git init && git config core.hooksPath .githooks' manualmente para ativar o pre-commit de ref-integrity" >&2
   exit 0
 fi
 
@@ -27,14 +27,14 @@ CURRENT_HP="$(git config --get core.hooksPath 2>/dev/null || true)"
 
 if [ -z "$CURRENT_HP" ]; then
   git config core.hooksPath .githooks
-  echo "harness-wiki: core.hooksPath -> .githooks"
+  echo "orions-belt: core.hooksPath -> .githooks"
 elif [ "$CURRENT_HP" = ".githooks" ]; then
-  echo "harness-wiki: core.hooksPath ja e .githooks (idempotente, nada a fazer)"
+  echo "orions-belt: core.hooksPath ja e .githooks (idempotente, nada a fazer)"
 else
   # GATE A2: nunca sobrescrever um hooksPath já customizado (Husky, lefthook,
   # husky.sh, qualquer outro gerenciador). Avisa e ensina o encadeamento
   # compatível em vez de clobber silencioso.
-  echo "harness-wiki: core.hooksPath ja aponta para '$CURRENT_HP' (ex.: Husky/outro hook manager) -- NAO sobrescrito (A2, anti-clobber). Para ativar o ref-integrity do harness sem substituir seu hook manager, encadeie manualmente: adicione ao final do seu hook em '$CURRENT_HP/pre-commit' uma chamada a 'bash \"\$(git rev-parse --show-toplevel)/.githooks/pre-commit\"' deste projeto. Se preferir substituir por completo em vez de encadear, rode 'git config core.hooksPath .githooks' você mesmo. Ver docs/manual/14-instalacao-e-update.md." >&2
+  echo "orions-belt: core.hooksPath ja aponta para '$CURRENT_HP' (ex.: Husky/outro hook manager) -- NAO sobrescrito (A2, anti-clobber). Para ativar o ref-integrity do harness sem substituir seu hook manager, encadeie manualmente: adicione ao final do seu hook em '$CURRENT_HP/pre-commit' uma chamada a 'bash \"\$(git rev-parse --show-toplevel)/.githooks/pre-commit\"' deste projeto. Se preferir substituir por completo em vez de encadear, rode 'git config core.hooksPath .githooks' você mesmo. Ver docs/manual/14-instalacao-e-update.md." >&2
 fi
 
 exit 0

@@ -2,9 +2,9 @@
 # subagent-throttle — PreToolUse (Task|Agent). Cap CONFIGURÁVEL de subagents
 # simultâneos.
 #
-# MATERIALIZAÇÃO (F3, harness-wiki): cópia adaptada de
+# MATERIALIZAÇÃO (F3, orions-belt): cópia adaptada de
 # engine/hooks/subagent-throttle.sh (a fonte de autoria/teste dentro do repo
-# harness-wiki) para o projeto-alvo — hooks do Claude Code rodam como
+# orions-belt) para o projeto-alvo — hooks do Claude Code rodam como
 # comando shell local (`$CLAUDE_PROJECT_DIR/.claude/hooks/...`), não há como
 # referenciar um path fora do repo de forma portátil entre máquinas. ÚNICA
 # diferença funcional da fonte: `CONF_PY` aponta para

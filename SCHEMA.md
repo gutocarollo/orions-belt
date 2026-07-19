@@ -1,6 +1,6 @@
 # SCHEMA.md — como este repositório é organizado
 
-> Padrão: **Karpathy LLM Wiki**, aplicado ao repositório `harness-wiki` inteiro. Esta é a constituição do framework — e é dogfooding deliberado: o mesmo sistema de curadoria documental que o framework INSTALA nos projetos-alvo (capítulo 10 do manual, `docs/manual/10-wiki-karpathy.md`) governa o próprio repositório do framework.
+> Padrão: **Karpathy LLM Wiki**, aplicado ao repositório `orions-belt` inteiro. Esta é a constituição do framework — e é dogfooding deliberado: o mesmo sistema de curadoria documental que o framework INSTALA nos projetos-alvo (capítulo 10 do manual, `docs/manual/10-wiki-karpathy.md`) governa o próprio repositório do framework.
 
 ## 0. Objetivo
 

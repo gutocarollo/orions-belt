@@ -9,9 +9,9 @@ das 10 skills trailofbits + diataxis + 3 skills learnhouse-internas só entra
 quando use_claude=true, porque só nesse caso elas são materializadas em
 .claude/skills/ (ver templates/{% raw %}{% if use_claude %}{% endraw %}.claude{% raw %}{% endif %}{% endraw %}/skills/).
 Fonte completa e sempre atualizada: NOTICE + PROVENANCE.json na raiz do
-repo harness-wiki (github.com/<owner>/harness-wiki) — este arquivo é um
+repo orions-belt (github.com/<owner>/orions-belt) — este arquivo é um
 RESUMO escopado ao que este projeto especificamente instalou, não uma cópia
-completa (ver harness-wiki/NOTICE §8 e docs/manual/15-limitacoes-conhecidas.md
+completa (ver orions-belt/NOTICE §8 e docs/manual/15-limitacoes-conhecidas.md
 item 14 para o porquê de ser um resumo e não uma cópia integral).
 -#}
 {{ project_name }} — NOTICE (proveniência de terceiros herdada do harness instalado)
@@ -22,13 +22,13 @@ Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)** — texto completo
 em https://creativecommons.org/licenses/by-sa/4.0/legalcode. Este arquivo é
 a atribuição mínima exigida pela licença para o material herdado; a fonte
 completa (inventário máquina-legível componente-a-componente) é o
-`NOTICE`/`PROVENANCE.json` do próprio harness-wiki (o framework que gerou
+`NOTICE`/`PROVENANCE.json` do próprio orions-belt (o framework que gerou
 este projeto), não deste repositório.
 
 ## Sempre instalado (`.harness/lib/`)
 
 - `docs_wiki_lint.py`, `ref_integrity.py` — portados e parametrizados de
-  `guto-wiki` (mesmo autor do harness-wiki; sem conflito de licença de
+  `guto-wiki` (mesmo autor do orions-belt; sem conflito de licença de
   terceiro). Modificados em relação ao original.
 - `scan_project.py` — blueprint reimplementado (não copiado verbatim) a
   partir de `scan-project.mjs` do Understand Anything
@@ -54,10 +54,10 @@ este projeto), não deste repositório.
   verbatim do site.
 - **`owasp-security`, `curate-long-context`, `ai-ui-dev`** — extraídas e
   generalizadas de um harness de produção privado pelo mesmo autor do
-  harness-wiki (nome do cliente original omitido por decisão do autor); sem
+  orions-belt (nome do cliente original omitido por decisão do autor); sem
   conflito de licença de terceiro.
 
 Fonte completa (por que cada uma, hash de verificação, revisão de
 compatibilidade de licença): `NOTICE`/`PROVENANCE.json` do repositório
-harness-wiki.
+orions-belt.
 {% endif %}

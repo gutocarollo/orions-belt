@@ -1,4 +1,4 @@
-# Manual do harness-wiki
+# Manual do Orion's Belt
 
 **A documentação canônica do produto**: o que o framework instala num projeto, como cada componente funciona, quais variáveis da config central o governam e como instalar/atualizar. Todo capítulo referencia os arquivos REAIS do framework (em `templates/`, `engine/`, `copier.yml`) e as variáveis pelo nome (`HARNESS_*`, `PROD_*`, `PROJECT_NAME`) — nunca valores fixos de um projeto específico.
 

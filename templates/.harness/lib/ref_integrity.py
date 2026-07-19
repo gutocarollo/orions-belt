@@ -3,7 +3,7 @@
 
 Porte do `guto-wiki` (padronizacao-documentacao/artefatos/scripts/
 ref-integrity.py — ver docs/planning/research/01-guto-wiki.md §b) para o
-`engine/` do harness-wiki. Mesma troca estrutural do `docs_wiki_lint.py`
+`engine/` do orions-belt. Mesma troca estrutural do `docs_wiki_lint.py`
 irmão: `load_config()`/`config_csv()` locais REMOVIDOS, substituídos pelo
 import de `_tooling_conf.py` (parser único — não repete a triplicação DRY
 que o próprio guto-wiki não corrigiu). `ROOT` passa a vir de
@@ -12,9 +12,9 @@ inline (a MESMA chamada existia aqui — agora está centralizada no módulo
 compartilhado, junto com o fallback HARNESS_PROJECT_ROOT/CLAUDE_PROJECT_DIR
 que o `docs_wiki_lint.py` também usa).
 
-MATERIALIZAÇÃO (R2, harness-wiki — plano de resgate §2 item "Distribuição de
+MATERIALIZAÇÃO (R2, orions-belt — plano de resgate §2 item "Distribuição de
 lint"): cópia deste arquivo (autoria em `engine/lint/ref_integrity.py`,
-dentro do repo harness-wiki) para `.harness/lib/ref_integrity.py` no
+dentro do repo orions-belt) para `.harness/lib/ref_integrity.py` no
 projeto-alvo, no MESMO diretório onde `_tooling_conf.py`/`scan_project.py`/
 `ds-gate.sh` já são materializados via Copier (padrão de F0/F5). Diferença
 de layout vs. a cópia-fonte em `engine/lint/`: aqui o script mora LADO A

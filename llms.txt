@@ -1,4 +1,4 @@
-# harness-wiki — framework portátil e auto-configurável de harness de agentes de IA
+# Orion's Belt — framework portátil e auto-configurável de harness de agentes de IA
 
 > Hooks determinísticos, skills, council adversarial e wiki Karpathy temporal, instaláveis em qualquer projeto de software via [Copier](https://copier.readthedocs.io/). Suporta **Claude Code** e **Codex** a partir de uma única fonte de verdade — o mesmo script de hook e a mesma SKILL.md servem os dois runtimes. Tudo parametrizado pela config central (`.harness/harness.conf`) gerada pelo questionário `copier.yml`.
 

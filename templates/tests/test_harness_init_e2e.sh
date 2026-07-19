@@ -5,7 +5,7 @@
 # num CLAUDE.md pré-existente com 2-3 linhas REAIS, e confirma via diff que o
 # conteúdo original sobreviveu intocado (append, não replace).
 #
-# Requer `uvx` (baixa/cacheia copier na primeira vez). Roda fora do harness-wiki
+# Requer `uvx` (baixa/cacheia copier na primeira vez). Roda fora do orions-belt
 # (fixtures em $TMPDIR), nunca escreve dentro do próprio repo.
 #
 # Mora em templates/tests/ (excluído do copy via copier.yml `/tests`, mesma
@@ -86,7 +86,7 @@ assert "linha 'Rodar \`make test\`' sobrevive verbatim" \
 assert "conteúdo do harness (LEI ZERO) foi ANEXADO" \
   'grep -q "LEI ZERO" "$TARGET/.claude/CLAUDE.md"'
 assert "conteúdo original aparece ANTES do bloco do harness (prova de append, não prepend/replace)" \
-  '[ "$(grep -n "Nunca commitar" "$TARGET/.claude/CLAUDE.md" | cut -d: -f1)" -lt "$(grep -n "harness-wiki:begin" "$TARGET/.claude/CLAUDE.md" | cut -d: -f1)" ]'
+  '[ "$(grep -n "Nunca commitar" "$TARGET/.claude/CLAUDE.md" | cut -d: -f1)" -lt "$(grep -n "orions-belt:begin" "$TARGET/.claude/CLAUDE.md" | cut -d: -f1)" ]'
 
 # diff explícito: linhas do arquivo original devem estar TODAS presentes (subset), nada removido
 MISSING=0
@@ -101,7 +101,7 @@ python3 "$LIB/merge_docs.py" markdown \
   --existing "$TARGET/.claude/CLAUDE.md" \
   --new "$SCRATCH/.claude/CLAUDE.md" \
   --label "e2e-test-v2" > /dev/null
-COUNT_MARKERS=$(grep -c "harness-wiki:begin" "$TARGET/.claude/CLAUDE.md")
+COUNT_MARKERS=$(grep -c "orions-belt:begin" "$TARGET/.claude/CLAUDE.md")
 assert "2ª rodada não duplica o marcador (1 bloco só)" '[ "$COUNT_MARKERS" -eq 1 ]'
 
 # --- 6. settings.json: repo-alvo SEM settings.json (caso "criar do zero") ---

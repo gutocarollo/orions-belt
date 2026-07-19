@@ -1,4 +1,4 @@
-# copier.yml — questionário do harness-wiki.
+# copier.yml — questionário do orions-belt.
 # A CONFIG CENTRAL é o produto: cada pergunta aqui materializa uma chave em
 # .harness/harness.conf.jinja (a fonte do schema é docs/planning/research/
 # 03-hardcodes.md §3 — ~40 variáveis levantadas por auditoria do harness real
@@ -22,10 +22,10 @@
 # "Copying from template version None" (ignora o tag, usa sempre o working
 # tree atual). O PRÓPRIO plano original já dizia isso corretamente
 # (docs/planning/00-plano-consolidado.md linha 48: `copier copy gh:<owner>/
-# harness-wiki . --trust` — raiz do repo, não .../templates) — a
+# orions-belt . --trust` — raiz do repo, não .../templates) — a
 # implementação (F0-F5) tinha desviado disso. `_subdirectory: templates`
 # abaixo resolve: aponte SEMPRE para a raiz do repo (`.` local ou
-# `gh:<owner>/harness-wiki`), nunca para `templates/` direto.
+# `gh:<owner>/orions-belt`), nunca para `templates/` direto.
 _subdirectory: templates
 
 _answers_file: .harness/answers.yml
@@ -34,7 +34,7 @@ _min_copier_version: "9.0.0"
 # Default do Copier (copier/_template.py DEFAULT_EXCLUDE) + 2 padrões nossos.
 # Definir _exclude REPLACES o default (não soma) — por isso os 8 padrões
 # originais estão replicados aqui, não só os novos. Os 4 itens `/tests/*` e
-# `/verification/*` abaixo são a QA do PRÓPRIO harness-wiki sobre o merge
+# `/verification/*` abaixo são a QA do PRÓPRIO orions-belt sobre o merge
 # do council (F1.5: council-witness.json + test_council_merge.py) — testam a
 # árvore de templates ANTES de virar produto instalado; não fazem sentido
 # dentro de um projeto-alvo já instalado (testariam paths que nem existem

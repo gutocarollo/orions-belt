@@ -52,7 +52,7 @@ class MergeMarkdownTest(unittest.TestCase):
         target.write_text(original, encoding="utf-8")
 
         new = self.tmpdir / "new.md"
-        new.write_text("# Conteúdo autorado pelo harness-wiki\n\nLEI ZERO etc.\n", encoding="utf-8")
+        new.write_text("# Conteúdo autorado pelo orions-belt\n\nLEI ZERO etc.\n", encoding="utf-8")
 
         result = _run(["markdown", "--existing", str(target), "--new", str(new), "--label", "v1"])
         self.assertEqual(result["action"], "appended")
@@ -61,9 +61,9 @@ class MergeMarkdownTest(unittest.TestCase):
         # O CONTEÚDO ORIGINAL sobrevive INTEIRO, verbatim, sem alteração.
         self.assertIn(original.strip(), final)
         # O novo conteúdo foi ANEXADO, não substituiu.
-        self.assertIn("Conteúdo autorado pelo harness-wiki", final)
+        self.assertIn("Conteúdo autorado pelo orions-belt", final)
         # A ordem prova que foi append (original vem ANTES do bloco novo).
-        self.assertLess(final.index("Nunca commitar direto na main"), final.index("harness-wiki:begin"))
+        self.assertLess(final.index("Nunca commitar direto na main"), final.index("orions-belt:begin"))
 
     def test_second_run_updates_block_idempotently_without_duplicating(self) -> None:
         target = self.tmpdir / "CLAUDE.md"
@@ -82,7 +82,7 @@ class MergeMarkdownTest(unittest.TestCase):
         self.assertIn("Regra original", final)  # conteúdo do usuário continua intocado
         self.assertIn("versão 2", final)  # bloco atualizado
         self.assertNotIn("versão 1", final)  # bloco antigo foi SUBSTITUÍDO, não empilhado
-        self.assertEqual(final.count("harness-wiki:begin"), 1, "não pode duplicar o marcador em updates sucessivos")
+        self.assertEqual(final.count("orions-belt:begin"), 1, "não pode duplicar o marcador em updates sucessivos")
 
 
 class MergeSettingsJsonTest(unittest.TestCase):
@@ -303,7 +303,7 @@ class MergeGitignoreTest(unittest.TestCase):
         self.assertIn(".env", final)
         self.assertIn("dist/", final)
         self.assertIn("__pycache__/", final)
-        self.assertLess(final.index("node_modules/"), final.index("harness-wiki:begin"))
+        self.assertLess(final.index("node_modules/"), final.index("orions-belt:begin"))
 
     def test_second_run_updates_block_without_duplicating(self) -> None:
         target = self.tmpdir / ".gitignore"
@@ -322,7 +322,7 @@ class MergeGitignoreTest(unittest.TestCase):
         self.assertIn("meu-padrao-custom/", final)
         self.assertIn("padrao-v2/", final)
         self.assertNotIn("padrao-v1/", final)
-        self.assertEqual(final.count("harness-wiki:begin"), 1)
+        self.assertEqual(final.count("orions-belt:begin"), 1)
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@
 #     (`grep -vF`) — um padrão como `legacy/**` nunca casava nenhum path
 #     real. Fix: `.harness/lib/ds_allowlist_filter.py` (fnmatch real).
 #
-# Requer `uvx`. Roda fora do harness-wiki (fixture em $TMPDIR).
+# Requer `uvx`. Roda fora do orions-belt (fixture em $TMPDIR).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -4,7 +4,7 @@
 Porte da versão FORTE do `guto-wiki`
 (padronizacao-documentacao/artefatos/scripts/docs-wiki-lint.py, 312 linhas —
 ver docs/planning/research/01-guto-wiki.md §b) para o `engine/` do
-harness-wiki. Duas mudanças estruturais em relação à fonte, nenhuma
+orions-belt. Duas mudanças estruturais em relação à fonte, nenhuma
 mudança de REGRA:
 
 1. `load_config()`/`config_csv()` locais foram REMOVIDOS — este script
@@ -19,9 +19,9 @@ mudança de REGRA:
    vem de `_tooling_conf.project_root()` (HARNESS_PROJECT_ROOT ->
    CLAUDE_PROJECT_DIR -> `git rev-parse --show-toplevel` -> cwd).
 
-MATERIALIZAÇÃO (R2, harness-wiki — plano de resgate §2 item "Distribuição de
+MATERIALIZAÇÃO (R2, orions-belt — plano de resgate §2 item "Distribuição de
 lint"): cópia deste arquivo (autoria em `engine/lint/docs_wiki_lint.py`,
-dentro do repo harness-wiki) para `.harness/lib/docs_wiki_lint.py` no
+dentro do repo orions-belt) para `.harness/lib/docs_wiki_lint.py` no
 projeto-alvo, no MESMO diretório onde `_tooling_conf.py`/`scan_project.py`/
 `ds-gate.sh` já são materializados via Copier (padrão estabelecido em F0/F5,
 não uma convenção nova). Diferença de layout vs. a cópia-fonte em
