@@ -2,7 +2,7 @@
 
 Uma **skill** é um manual de instruções empacotado (`SKILL.md` com frontmatter `name`/`description`) que o agente carrega quando a tarefa casa a descrição — em vez de improvisar um procedimento, ele segue o validado. As skills complementam os hooks: o hook FORÇA um comportamento no evento; a skill ENSINA o procedimento completo quando o agente precisa dele. Vários pares andam juntos (gate + skill): `completion-gate` ↔ `prova-de-conclusao`; `ui-evidence-gate` ↔ `ui-evidence`; guardas de prod ↔ skill de deploy.
 
-Onde vivem no projeto instalado: `.claude/skills/<nome>/SKILL.md` (Claude Code) e as dual-runtime em `HARNESS_SKILLS_DIR` (default `.agents/skills` — servem Claude e Codex; capítulo 11). Fonte no framework: os templates sob [skills/](<../../templates/{% if use_claude %}.claude{% endif %}/skills/harness-init/SKILL.md>) — `.jinja` quando parametrizadas por projeto.
+Onde vivem no projeto instalado: `.claude/skills/<nome>/SKILL.md` (Claude Code) e as dual-runtime em `HARNESS_SKILLS_DIR` (default `.agents/skills` — servem Claude e Codex; capítulo 11). Fonte no framework: os templates sob [skills-shared/](../../templates/.harness/skills-shared/harness-init/SKILL.md.jinja) (fonte única das dual-runtime) — `.jinja` quando parametrizadas por projeto.
 
 ## As skills do núcleo operacional
 

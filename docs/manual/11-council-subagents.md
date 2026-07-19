@@ -79,7 +79,7 @@ Lição operacional: **implementer nunca roda em paralelo dentro do mesmo worktr
 
 Ele confronta, citando path e linha, cinco fontes: (1) o pedido/plano original; (2) a execução real e o diff; (3) os contratos de arquitetura em `docs/architecture`; (4) os contratos de design-system em `docs/design-system`; (5) o código e os testes reais do app. Toda acusação precisa de prova concreta — inventar evidência invalida a auditoria.
 
-O contrato completo (skill `adversarial-review`, fonte: [SKILL.md.jinja](../../templates/.agents/skills/adversarial-review/SKILL.md.jinja)) exige classificar cada hipótese de gap em uma de **9 classes**, e cada classe carrega a sua própria prova obrigatória — misturar prova de uma classe com hipótese de outra não vale:
+O contrato completo (skill `adversarial-review`, fonte: [SKILL.md.jinja](../../templates/.harness/skills-shared/adversarial-review/SKILL.md.jinja)) exige classificar cada hipótese de gap em uma de **9 classes**, e cada classe carrega a sua própria prova obrigatória — misturar prova de uma classe com hipótese de outra não vale:
 
 | Classe | Quando usar | Prova obrigatória |
 |---|---|---|

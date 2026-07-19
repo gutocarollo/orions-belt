@@ -502,6 +502,17 @@ harness_understand_apps_root:
         específicos não são gerados.
     default: ""
 
+harness_graph_refresh_threshold:
+    type: int
+    help: >-
+        Só relevante se harness_understand_apps_root estiver preenchido:
+        no loop de manutenção (.claude/loop.md, check "Frescor do grafo"),
+        quantos arquivos precisam mudar sob o PROJECT_ROOT do grafo, desde o
+        último build (meta.json gitCommitHash), para disparar um /understand
+        incremental. Threshold porque /understand é LLM-heavy (subagents,
+        cota) — roda quando o diff acumulado justifica, não a cada passada.
+    default: 15
+
 # =========================================================================
 # --- skills/council (engine/contract/scripts/validate_skills.py) ---
 # =========================================================================

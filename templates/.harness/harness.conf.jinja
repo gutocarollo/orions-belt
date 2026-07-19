@@ -110,6 +110,7 @@ HARNESS_EVIDENCE_DIR={{ harness_evidence_dir }}
 IGNORED_TOOL_DIRS={{ harness_ignored_tool_dirs }}
 {%- if harness_understand_apps_root %}
 HARNESS_UNDERSTAND_APPS_ROOT={{ harness_understand_apps_root }}
+HARNESS_GRAPH_REFRESH_THRESHOLD={{ harness_graph_refresh_threshold }}  # loop.md: N arquivos mudados sob o PROJECT_ROOT p/ disparar /understand incremental
 {%- endif %}
 {%- if use_ui_evidence or use_ds_gate %}
 HARNESS_WEB_APP_DIR={{ harness_web_app_dir }}

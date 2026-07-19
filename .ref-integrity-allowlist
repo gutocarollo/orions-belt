@@ -89,3 +89,16 @@ understand-apps-changed-files.sh
 # inteiro — por isso as 4 entradas de placeholder de link acima e `{% if use_codex %}AGENTS.md
 # {% endif %}.jinja` foram TESTADAS e CONFIRMADAS ainda necessárias via `--range`/`--since`, apesar
 # de aparentarem "mortas" sob `--staged` isolado — não remover essas.
+
+# Loop de manutenção 2026-07-19 — placeholders ILUSTRATIVOS de sintaxe em prosa,
+# não refs reais: docs/planning/research/08-memory-surfaces.md linhas 19/46 mostram
+# o FORMATO de linha do MEMORY.md (`- [Título](slug.md) — resumo`) e do log.md
+# (`[Título](path.md) — resumo`). Mesmo caso de loop.md/manifest.json acima.
+slug.md
+path.md
+
+# Loop 2026-07-19 — citação HISTÓRICA (época, docs/planning/research/07-autoconfig-patterns.md:49):
+# link para o SKILL.md do plugin understand-anything no cache local da máquina do autor, no
+# momento da pesquisa do blueprint F5. Não é ref de arquivo do repo; preservar como registro de
+# onde veio o padrão (mesmo caso do notas-f1.6.md acima). Target completo (casa por tgt exato).
+../../../../../../home/augusto/.claude/plugins/cache/understand-anything/understand-anything/2.8.1/skills/understand/SKILL.md

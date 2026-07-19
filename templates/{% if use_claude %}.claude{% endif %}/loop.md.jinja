@@ -40,6 +40,23 @@ do RUN.md e encerre a passada.
   `{{ harness_web_app_dir }}`, lido em runtime de `.harness/harness.conf`). Regressão → reportar
   cluster e `path:linha`.
 {%- endif %}
+{%- if harness_understand_apps_root %}
+- **Frescor do grafo (Understand Anything)** — só se o grafo já existe
+  (`{{ harness_understand_apps_root }}/.understand-anything/meta.json`). Conte quantos arquivos
+  mudaram sob o PROJECT_ROOT desde o último build, com o **diff relativo obrigatório** (o grafo
+  usa `PROJECT_ROOT={{ harness_understand_apps_root }}`, mas o git root é a raiz do repo — diff
+  bruto emite paths errados):
+
+  ```bash
+  LAST=$(python3 -c "import json;print(json.load(open('{{ harness_understand_apps_root }}/.understand-anything/meta.json'))['gitCommitHash'])" 2>/dev/null)
+  N=$(git diff --relative={{ harness_understand_apps_root }} "$LAST"..HEAD --name-only -- {{ harness_understand_apps_root }} | grep -cv '^\.understand-anything/')
+  ```
+
+  Se `N >= {{ harness_graph_refresh_threshold }}` (`HARNESS_GRAPH_REFRESH_THRESHOLD`), rode o
+  `/understand` incremental (NÃO `--full`) e commite o grafo atualizado; senão, só reporte `N`.
+  `/understand` é LLM-heavy (subagents, cota da assinatura) — por isso o gatilho por threshold,
+  não a cada passada. O `/understand` roda no modelo da própria sessão do loop; não usa API.
+{%- endif %}
 - **Integridade referencial (backstop de rename/delete)** —
   `python3 .harness/lib/ref_integrity.py --since <ref-da-última-passada-verde>` (report-only:
   pega o que escapou do pre-commit — bypass `--no-verify`, edição manual, ou projeto onde
