@@ -1,0 +1,13 @@
+---
+name: {{ prod_stack_prefix }}-prod-prune
+enabled: true
+event: bash
+action: block
+pattern: docker\s+(system|image|volume|container|builder)\s+prune
+---
+
+BLOQUEADO: `docker prune` nesta máquina.
+
+{% if prod_host_name %}Esta máquina ({{ prod_host_name }}) é{% else %}Esta máquina é{% endif %} o AMBIENTE DE PRODUÇÃO (Swarm {{ prod_stack_prefix }}_* + registry {{ prod_registry_url }}). As imagens antigas no daemon/registry são o ÚNICO caminho de rollback — um prune descontrolado pode destruir o rollback durante um incidente.
+
+Se a limpeza for realmente necessária (disco cheio), quem roda é o dono do projeto, manualmente, depois de listar o que será removido (`docker images`, `docker system df`) e garantir tag de backup das imagens {{ prod_stack_prefix }} correntes.

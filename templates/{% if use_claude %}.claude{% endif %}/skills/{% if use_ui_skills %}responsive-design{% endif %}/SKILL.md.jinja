@@ -1,0 +1,101 @@
+---
+name: responsive-design
+description: >
+  Framework de decisão para responsividade — corrige componentes quebrados
+  e orienta a construção de componentes novos. Decision model
+  viewport/container/vertical/content, container queries, fluid typography
+  (clamp), anti-patterns transversais. 100% tech-agnóstico (CSS moderno);
+  use ao construir ou refatorar qualquer layout responsivo do
+  {{ project_name }}.
+---
+
+# Responsive Design — decision framework
+
+Origem: generalizado de um sistema de responsividade real de um projeto
+doador de referência — o decision model e a quick decision table
+sobreviveram porque são CSS puro/tech-agnóstico. O que foi removido:
+declaração de stack/versões daquele projeto específico, a constraint de
+theming via inline-style daquele repo (contradiz um padrão de tokens
+CSS/W3C DTCG — o mais comum neste tipo de stack) e a lista de paths de
+componentes daquele repo. Também não portamos a árvore de regras
+(`rules/*.md`) referenciada pela fonte original — citar esses arquivos sem
+portá-los criaria referência quebrada (o mesmo modo de falha que a wiki
+Karpathy deste harness existe para prevenir); o que segue é o conteúdo que
+estava DENTRO do `SKILL.md` da fonte, não um índice para arquivos externos.
+
+## Core Decision Model
+
+**Sempre pergunte primeiro: qual referência espacial governa este
+comportamento?**
+
+| Referência | Quando | Ferramentas |
+|-----------|--------|--------------|
+| Viewport | Shell de página, split de rota, áreas full-screen | breakpoints (`md:`, `lg:`), `vw`, `max-w` |
+| Container | Cards, seletores, widgets, tabelas dentro de card | `@container`, `cqi`, `clamp()` |
+| Eixo vertical | Modais, drawers, dropdowns, altura visível | `dvh`, `max-height`, `overflow-y` |
+| Content | Truncamento, wrap, overflow, largura intrínseca | `min-w-0`, `truncate`, `overflow-auto`, `flex-wrap` |
+
+Não escolha pela categoria do componente (ex.: "é um card, então é sempre
+container"). Escolha pela restrição REAL de layout que está em jogo naquele
+ponto específico — um card dentro de um modal tem eixo vertical governando
+a altura E container governando a largura, ao mesmo tempo.
+
+## Quick Decision Table
+
+| Cenário | Estratégia |
+|---------|-----------|
+| Layout de página (header, sidebar, main) | breakpoints (`md:`, `lg:`) ou hook de device |
+| Card em containers diferentes | `@container` + variante de container query |
+| Texto escala com o card | `clamp(rem, rem + cqi, rem)` |
+| Texto escala com o viewport | `clamp(rem, rem + vw, rem)` |
+| Altura de modal/drawer/dropdown | `dvh` + `max-height` + `overflow-auto` |
+| Tabela dentro de card | `overflow-x-auto` + `min-w-0` nas células flex |
+| Grid de cards | `repeat(auto-fit, minmax(280px, 1fr))` |
+| Troca completa de UI mobile/desktop | hook de breakpoint + componente mobile dedicado |
+| Ícone/botão dentro de card | `clamp(px, px + cqi, px)` |
+| Grid tipo calendário/date-picker | `containerType: 'inline-size'` + células `aspectRatio` + `cqi` no clamp |
+
+Ao usar este framework num refactor real: todo bloco de exemplo do código
+ATUAL do projeto rotulado "antes"/"quebrado" é insumo de refactor, nunca
+código a copiar para outro lugar.
+
+## Regras transversais (aplicam-se sempre, qualquer eixo)
+
+1. Todo `clamp()` de tipografia/spacing deve incluir a base em **rem**, não
+   só `px`/`vw` — acessibilidade: WCAG 1.4.4 exige que o zoom do navegador
+   escale o texto, e zoom escala `rem` (relativo à fonte raiz), não `px`.
+2. Anime só `transform` e `opacity` — nunca `width`, `height`, `margin` ou
+   `padding`. Motivo: propriedades de layout forçam reflow a cada frame;
+   `transform`/`opacity` ficam isolados no compositor (GPU), sem reflow.
+3. Prefira comportamento responsivo CSS-first (media/container query)
+   antes de recorrer a um hook de breakpoint em JS — CSS não paga custo de
+   re-render nem sofre de layout-thrashing em resize.
+4. Responsabilidade de espaçamento por camada: o **shell** possui o
+   padding externo; o **container** possui o gap entre filhos; o
+   **componente-folha** não possui nenhum dos dois — evita padding/gap
+   duplicado quando o mesmo componente é composto em contextos diferentes.
+
+## Response Format
+
+Ao analisar um componente sob este framework, sempre entregue, nesta
+ordem:
+
+1. **Leitura estrutural** — é shell, container, folha ou overlay?
+2. **Referência espacial** — o que governa largura, altura e escala
+   interna deste componente especificamente (Core Decision Model acima)?
+3. **Recomendação** — ferramentas CSS/framework concretas a usar.
+4. **Justificativa** — por que essa estratégia cabe nesse contexto (não
+   "geralmente é assim").
+5. **Anti-patterns detectados** — o que evitar ou corrigir, com o
+   path+linha real do código analisado.
+6. **Plano acionável** — separado por camada externa / escala interna /
+   eixo vertical / fallback de conteúdo, na ordem em que devem ser
+   aplicados.
+
+## Skills relacionadas
+
+| Preciso de | Vá para |
+|------------|---------|
+| Playbook por tipo de componente (card, dropdown, tabela, chart...) | skill `ui-component-playbook` |
+| Tokens de cor, variantes, anti-patterns de design-system | a skill/doc de design-system canônica **deste projeto**, se existir |
+| Minerar/clusterizar className repetido para decidir se vira token | skill `classname-token-workflow` |

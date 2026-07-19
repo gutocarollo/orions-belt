@@ -1,0 +1,91 @@
+# Termos ignorados globalmente por engine/lint/ref_integrity.py (1 por linha, '#' = comentário).
+# Cada entrada = link markdown ilustrativo (exemplo de sintaxe/placeholder em prosa), não uma
+# referência real de arquivo do repo. Achados ao portar skills de terceiros para templates/ (F3).
+
+# G1 (revisão adversarial pós-v1.0.0) — as 4 entradas antigas deste bloco (curate-long-context/
+# SKILL.md:101, diataxis/references/{compass,how-to-guides,reference-vs-explanation}.md) foram
+# REMOVIDAS: os 4 links foram CONSERTADOS na fonte (deixaram de usar sintaxe `](...)` de link
+# markdown navegável — viraram texto/placeholder `#`), então não geram mais finding e não
+# precisam mais de allowlist. Motivo de terem sido flagados originalmente: `ref_integrity.py`
+# só zera code FENCE (```), não code SPAN (`` `x` ``) — um link dentro de crase simples ainda
+# é parseado pelo `LINK_RE`. Ver .git log do commit que resolveu G1 para o antes/depois.
+
+# docs/planning/notas-f1.6.md:4 (F5) — citação HISTÓRICA legítima: o doc registra qual era o path
+# exato no momento da decisão F1.6 (antes do rename incondicional em F5, documentado na nota
+# "Atualização F5" logo abaixo dela no mesmo arquivo). Preservar o path antigo aqui é o ponto —
+# não é uma referência morta a corrigir.
+{% if use_codex %}AGENTS.md{% endif %}.jinja
+
+# ------------------------------------------------------------------------------------------------
+# F9 — remoção do case-study/ (2026-07-18). O case-study espelhava 122 arquivos do harness-doador,
+# incluindo os ÚNICOS arquivos tracked com estes basenames literais (as versões do framework são
+# `.jinja`, basename diferente). Removê-los faz o detector cair no fallback por basename e flagar
+# TODA menção em prosa destes nomes-conceito repo-wide (docs/planning histórico, comentários de
+# proveniência em engine//templates/, e o próprio manual falando dos artefatos que o harness GERA
+# em runtime — ex.: manifest.json da ui-evidence, RUN.md do marathon). São conceitos vivos do
+# produto, não referências mortas ao case-study. Allowlist da remoção em massa, 1 term por linha:
+.ds-allowlist
+14-repos-publicos.md
+CLAUDE.md
+RUN.md
+SENSITIVE.md
+config.py
+deliverable-banlist.txt
+design-system-wiki-lint.py
+ds-classname-workflow-check.sh
+git-doctor.sh
+globals.css
+hookify.bare-python.local.md
+hookify.db-port-5432.local.md
+hookify.relative-cd.local.md
+hookify.web-dev-port.local.md
+learnhouse-adversarial-reviewer.toml
+learnhouse-context-scout.toml
+learnhouse-implementer.toml
+learnhouse-test-auditor.toml
+lessons-inject.sh
+lessons.md
+loop.md
+manifest.json
+pre-commit
+settings.json
+task-journal.log
+ui-evidence-gate.sh
+understand-apps-diff-guard.sh
+understand-context-inject.py
+verify.py
+
+# ------------------------------------------------------------------------------------------------
+# R2 (2026-07-18) — distribuição de lint, plano de resgate §2 item "Distribuição de lint". Estas 3
+# entradas TAMBÉM caíam no bucket F9 acima até esta rodada, mas por um motivo DIFERENTE que já foi
+# corrigido: `docs_wiki_lint.py`/`ref_integrity.py` agora são materializados de verdade em
+# `templates/.harness/lib/` e `understand-apps-changed-files.sh` em
+# `templates/.harness/lib/{% if harness_understand_apps_root %}...{% endif %}.jinja`; toda a prosa em
+# templates/ (AGENTS.md.jinja, docs/SCHEMA.md.jinja, as skills repo-wiki-curator/ref-integrity/
+# understand-apps-incremental, os hooks understand-apps-diff-guard.sh/understand-context-inject.py,
+# a skill {{ project_name }}-delivery-council e o agent Codex adversarial-reviewer) foi corrigida para
+# apontar pros locais reais — CONFIRMADO empiricamente: rodar `ref_integrity.py --staged` sem estas 3
+# linhas NÃO flagra mais nenhum arquivo em templates/. O que resta e ainda exige a entrada é outra
+# coisa, legítima e permanente: `docs/planning/research/{01-guto-wiki,02-agent-swarm,03-hardcodes,
+# 06-scaffolding-oss,07-autoconfig-patterns}.md` e `docs/planning/00-plano-consolidado.md` citam os
+# nomes hifenizados originais do guto-wiki/agent-swarm/learnhouse-doador como HISTÓRIA de outros
+# repos (não afirmam que existem aqui); `engine/_tooling_conf.py`, `engine/lint/docs_wiki_lint.py`,
+# `engine/lint/ref_integrity.py` e a cópia materializada `templates/.harness/lib/_tooling_conf.py`
+# citam os mesmos nomes em comentário de proveniência (mesma razão). Nenhum desses é referência morta
+# a corrigir — são citação de fato histórico em doc de arquivo (docs/planning) ou nota de autoria
+# (docstring). Manter as 3 linhas por esse motivo, não mais pelo motivo original do bloco F9 acima.
+docs-wiki-lint.py
+ref-integrity.py
+understand-apps-changed-files.sh
+
+# ------------------------------------------------------------------------------------------------
+# R8 (limpeza final de genericidade) — `ds-gate.sh` REMOVIDO do bloco F9 acima após teste empírico.
+# Diferente dos 3 nomes do bloco R2 (que continuam hifenizados vs. o arquivo real com underscore),
+# `templates/.harness/lib/ds-gate.sh` é tracked com o MESMO basename literal citado em prosa — o
+# detector resolve `base in tracked_bases` e cai no ramo "ainda existe, busca só por PATH completo
+# antigo" (não bare-basename), então nenhuma citação genérica a `ds-gate.sh` é mais flagada.
+# CONFIRMADO empiricamente com `ref_integrity.py --staged` E `--since HEAD` (o segundo cobre o
+# gap real do primeiro: `check_md_links(staged=True)` só varre .md do diff atual, não o repo
+# inteiro — por isso as 4 entradas de placeholder de link acima e `{% if use_codex %}AGENTS.md
+# {% endif %}.jinja` foram TESTADAS e CONFIRMADAS ainda necessárias via `--range`/`--since`, apesar
+# de aparentarem "mortas" sob `--staged` isolado — não remover essas.

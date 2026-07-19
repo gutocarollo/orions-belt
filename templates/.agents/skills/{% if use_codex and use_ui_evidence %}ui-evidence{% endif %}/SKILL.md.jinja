@@ -1,0 +1,9 @@
+{#-
+  Wrapper Codex (H3/A1, harness-wiki) — fonte única em
+  templates/.harness/skills-shared/ui-evidence/SKILL.md.jinja. Gerado só
+  quando use_codex E use_ui_evidence (o motor de evidência visual é opcional
+  nos dois runtimes). Espelho do wrapper
+  .claude/skills/{% raw %}{% if use_ui_evidence %}{% endraw %}ui-evidence{% raw %}{% endif %}{% endraw %}/SKILL.md.jinja
+  (mesma fonte, mesmo include). Editar SÓ a fonte, nunca este wrapper.
+-#}
+{%- include "templates/.harness/skills-shared/ui-evidence/SKILL.md.jinja" -%}

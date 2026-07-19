@@ -1,0 +1,14 @@
+---
+name: relative-cd
+enabled: true
+event: bash
+action: warn
+conditions:
+  - field: command
+    operator: regex_match
+    pattern: (^|&&|;|\|\|)\s*cd\s+(?!["']?(/|\$|~|-\s*$))
+---
+
+ATENÇÃO: `cd` relativo. Em várias sessões o cwd RESETA entre chamadas Bash ("Shell cwd was reset to ...") — `cd apps/web` numa call não vale na próxima, e já causou "cd: apps/web: No such file or directory".
+
+Use caminho ABSOLUTO — `cd {{ project_root }}/apps/web && ...` — ou melhor, embuta o caminho absoluto direto no comando (ex.: `bash {{ project_root }}/apps/web/scripts/ui-evidence.sh`) sem depender do cwd.

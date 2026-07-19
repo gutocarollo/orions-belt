@@ -1,0 +1,212 @@
+{#
+  hooks.json — registro de hooks nativos do Codex (F4, harness-wiki).
+
+  Fonte de verdade: docs/planning/00-plano-consolidado.md §1/§4/§6-F4 +
+  docs/planning/research/05-codex-surface.md §2.5 (mesmo protocolo JSON/exit-2
+  do Claude Code: hookSpecificOutput, exit 0 = ok, exit 2 + stderr = block).
+  Formato e nomes de evento/matcher confirmados ao vivo em learn.chatgpt.com/docs/hooks
+  nesta sessão (WebFetch — a pesquisa em research/05 não detalhava tool-names
+  de matcher nem env var de project-root; verificado antes de gerar este arquivo,
+  não assumido):
+    - Sem env var equivalente a $CLAUDE_PROJECT_DIR: o doc recomenda resolver
+      via `$(git rev-parse --show-toplevel)` para hooks repo-local — por isso
+      o `command` abaixo usa esse padrão em vez de uma variável de ambiente.
+      Os scripts em .harness/hooks/ já fazem o MESMO fallback internamente
+      (`ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"`, herdado
+      do subagent-throttle.sh original do F0) — funcionam idênticos nos dois
+      runtimes sem nenhuma mudança de script, só o `command` externo muda.
+    - matcher é regex; omitir ou usar "*"/"" casa toda ocorrência.
+    - Tool-names confirmados: "Bash" (shell), "Edit|Write" (apply_patch — o
+      doc mostra esse matcher como alternativa válida), spawn_agent (subagent).
+    - CORREÇÃO (A1/H3, achado real desta sessão — invalida a nota anterior
+      deste bloco): `SubagentStart` é evento de INJEÇÃO DE CONTEXTO
+      (`additionalContext`), não bloqueia — `continue: false` nesse evento
+      "doesn't stop the subagent from starting" (confirmado via WebFetch
+      learn.chatgpt.com/docs/hooks nesta sessão). Quem intercepta
+      `spawn_agent` ANTES de ele rodar é `PreToolUse` (suporta bloqueio via
+      exit 2 ou `permissionDecision: "deny"`), com matcher casando o
+      tool/function-name "spawn_agent" — igual ao Claude, que já faz esse
+      mesmo hack de interceptar o lançamento de subagent via `PreToolUse`
+      (matcher `Task|Agent` em settings.json.jinja). subagent-throttle.sh
+      portanto registra em `PreToolUse` abaixo, não em `SubagentStart`
+      (a nota anterior recomendando SubagentStart estava errada — pesquisa
+      research/05 §5.2 não tinha essa confirmação ao vivo, só inferência).
+      subagent-release.sh continua em `SubagentStop` (evento de FIM de
+      subagent, adequado para liberar slot — não precisa bloquear, só
+      observar) migrado de PostToolUse + PostToolUseFailure (2 registros no
+      Claude, mesmo script) para 1 único registro — o doc não confirma
+      explicitamente se SubagentStop dispara em falha de subagent também,
+      não só sucesso; assumido que sim (campo `last_assistant_message` é
+      nullable "se indisponível", sugerindo que o evento cobre os dois
+      casos) — se essa suposição se provar errada, o fallback é registrar
+      subagent-release.sh também em PostToolUse matcher="spawn_agent" (não
+      feito agora para não duplicar liberação de slot sem evidência de que
+      é necessário).
+    - `statusMessage` (hint de UI do Claude Code) NÃO foi confirmado como
+      campo reconhecido do Codex nos 3 fetches desta sessão — omitido aqui
+      (só type/command/timeout, campos confirmados) em vez de assumido.
+    - PostToolUseFailure, SessionEnd e Notification NÃO existem no Codex
+      (research 05 §2.5/§4) — sem equivalente aqui.
+#}
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/dev-doctor.sh\" status 2>/dev/null || true",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "^(resume|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/marathon-reinject.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/git-doctor.sh\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/lessons-inject.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/lei-zero-kickoff.py\"",
+            "timeout": 10
+          }
+        ]
+      }{% if harness_understand_apps_root %},
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/understand-context-inject.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+      {%- endif %}
+    ],
+    "PreToolUse": [
+      {%- if harness_understand_apps_root %}
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/understand-apps-diff-guard.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {%- endif %}
+      {
+        "matcher": "spawn_agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/subagent-throttle.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {%- if use_ds_gate %}
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/ds-gate-posttool.sh\"",
+            "timeout": 30
+          }
+        ]
+      },
+      {%- endif %}
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/deliverable-scrub-gate.sh\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/subagent-release.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/marathon-precompact.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/completion-gate.py\"",
+            "timeout": 15
+          },
+          {%- if use_ui_evidence %}
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/ui-evidence-gate.sh\"",
+            "timeout": 15
+          },
+          {%- endif %}
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/marathon-stop-gate.sh\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/reap-leaks.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

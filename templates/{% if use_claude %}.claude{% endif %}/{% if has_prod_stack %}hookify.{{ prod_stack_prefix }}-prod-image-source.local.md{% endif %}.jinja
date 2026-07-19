@@ -1,0 +1,22 @@
+---
+name: {{ prod_stack_prefix }}-prod-image-source
+enabled: true
+event: bash
+action: block
+conditions:
+  - field: command
+    operator: regex_match
+    pattern: docker\s+service\s+update[\s\S]*{{ prod_stack_prefix }}
+  - field: command
+    operator: regex_match
+    pattern: --image
+  - field: command
+    operator: not_contains
+    pattern: "{{ prod_registry_url }}/{{ prod_stack_prefix }}-"
+---
+
+BLOQUEADO: `docker service update --image` em serviço {{ prod_stack_prefix }}_* apontando para imagem FORA de `{{ prod_registry_url }}/{{ prod_stack_prefix }}-*`.
+
+Confirme a fonte da imagem antes de atualizar produção — um registry local pode conter MÚLTIPLAS famílias de imagem (builds antigos/legados junto dos atuais); a única fonte válida para este stack é `{{ prod_registry_url }}/{{ prod_stack_prefix }}-{api,web,collab}` (ajuste os nomes de serviço ao stack real).
+
+Procedimento correto: skill `deploy-{{ prod_stack_prefix }}`.

@@ -1,0 +1,17 @@
+---
+name: no-scaley-em-overlay
+enabled: true
+event: file
+action: warn
+conditions:
+  - field: file_path
+    operator: regex_match
+    pattern: apps/web/.*\.(tsx|css)$
+  - field: content
+    operator: regex_match
+    pattern: scale-y-|scaleY\(
+---
+
+ANTI-PATTERN DE ANIMAÇÃO (CLAUDE.md/AGENTS.md ⭐ dropdown canônico, se este projeto tiver um): `scaleY` distorce o texto durante a animação. Para dropdown/menu/flyout/popover o canônico costuma ser **clip-path inset + translateY + opacity**, aplicado via classes plain-CSS por `[data-state]`/`[data-side]`. Para expand-collapse inline: `grid grid-rows-[0fr→1fr]` + filho `overflow-hidden`.
+
+Se este uso de scaleY NÃO é animação de overlay/expansão (ex.: transform estático legítimo), siga — mas declare isso no veredito.

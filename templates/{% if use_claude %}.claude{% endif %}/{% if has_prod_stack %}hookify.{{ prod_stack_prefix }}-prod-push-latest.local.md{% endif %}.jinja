@@ -1,0 +1,19 @@
+---
+name: {{ prod_stack_prefix }}-prod-push-latest
+enabled: true
+event: bash
+action: warn
+pattern: docker\s+push\s+{{ prod_registry_url }}/{{ prod_stack_prefix }}-[a-z]+:latest
+---
+
+ATENÇÃO: push de `:latest` para o registry de prod SOBRESCREVE o único caminho de rollback.
+
+ANTES do push, preserve a imagem atualmente deployada:
+
+```bash
+S=api   # ou o nome do serviço relevante
+docker tag {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:latest {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:prev-$(date +%Y%m%d)
+docker push {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:prev-$(date +%Y%m%d)
+```
+
+Só então faça o push do novo `:latest`. Rollback depois vira: `docker service update --image {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:prev-<data> {{ prod_stack_prefix }}_$S`. Procedimento completo: skill `deploy-{{ prod_stack_prefix }}`.

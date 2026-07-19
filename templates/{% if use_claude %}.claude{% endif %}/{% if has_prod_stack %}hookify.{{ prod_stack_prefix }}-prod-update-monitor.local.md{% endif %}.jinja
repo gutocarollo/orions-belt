@@ -1,0 +1,17 @@
+---
+name: {{ prod_stack_prefix }}-prod-update-monitor
+enabled: true
+event: bash
+action: warn
+conditions:
+  - field: command
+    operator: regex_match
+    pattern: docker\s+service\s+update[\s\S]*{{ prod_stack_prefix }}
+  - field: command
+    operator: not_contains
+    pattern: --update-monitor
+---
+
+LEMBRETE: se o healthcheck do serviço tiver start-period alto, um monitor de update curto faz o Swarm marcar task saudável como falha e reverter em loop.
+
+Verifique a config de update PERSISTIDA antes de assumir o default: `docker service inspect {{ prod_stack_prefix }}_api --format '{{ '{{' }}.Spec.UpdateConfig.Order{{ '}}' }} {{ '{{' }}.Spec.UpdateConfig.Monitor{{ '}}' }}'`. Ela é reutilizada se você não passar flags — confirme com o inspect acima antes do update. Se for sobrescrever, use explicitamente `--update-order start-first --update-monitor <tempo maior que o start-period do healthcheck>`.

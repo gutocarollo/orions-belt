@@ -1,0 +1,29 @@
+# .pre-commit-config.yaml — alternativa ao par nativo `.githooks/pre-commit` para times que já
+# usam o framework `pre-commit` (pre-commit.com). Gated por `use_pre_commit_framework` (default
+# false) — quando ligado, o `_task` do Copier que ativaria `.githooks/` via
+# `core.hooksPath` fica desligado (ver copier.yml) para não colidir: rode `pre-commit install`
+# aqui em vez de `git config core.hooksPath .githooks`.
+#
+# PROVENIENCIA (harness-wiki, R5 — plano de resgate §2 P0): generalizado a partir de um
+# `pre-commit-config.yaml` de um projeto-doador de referência (3 hooks `repo: local`, motor
+# original em `scripts/`); paths apontam para o motor real deste framework em `.harness/lib/`.
+repos:
+  - repo: local
+    hooks:
+      - id: docs-wiki-lint-staged
+        name: docs wiki lint (política de indexação staged)
+        entry: python3 .harness/lib/docs_wiki_lint.py --staged
+        language: system
+        pass_filenames: false
+
+      - id: docs-wiki-lint-global
+        name: docs wiki lint (repo inteiro)
+        entry: python3 .harness/lib/docs_wiki_lint.py
+        language: system
+        pass_filenames: false
+
+      - id: ref-integrity-staged
+        name: ref integrity (staged)
+        entry: python3 .harness/lib/ref_integrity.py --staged
+        language: system
+        pass_filenames: false

@@ -1,0 +1,17 @@
+---
+name: icones-lucide-only
+enabled: true
+event: file
+action: warn
+conditions:
+  - field: file_path
+    operator: regex_match
+    pattern: \.(tsx|jsx)$
+  - field: content
+    operator: regex_match
+    pattern: from ['"]@phosphor-icons/react|from ['"]react-icons/(?!si['"/])
+---
+
+CANON DE ÍCONES VIOLADO: o projeto adota UMA biblioteca de ícones canônica (`lucide-react`). Único pacote extra permitido: `react-icons/si` (logos de marcas Simple Icons).
+
+Troque o import por `lucide-react` — procure o ícone equivalente em https://lucide.dev. Misturar bibliotecas de ícones quebra a consistência visual (pesos/estilos diferentes) e infla o bundle. Se a biblioteca canônica DESTE projeto for outra, edite esta regra (`.claude/hookify.icones-lucide.local.md`) para refletir a decisão — nunca conviver com duas.

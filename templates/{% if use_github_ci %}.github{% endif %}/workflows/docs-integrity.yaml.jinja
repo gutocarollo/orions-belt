@@ -1,0 +1,81 @@
+{%- raw -%}
+name: docs-integrity
+
+# PROVENIENCIA (harness-wiki, R5 — plano de resgate §2 P0): generalizado a partir de 2
+# variantes de um mesmo workflow em 2 projetos-doadores de referência (o segundo tinha um passo
+# extra de lint diff-aware, incorporado aqui — LEI ZERO: reusar a melhor versão encontrada, não
+# a primeira). Gated por `use_github_ci` (default false — arquivo nem é gerado se desligado);
+# paths apontam para o motor real deste framework em `.harness/lib/`, nunca `scripts/`.
+#
+# Backstop de CI para a wiki Karpathy: pega o que escapa do pre-commit (`.githooks/`, ou do
+# `.pre-commit-config.yaml` se `use_pre_commit_framework=true`) quando alguém commita com
+# `--no-verify` ou clona sem ativar o hook local. Ajuste `branches: [main]` abaixo se a branch
+# padrão deste repositório for outra.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/docs-integrity.yaml'
+{%- endraw %}
+      - '{{ harness_docs_dir }}/**'
+{%- raw %}
+      - '**/*.md'
+      - '.harness/lib/docs_wiki_lint.py'
+      - '.harness/lib/ref_integrity.py'
+      - '.ref-integrity-allowlist'
+  pull_request:
+    paths:
+      - '.github/workflows/docs-integrity.yaml'
+{%- endraw %}
+      - '{{ harness_docs_dir }}/**'
+{%- raw %}
+      - '**/*.md'
+      - '.harness/lib/docs_wiki_lint.py'
+      - '.harness/lib/ref_integrity.py'
+      - '.ref-integrity-allowlist'
+
+jobs:
+  docs-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Wiki lint (órfãos sem índice + naming + wayfinding)
+        run: python3 .harness/lib/docs_wiki_lint.py
+      - name: Wiki lint diff-aware (política de indexação no mesmo diff)
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+          fi
+          if [[ -n "$BASE" && "$BASE" != "0000000000000000000000000000000000000000" ]]; then
+            python3 .harness/lib/docs_wiki_lint.py --diff-base "$BASE"
+          else
+            python3 .harness/lib/docs_wiki_lint.py
+          fi
+      - name: Ref-integrity — self-test do detector
+        run: python3 .harness/lib/ref_integrity.py --selftest
+      - name: Ref-integrity — refs quebradas nos commits do push
+        if: github.event_name == 'push'
+        env:
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          BASE="$EVENT_BEFORE"
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            BASE="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
+          fi
+          python3 .harness/lib/ref_integrity.py --range "${BASE}..HEAD"
+      - name: Ref-integrity — refs quebradas no diff do PR
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 .harness/lib/ref_integrity.py --range "origin/${BASE_REF}..HEAD"
+{%- endraw %}

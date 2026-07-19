@@ -1,0 +1,654 @@
+# copier.yml — questionário do harness-wiki.
+# A CONFIG CENTRAL é o produto: cada pergunta aqui materializa uma chave em
+# .harness/harness.conf.jinja (a fonte do schema é docs/planning/research/
+# 03-hardcodes.md §3 — ~40 variáveis levantadas por auditoria do harness real
+# do learnhouse). `copier copy` grava as respostas em .harness/answers.yml
+# (relocado do default `.copier-answers.yml` — ver _answers_file abaixo) e
+# renderiza esta árvore de templates no projeto-alvo.
+#
+# `copier update` reaplica este questionário preservando as respostas já
+# dadas (default do Copier: pergunta só o que mudou desde a última versão) e
+# faz merge 3-vias nos arquivos que o usuário customizou localmente — é por
+# isso que Copier foi escolhido sobre cookiecutter/cruft (docs/planning/
+# research/06-scaffolding-oss.md §1-3).
+#
+# LOCALIZAÇÃO NA RAIZ DO REPO (F8, achado real — não estava assim antes):
+# copier.yml vivia em templates/copier.yml e todo `copy`/teste apontava
+# `template_src` DIRETO pra pasta templates/. Isso funciona para `copy` mas
+# QUEBRA silenciosamente o versionamento VCS: confirmado empiricamente nesta
+# sessão (2 repros isolados + docs oficiais copier.readthedocs.io/en/stable/
+# configuring/) que `--vcs-ref`/tags só funcionam quando `template_src` é a
+# RAIZ do repositório git — apontar pra um subdiretório sempre resulta em
+# "Copying from template version None" (ignora o tag, usa sempre o working
+# tree atual). O PRÓPRIO plano original já dizia isso corretamente
+# (docs/planning/00-plano-consolidado.md linha 48: `copier copy gh:<owner>/
+# harness-wiki . --trust` — raiz do repo, não .../templates) — a
+# implementação (F0-F5) tinha desviado disso. `_subdirectory: templates`
+# abaixo resolve: aponte SEMPRE para a raiz do repo (`.` local ou
+# `gh:<owner>/harness-wiki`), nunca para `templates/` direto.
+_subdirectory: templates
+
+_answers_file: .harness/answers.yml
+_min_copier_version: "9.0.0"
+
+# Default do Copier (copier/_template.py DEFAULT_EXCLUDE) + 2 padrões nossos.
+# Definir _exclude REPLACES o default (não soma) — por isso os 8 padrões
+# originais estão replicados aqui, não só os novos. Os 4 itens `/tests/*` e
+# `/verification/*` abaixo são a QA do PRÓPRIO harness-wiki sobre o merge
+# do council (F1.5: council-witness.json + test_council_merge.py) — testam a
+# árvore de templates ANTES de virar produto instalado; não fazem sentido
+# dentro de um projeto-alvo já instalado (testariam paths que nem existem
+# mais lá) e não devem ser copiados.
+#
+# EXCLUSÃO POR ARQUIVO NOMINAL, não por diretório inteiro (mudou no R3 do
+# plano de resgate — bug real encontrado ao portar o motor de evidência
+# visual): a versão anterior excluía com `/tests` e `/verification`
+# (leading slash = âncora na raiz de `templates/`, dita como correta pela
+# nota histórica de F5 abaixo). Isso quebrava silenciosamente qualquer
+# projeto-alvo com `harness_web_app_dir="."` (o default — projeto-alvo SEM
+# wrapper de monorepo): `templates/{% if X %}{{ harness_web_app_dir }}{%
+# endif %}/tests/visual/routes.json` renderiza, com "." colapsado pelo
+# Copier, para o MESMO path raiz `tests/visual/routes.json` que a âncora
+# `/tests` intercepta — o arquivo do projeto-alvo era descartado junto com
+# a QA do framework, sem aviso (confirmado com 2 renders isolados, `.`
+# vs `apps/web`, nesta sessão). Como glob não distingue "é a QA do
+# framework" de "é conteúdo legítimo de projeto no mesmo path renderizado",
+# a correção é excluir os arquivos REAIS pelo nome em vez do diretório
+# inteiro — qualquer projeto-alvo pode ter seu próprio `tests/` ou
+# `verification/` sem colidir. Novo arquivo de QA do framework em
+# `templates/tests/` ou `templates/verification/` precisa ser adicionado
+# aqui nominalmente (o teste `templates/tests/test_copier_update_e2e.sh`
+# não cobre este caso — se um novo arquivo aparecer sem entrada aqui, ele
+# vaza para todo projeto-alvo). `test_harness_install_brownfield_e2e.sh`
+# (B3) entrou nesta lista na mesma rodada em que foi criado; H4 (auditoria
+# adversarial) somou `test_copier_update_no_op.sh` (M1) e
+# `test_check_platform.sh` (M3) — contagem atual: 10 arquivos em `/tests/`
+# + 1 em `/verification/` (não hardcode um número aqui de novo; conferir
+# a lista literal abaixo é a fonte de verdade, este comentário só explica
+# o PORQUÊ).
+#
+# Nota histórica (ainda válida, é sobre outra armadilha): **leading slash é
+# obrigatório** nos paths abaixo (verificado na sessão F5 via render real):
+# sem ele, um nome bateria em QUALQUER subdiretório homônimo em qualquer
+# profundidade — o bug original encontrado ao adicionar
+# `.harness/lib/tests/` (suite portátil de scan_project.py/merge_docs.py,
+# deve SIM ir para o projeto-alvo, ao contrário de `templates/tests/`).
+_exclude:
+  - "copier.yaml"
+  - "copier.yml"
+  - "~*"
+  - "*.py[co]"
+  - "__pycache__"
+  - ".git"
+  - ".DS_Store"
+  - ".svn"
+  - "/tests/test_copier_update_e2e.sh"
+  - "/tests/test_council_merge.py"
+  - "/tests/test_harness_init_e2e.sh"
+  - "/tests/test_harness_install_brownfield_e2e.sh"
+  - "/tests/test_ui_evidence_gate_bypass.sh"
+  - "/tests/test_ds_pairs_oklch.sh"
+  - "/tests/test_ds_gate_hardening.sh"
+  - "/tests/test_codex_parity.sh"
+  - "/tests/test_copier_update_no_op.sh"
+  - "/tests/test_check_platform.sh"
+  - "/tests/test_skill_runtime_parity.sh"
+  - "/verification/council-witness.json"
+  # H3/A1 (fonte única de skills dual-runtime — grill-me,
+  # prova-de-conclusao, marathon, repo-wiki-curator, ui-evidence, verify):
+  # estes arquivos existem só para {% raw %}{% include %}{% endraw %} pelos
+  # wrappers reais em .claude/skills/<nome>/ e .agents/skills/<nome>/ (mesmo
+  # padrão já usado por templates/AGENTS.md.jinja↔.claude/CLAUDE.md.jinja).
+  # Não fazem sentido copiados soltos para um projeto-alvo (nenhum runtime
+  # escaneia .harness/skills-shared/ em busca de SKILL.md). Novo skill
+  # dual-runtime que adotar este padrão precisa somar a entrada aqui.
+  # Nota (achado real ao testar): o exclude casa contra o nome JÁ RENDERIZADO
+  # (Copier estrip a suffix `.jinja` antes de comparar) — por isso os paths
+  # abaixo NÃO terminam em `.jinja`, mesmo a fonte sendo `SKILL.md.jinja`.
+  - "/.harness/skills-shared/grill-me/SKILL.md"
+  - "/.harness/skills-shared/prova-de-conclusao/SKILL.md"
+  - "/.harness/skills-shared/marathon/SKILL.md"
+  - "/.harness/skills-shared/repo-wiki-curator/SKILL.md"
+  - "/.harness/skills-shared/ui-evidence/SKILL.md"
+  - "/.harness/skills-shared/verify/SKILL.md"
+  # M-ALTA/H4 (gap simétrico ao H3: council + adversarial-review só
+  # existiam em .agents/skills, sem condicional de runtime -- um install
+  # Claude-only não os tinha, já que Claude Code não escaneia
+  # .agents/skills). Mesmo mecanismo skills-shared das 6 skills acima,
+  # mesma regra de exclusão nominal.
+  - "/.harness/skills-shared/delivery-council/SKILL.md"
+  - "/.harness/skills-shared/adversarial-review/SKILL.md"
+
+# _tasks — 1 post-gen task (R5, plano de resgate §2 P0 item "camada de enforcement da wiki").
+# Ativa `.githooks/pre-commit` (sempre materializado, incondicional — ver
+# `templates/.githooks/pre-commit.jinja`) apontando `core.hooksPath` para ele, para que o
+# ref-integrity rode a cada commit sem passo manual.
+#
+# DECISÃO (_task vs. ativação manual, empiricamente testada nesta sessão com Copier 9.17.0):
+# usar `_task`. `--trust` (já obrigatório neste projeto para QUALQUER `copier copy`/`update` —
+# ver README.md e docs/manual/14-instalacao-e-update.md) é suficiente para `_tasks` rodarem;
+# não é necessário `--UNSAFE` (esse flag só gateia Jinja extensions/migrations, confirmado via
+# Context7 `/copier-org/copier` docs/configuring.md). Custo marginal de ativação = zero porque o
+# usuário já precisa passar `--trust`.
+#
+# FONTE ÚNICA (A2, revisão adversarial pós-v1.0.0 — gap real corrigido): a lógica de ativação
+# vive em `.harness/lib/set_hooks_path.sh` (script framework-owned, materializado ANTES dos
+# `_tasks` rodarem), não mais inline aqui. O script cobre os dois gates originais:
+#
+# GATE 1 (não falhar em destino não-git): `git config core.hooksPath ...` cru retorna exit 128
+# ("fatal: not in a git directory") e ESTOURA `copier copy` inteiro (exit 1) se o destino ainda
+# não é um repositório git. `set_hooks_path.sh` guarda com `git rev-parse --is-inside-work-tree`
+# antes; se falhar, só avisa em stderr e retorna 0 (fail-open).
+#
+# GATE 2 (não colidir com `use_pre_commit_framework`): mesma regra de sempre — o `_task` só roda
+# quando `use_pre_commit_framework=false`; ver comentário em `templates/.githooks/pre-commit.jinja`.
+#
+# GATE 3 — NOVO (A2, o gap real): `set_hooks_path.sh` nunca SOBRESCREVE um `core.hooksPath` já
+# configurado apontando para outro lugar (Husky em `.husky/`, lefthook, etc.) — antes deste fix
+# o comando rodava incondicional e fazia clobber silencioso de qualquer hook manager brownfield
+# já instalado. Se já houver um hooksPath diferente de `.githooks`, o script AVISA em vez de
+# sobrescrever e ensina o encadeamento compatível (chamar `.githooks/pre-commit` de dentro do
+# hook existente do usuário). Mesmo script é reusado por `harness-install.sh` (raiz do repo) no
+# fluxo brownfield, porque nesse fluxo o `_task` abaixo roda dentro do SCRATCH intermediário, não
+# do projeto-alvo — ver comentário no topo de `harness-install.sh`.
+_tasks:
+    - command: bash .harness/lib/set_hooks_path.sh .
+      when: "{{ not use_pre_commit_framework }}"
+
+# =========================================================================
+# --- identidade ---
+# =========================================================================
+project_name:
+    type: str
+    help: >-
+        Slug do projeto (kebab/snake, minúsculo). Vira prefixo de skills,
+        subagents e containers gerados (ex.: "meu-app" -> HARNESS_DEV_CONTAINER_PREFIX=meu-app-,
+        skill "meu-app-delivery-council").
+    validator: >-
+        {% if not (project_name | regex_search('^[a-z][a-z0-9-]*$')) %}
+        project_name deve começar com letra minúscula e conter só letras, dígitos e hífen.
+        {% endif %}
+
+project_root:
+    type: str
+    help: >-
+        Path da raiz do projeto-alvo — metadado INFORMATIVO, preenchido com o
+        path ABSOLUTO pelo harness-init (scan_project.py `answers` já o emite
+        absoluto). O default abaixo é o dst_path cru do Copier e PODE ser
+        relativo (ex.: ".") se você rodar `copier copy` direto sem harness-init
+        — aceitável porque nenhum hook/script lê este valor para resolver
+        paths: a raiz é sempre descoberta em runtime via $CLAUDE_PROJECT_DIR
+        ou `git rev-parse --show-toplevel` (ver .harness/lib/_tooling_conf.py).
+        Testado nesta versão do Copier (9.17): dst_path é PurePosixPath sem
+        `.absolute()` e não existe filtro `abspath` — não há como normalizar
+        no template.
+    default: "{{ _copier_conf.dst_path }}"
+
+client_name:
+    type: str
+    help: >-
+        Nome do cliente, se este projeto for um entregável para terceiros
+        (ex.: "Quero-Quero"). Vazio = projeto interno/produto próprio, sem
+        camada de cliente (CLIENT_NAME fica vazio no .conf).
+    default: ""
+
+client_product_name:
+    type: str
+    help: 'Nome comercial do produto entregue ao cliente (ex.: "Quero-Quero Academy").'
+    default: ""
+    when: "{{ client_name != '' }}"
+
+client_org_slug:
+    type: str
+    help: 'Slug/tenant do cliente usado em config de app (ex.: org default do multi-tenant).'
+    default: ""
+    when: "{{ client_name != '' }}"
+
+owner_name:
+    type: str
+    help: Nome do dono/mantenedor do projeto (aparece em comentários de regra nos hooks gerados).
+
+git_remote_owner:
+    type: str
+    help: 'Owner/organização do remote git (ex.: "gutocarollo").'
+    default: ""
+
+git_remote_url:
+    type: str
+    help: 'URL SSH do remote git (ex.: "git@github.com:owner/repo.git").'
+    default: ""
+
+# =========================================================================
+# --- superfícies de runtime a gerar (controla quais árvores de template rodam) ---
+# M1/H4 (auditoria adversarial pós-v1.0.0, no-op não-idempotente de
+# `copier update`): ESTE BLOCO PRECISA vir antes de qualquer questão cujo
+# `when`/`default` leia use_claude/use_codex (harness_codex_max_threads,
+# harness_codex_max_depth, harness_codex_project_doc_max_bytes,
+# harness_codex_agents_dir, harness_codex_config_path, mais adiante neste
+# arquivo). Copier resolve `when` na ORDEM DE DECLARAÇÃO do questionário —
+# confirmado via Context7 /copier-org/copier docs/configuring.md ("the
+# question is skipped and its answer is not recorded" quando `when` avalia
+# false) — se a variável referenciada ainda não foi declarada/perguntada,
+# ela é undefined (falsy) NA PRIMEIRA `copier copy`, a pergunta é pulada e
+# a resposta não é gravada em answers.yml, mesmo com use_codex=true. No
+# `copier update` seguinte (mesma versão, zero mudança de template!),
+# use_codex já está carregado do answers.yml ANTES da varredura de questões
+# — quando agora avalia true, a pergunta é feita e a resposta é ADICIONADA,
+# um update que deveria ser no-op muda o arquivo. Reproduzido nesta sessão
+# (`copier copy --defaults` seguido de `copier update --vcs-ref` na MESMA
+# tag: 5 chaves harness_codex_* apareciam como diff). Fix: declarar
+# use_claude/use_codex cedo, antes de qualquer dependente. Mesma regra vale
+# para has_prod_stack (movido para o bloco PROD, antes de
+# harness_mcp_db_prod_port, que tinha o mesmo bug).
+# =========================================================================
+use_claude:
+    type: bool
+    help: Gerar as superfícies do Claude Code (.claude/, CLAUDE.md, .agents/skills)?
+    default: true
+
+use_codex:
+    type: bool
+    help: Gerar as superfícies do Codex (.codex/, AGENTS.md)?
+    default: true
+
+# =========================================================================
+# --- dev stack ---
+# =========================================================================
+harness_dev_api_port:
+    type: int
+    help: Porta do backend/API em desenvolvimento local.
+    default: 8000
+
+harness_dev_web_port:
+    type: int
+    help: Porta do frontend/web em desenvolvimento local.
+    default: 3000
+
+harness_dev_collab_port:
+    type: int
+    help: Porta de serviço de colaboração/websocket em dev, se existir (0 = não aplicável).
+    default: 0
+
+harness_dev_db_port:
+    type: int
+    help: Porta do Postgres/DB exposta no host (fora do container) em dev.
+    default: 5432
+
+harness_dev_db_internal_port:
+    type: int
+    help: Porta do Postgres/DB dentro do container (normalmente 5432).
+    default: 5432
+
+harness_dev_redis_port:
+    type: int
+    help: Porta do Redis em dev.
+    default: 6379
+
+harness_reserved_ports:
+    type: str
+    help: >-
+        CSV de portas que o dev NÃO pode usar por conflitar com outra
+        ferramenta local (ex.: painel de deploy). Vazio = nenhuma reserva.
+    default: ""
+
+harness_mcp_db_dev_port:
+    type: int
+    help: Porta do MCP server de Postgres dev, se houver (0 = não usa MCP de DB).
+    default: 0
+
+harness_mcp_proxy_image:
+    type: str
+    help: Imagem docker do proxy MCP de banco, se usar um (vazio = não aplicável).
+    default: ""
+
+# =========================================================================
+# --- prod (bloco inteiro condicional — has_prod_stack=false = sem guardas de prod) ---
+# =========================================================================
+has_prod_stack:
+    type: bool
+    help: >-
+        Este projeto tem uma stack de produção que o harness deve PROTEGER
+        (guardas hookify anti-destroy/anti-prune, skill de deploy)? "Não" pula
+        todo o bloco PROD_* do .conf e os hookify de proteção de prod.
+    default: false
+
+harness_mcp_db_prod_port:
+    type: int
+    help: Porta do MCP server de Postgres prod, se houver (0 = não usa MCP de DB).
+    default: 0
+    when: "{{ has_prod_stack }}"
+
+prod_stack_prefix:
+    type: str
+    help: 'Prefixo dos serviços de produção (ex.: docker stack "myapp" -> serviços "myapp_api" etc.).'
+    when: "{{ has_prod_stack }}"
+    validator: >-
+        {% if has_prod_stack and not (prod_stack_prefix | regex_search('^[a-z][a-z0-9_-]*$')) %}
+        prod_stack_prefix deve ser minúsculo, começar com letra e conter só letras/dígitos/hífen/underscore
+        (o valor é embutido literal em regex dos guardas hookify.{{ prod_stack_prefix }}-prod-*; caracteres de regex quebrariam o guard).
+        {% endif %}
+
+prod_protected_services:
+    type: str
+    help: >-
+        Lista (separada por espaço, vira string entre aspas no .conf) dos
+        serviços/labels que os guardas hookify NUNCA deixam destruir/prunar.
+    default: "{{ prod_stack_prefix | default('') }}"
+    when: "{{ has_prod_stack }}"
+
+prod_registry_url:
+    type: str
+    help: Registry docker usado para publicar as imagens de produção.
+    when: "{{ has_prod_stack }}"
+
+prod_public_web_url:
+    type: str
+    help: URL pública do frontend em produção.
+    when: "{{ has_prod_stack }}"
+
+prod_public_api_url:
+    type: str
+    help: URL pública da API em produção (vazio se só o web for exposto).
+    default: ""
+    when: "{{ has_prod_stack }}"
+
+prod_host_name:
+    type: str
+    help: Nome/hostname do host de produção (para state-checks de deploy citarem).
+    default: ""
+    when: "{{ has_prod_stack }}"
+
+# =========================================================================
+# --- caps do harness ---
+# =========================================================================
+harness_subagent_max_concurrent:
+    type: int
+    help: >-
+        Máximo de subagents lançados em paralelo antes do hook
+        subagent-throttle bloquear o próximo (protege contra estouro de
+        cota de tokens da conta).
+    default: 6
+
+harness_subagent_slot_stale_minutes:
+    type: int
+    help: Minutos até um slot de subagent "travado" (processo morto sem liberar) expirar sozinho.
+    default: 45
+
+harness_lessons_inject_max_lines:
+    type: int
+    help: Máximo de linhas do lessons.md injetadas no início de cada sessão (SessionStart hook).
+    default: 80
+
+harness_ui_evidence_skip_ttl_seconds:
+    type: int
+    help: TTL (segundos) do escape hatch `.claude/evidence/SKIP` do gate de evidência visual.
+    default: 14400
+
+harness_ui_evidence_themes:
+    type: str
+    help: CSV de temas capturados pela skill ui-evidence (nomes de tema deste projeto, se houver mais de um).
+    default: light,dark
+
+harness_reap_chromium_max_age_seconds:
+    type: int
+    help: Idade (segundos) a partir da qual um processo chromium órfão é considerado leak e reapado.
+    default: 300
+
+harness_runaway_cpu_pct:
+    type: int
+    help: "% de CPU sustentado acima do qual um processo é considerado runaway."
+    default: 50
+
+harness_runaway_min_age_seconds:
+    type: int
+    help: Idade mínima (segundos) antes de um processo de alta CPU ser considerado runaway (evita falso-positivo em build/CI legítimo).
+    default: 3600
+
+harness_marathon_max_blocks_without_progress:
+    type: int
+    help: Número de vezes que o Stop hook do marathon pode bloquear sem progresso registrado antes de ceder (anti-prisão).
+    default: 3
+
+harness_plan_review_max:
+    type: int
+    help: Máximo de rodadas do Planning Adversarial Loop.
+    default: 2
+
+harness_execution_review_max:
+    type: int
+    help: Máximo de rodadas do Adversarial Verification Loop de execução.
+    default: 3
+
+harness_adversarial_reviewer_model:
+    type: str
+    help: Nome/alias do modelo usado pelo subagent revisor adversarial.
+    default: sonnet
+
+harness_codex_max_threads:
+    type: int
+    help: "[Codex] Máximo de threads de subagent (`[agents] max_threads`)."
+    default: 4
+    when: "{{ use_codex }}"
+
+harness_codex_max_depth:
+    type: int
+    help: "[Codex] Profundidade máxima de fan-out de subagents (`[agents] max_depth`)."
+    default: 1
+    when: "{{ use_codex }}"
+
+harness_codex_project_doc_max_bytes:
+    type: int
+    help: "[Codex] Bytes máximos da cadeia AGENTS.md antes de truncar (`project_doc_max_bytes`)."
+    default: 32768
+    when: "{{ use_codex }}"
+
+# =========================================================================
+# --- convenções (defaults = padrão das ferramentas; raramente mudar) ---
+# =========================================================================
+harness_docs_dir:
+    type: str
+    help: Diretório raiz da wiki Karpathy de documentação do projeto.
+    default: docs
+
+harness_lessons_file:
+    type: str
+    help: Path do arquivo de lições do self-improvement loop.
+    default: tasks/lessons.md
+
+harness_runs_dir:
+    type: str
+    help: >-
+        Diretório de estado durável de execuções longas (marathon) e dos
+        slots de throttle de subagent. Default NEUTRO (M-ALTA/H4, auditoria
+        adversarial): era ".claude/runs" incondicionalmente, mesmo em
+        projeto codex-only/use_claude=false — os hooks/skills que leem
+        HARNESS_RUNS_DIR (marathon-*.sh, subagent-throttle.sh,
+        subagent-release.sh, skill marathon) já são dual-runtime; só o
+        DEFAULT carregava "claude" sem necessidade. ".harness/" já é o
+        diretório neutro/runtime-agnóstico do resto do framework
+        (harness.conf, answers.yml, hooks, lib) — decisão: default neutro
+        fixo (não condicional a use_claude/use_codex) porque o mesmo
+        projeto pode ter os dois runtimes ligados ao mesmo tempo (default
+        do copier.yml) compartilhando o MESMO diretório de runs/slots; um
+        default condicional por runtime criaria dois diretórios de slot
+        divergentes num projeto dual-runtime, quebrando o throttle
+        compartilhado. Instalação já existente NÃO é afetada — o valor já
+        gravado no `.harness/answers.yml` do projeto prevalece; só instalações
+        NOVAS herdam o default novo.
+    default: .harness/runs
+
+harness_evidence_dir:
+    type: str
+    help: Diretório de evidência visual (PNG + manifest do ui-evidence).
+    default: .claude/evidence
+
+harness_ignored_tool_dirs:
+    type: str
+    help: >-
+        CSV de diretórios que os lints (docs_wiki_lint.py, ref_integrity.py)
+        devem ignorar por serem gerados por ferramenta, não conteúdo.
+    default: .understand-anything,.anythingllm
+
+harness_understand_apps_root:
+    type: str
+    help: >-
+        Se este projeto usa o Understand Anything (knowledge-graph) com um
+        subdiretório monorepo como PROJECT_ROOT do grafo (ex.: "apps"),
+        informe o nome do subdiretório aqui — ativa os hooks
+        understand-context-inject/understand-apps-diff-guard e a regra de
+        diff relativo. Vazio = Understand Anything não usado (ou usado na
+        raiz do repo, sem a armadilha de PROJECT_ROOT≠git-root) — hooks
+        específicos não são gerados.
+    default: ""
+
+# =========================================================================
+# --- skills/council (engine/contract/scripts/validate_skills.py) ---
+# =========================================================================
+harness_skills_dir:
+    type: str
+    help: >-
+        Diretório onde as skills dual-runtime (Claude+Codex) do harness
+        vivem no projeto-alvo.
+    default: .agents/skills
+
+harness_required_skills:
+    type: str
+    help: >-
+        CSV de nomes de skill que validate_skills.py exige existir em
+        HARNESS_SKILLS_DIR (cada uma vira <dir>/<nome>/SKILL.md com
+        frontmatter `name`/`description`). Vazio = nenhuma skill obrigatória
+        por padrão — cada projeto declara as suas (ex.: a skill do council,
+        "{{ project_name }}-delivery-council").
+    default: ""
+
+harness_codex_agents_dir:
+    type: str
+    help: "[Codex] Diretório dos custom agents (.toml)."
+    default: .codex/agents
+    when: "{{ use_codex }}"
+
+harness_codex_config_path:
+    type: str
+    help: "[Codex] Path do config.toml do projeto."
+    default: .codex/config.toml
+    when: "{{ use_codex }}"
+
+harness_council_skill_name:
+    type: str
+    help: >-
+        Nome da skill do delivery council, SE este projeto tiver uma
+        variante OpenAI/companion (agents/openai.yaml dentro da skill) a
+        validar. Vazio = validação pulada (fail-open).
+    default: ""
+
+# =========================================================================
+# --- e2e (opcional) ---
+# =========================================================================
+has_e2e:
+    type: bool
+    help: Este projeto tem suite E2E com um usuário admin fixo (Playwright/Cypress etc.)?
+    default: false
+
+e2e_admin_email:
+    type: str
+    help: Email do usuário admin fixo usado pelos testes E2E.
+    default: admin@example.test
+    when: "{{ has_e2e }}"
+
+e2e_admin_password:
+    type: str
+    secret: true
+    help: Senha do usuário admin fixo de E2E (NUNCA a senha real de produção).
+    default: ""
+    when: "{{ has_e2e }}"
+
+# =========================================================================
+# --- módulos stack-específicos (flags por módulo — decisão D5: o harness-init
+#     detecta a stack e passa estes valores via --data conforme o relatório de
+#     aplicabilidade; default true = comportamento anterior preservado, mas um
+#     repo backend-puro pode desligar sem herdar artefato de UI inútil) ---
+# =========================================================================
+use_ui_evidence:
+    type: bool
+    help: >-
+        Instalar o módulo de evidência visual de UI (skill ui-evidence + Stop
+        hook ui-evidence-gate + bloco correspondente nas instruções)? Faz
+        sentido só em projeto com frontend renderizável + Playwright; num
+        backend puro deixa artefatos inertes — desligue (o harness-init marca
+        NAO_APLICAVEL nesses casos).
+    default: true
+
+use_icon_guard:
+    type: bool
+    help: >-
+        Instalar a regra hookify de biblioteca de ícones canônica única (warn
+        ao importar ícone fora da lib canônica em código de UI)? Só faz
+        sentido em projeto com frontend de componentes; desligue em backend
+        puro.
+    default: true
+
+use_ds_gate:
+    type: bool
+    help: >-
+        Instalar o ratchet anti-hardcode de design system (Stop/PostToolUse
+        hook `ds-gate-posttool.sh` rodando `.harness/lib/ds-gate.sh` +
+        `.harness/lib/ds-pairs-check.py` a cada Edit/Write de UI)? Motor
+        genérico (9 dimensões ERE de hardcode Tailwind + oráculo de contraste
+        WCAG dos pares texto×fundo); só faz sentido com um app web que use
+        classes Tailwind + tokens CSS num arquivo tipo globals.css. Desligue
+        em backend puro (o harness-init marca NAO_APLICAVEL nesses casos).
+    default: true
+
+use_ui_skills:
+    type: bool
+    help: >-
+        Instalar as 3 skills genéricas de UI (playbook por tipo de
+        componente, framework de decisão de responsividade, workflow de
+        mineração/tokenização de className)? Fazem sentido só em projeto com
+        frontend de componentes; desligue em backend puro (o harness-init
+        marca NAO_APLICAVEL nesses casos).
+    default: true
+
+use_data_warehouse:
+    type: bool
+    help: >-
+        Instalar a skill `star-schema-dw` (modelagem dimensional: naming
+        dbt-style/medallion dim_/fct_/rpt_/stg_, tipagem PostgreSQL
+        normativa, SCD2, COMMENT ON COLUMN como grafo de JOIN p/ MCP, +
+        validador determinístico `validate_dw.py`)? Só faz sentido em
+        projeto que tem um data warehouse dimensional (star schema)
+        propriamente dito — a maioria dos projetos NÃO tem; default false
+        (o harness-init marca NAO_APLICAVEL na ausência de sinal de DW no
+        scan de stack).
+    default: false
+
+harness_web_app_dir:
+    type: str
+    help: >-
+        Subdiretório do app web dentro do projeto (ex.: "apps/web" num
+        monorepo; "." se o projeto-alvo JÁ É o app web, sem wrapper de
+        monorepo). Usado pelos hooks/skills de UI (ds-gate, ui-evidence,
+        ui-component-playbook, responsive-design, classname-token-workflow)
+        para resolver onde ficam os componentes/estilos/scripts do
+        frontend — sem isso, esses módulos reintroduziriam "apps/web"
+        hardcoded.
+    default: "."
+    when: "{{ use_ui_evidence or use_ds_gate or use_ui_skills }}"
+
+use_github_ci:
+    type: bool
+    help: >-
+        [Reservado para R2 — distribuição de lint] Gerar workflow do GitHub
+        Actions rodando os lints do harness (docs-wiki-lint, ref-integrity)
+        em CI? Ainda não wired nesta versão; a flag existe para não precisar
+        re-perguntar o questionário quando R2 for implementado.
+    default: false
+
+use_pre_commit_framework:
+    type: bool
+    help: >-
+        [Reservado para R2 — distribuição de lint] Gerar `.pre-commit-config.yaml`
+        rodando os lints do harness antes de cada commit? Ainda não wired
+        nesta versão; a flag existe para não precisar re-perguntar o
+        questionário quando R2 for implementado.
+    default: false

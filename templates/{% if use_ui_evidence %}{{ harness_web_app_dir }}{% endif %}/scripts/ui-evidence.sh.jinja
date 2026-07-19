@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# ui-evidence — captura evidência visual rotulada (PNG + console) em
+# {{ harness_evidence_dir }}/<label>/
+# Uso: scripts/ui-evidence.sh [label] [--routes /a,/b] [--themes t1,t2] [--project desktop]
+# Preflight fail-fast (<5s) mata a classe de travamento "playwright pendura
+# minutos sem a stack no ar".
+#
+# PORTADO de apps/web/scripts/ui-evidence.sh (harness-doador de referência) —
+# plano de resgate §R3 item 1. Genericização vs. a versão-fonte:
+#   - porta fixa 3009 -> {{ harness_dev_web_port }} (HARNESS_DEV_WEB_PORT)
+#   - REPO_ROOT por profundidade fixa (../../) -> `git rev-parse --show-toplevel`
+#     (robusto independente de HARNESS_WEB_APP_DIR ser "." ou um monorepo
+#     "apps/web" — a versão-fonte assumia sempre 2 níveis)
+#   - OUT_DIR fixo ".claude/evidence" -> {{ harness_evidence_dir }} (mesmo
+#     diretório que .harness/hooks/ui-evidence-gate.sh já lê de
+#     HARNESS_EVIDENCE_DIR — hardcoded aqui divergiria do gate se o projeto
+#     mudasse HARNESS_EVIDENCE_DIR no .conf)
+#   - preflight "é o app certo?" (grep de string de um painel de infra
+#     específico do doador) REMOVIDO — não generaliza; se este projeto tiver
+#     um risco equivalente (porta compartilhada com outro serviço), adicione
+#     seu próprio preflight aqui.
+set -uo pipefail
+WEB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(git -C "$WEB_DIR" rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$REPO_ROOT" ]; then
+  echo "ui-evidence: não foi possível resolver a raiz do repo git a partir de $WEB_DIR." >&2
+  exit 1
+fi
+WEB_URL="${PLAYWRIGHT_WEB_URL:-http://localhost:{{ harness_dev_web_port }}}"
+
+LABEL="after"; ROUTES=""; THEMES=""; PROJECT="desktop"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --routes) ROUTES="$2"; shift 2 ;;
+    --themes) THEMES="$2"; shift 2 ;;
+    --project) PROJECT="$2"; shift 2 ;;
+    *) LABEL="$1"; shift ;;
+  esac
+done
+
+# PREFLIGHT 1: web no ar? (auth setup depende do form de login renderizar)
+# H2/A5.4 (auditoria pós-v1.0.0, bypass REPRODUZIDO): a versão anterior era
+# `code=$(curl ... || echo 000)` — quando o host está fora do ar, curl JÁ
+# imprime "000" via `-w '%{http_code}'` (nenhuma transação HTTP ocorreu) E
+# sai com exit != 0, então o `|| echo 000` do lado de fora ANEXAVA um
+# segundo "000" na mesma substituição de comando -> "000000", que nunca
+# batia em `[ "$code" = "000" ]` (o preflight "passava" e seguia gerando
+# evidência falsa contra um host morto). Fix: captura o stdout de curl com
+# `|| true` (preserva o "000" que o próprio curl já escreveu, sem duplicar)
+# e casa o caso real com regex (^0*$, cobre "000"/"000000"/vazio) + um
+# comprimento mínimo via wc -c (não bash param-expansion de comprimento --
+# essa sintaxe usa um cifrão seguido de chave e cerquilha que o Jinja deste
+# .jinja leria como abertura de comentário).
+code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$WEB_URL" 2>/dev/null || true)
+code_len=$(printf '%s' "$code" | wc -c)
+if [ -z "$code" ] || [[ "$code" =~ ^0*$ ]] || [ "$code_len" -lt 3 ]; then
+  echo "PREFLIGHT FALHOU: $WEB_URL não responde (stack dev fora do ar? http_code='$code')." >&2
+  {%- if project_name %}
+  echo "Suba com a skill run-{{ project_name }} antes de capturar evidência." >&2
+  {%- endif %}
+  echo "Se o alvo é outro host/porta: PLAYWRIGHT_WEB_URL=http://... $0 ..." >&2
+  exit 1
+fi
+# PREFLIGHT 2: binário chromium presente? (evita download surpresa no meio do run)
+if ! ls "${HOME}/.cache/ms-playwright"/chromium-* >/dev/null 2>&1; then
+  echo "PREFLIGHT FALHOU: chromium do Playwright ausente. Rode: cd $WEB_DIR && npx playwright install chromium" >&2
+  exit 1
+fi
+
+OUT_DIR="$REPO_ROOT/{{ harness_evidence_dir }}/$LABEL"
+mkdir -p "$OUT_DIR"
+echo "ui-evidence: label=$LABEL project=$PROJECT url=$WEB_URL -> $OUT_DIR"
+
+cd "$WEB_DIR"
+PLAYWRIGHT_WEB_URL="$WEB_URL" \
+UI_EVIDENCE_LABEL="$LABEL" \
+UI_EVIDENCE_ROUTES="$ROUTES" \
+UI_EVIDENCE_THEMES="$THEMES" \
+  npx playwright test -c playwright.visual.config.ts tests/visual/evidence.spec.ts \
+  --project="$PROJECT" 2>&1 | tail -25
+PW_EXIT=${PIPESTATUS[0]}
+
+# G3 (revisão adversarial pós-v1.0.0): NÃO escrever/atualizar manifest.json
+# quando o Playwright falhou (exit != 0). A versão anterior escrevia SEMPRE,
+# mesmo em run falho — um manifest fresco com captures:0 tem mtime novo e
+# satisfazia o Stop hook ui-evidence-gate (que só comparava mtime) para
+# sempre, mesmo sem nenhuma captura real. Defesa em profundidade: o gate
+# também passou a exigir "captures" > 0 dentro do manifest (não só mtime).
+if [ "$PW_EXIT" -eq 0 ]; then
+  # MANIFEST: prova auditável (sha256 + commit + timestamp) — é o que o Stop hook procura
+  python3 - "$OUT_DIR" "$LABEL" <<'PYEOF'
+import hashlib, json, os, subprocess, sys, datetime
+out_dir, label = sys.argv[1], sys.argv[2]
+files = {}
+for f in sorted(os.listdir(out_dir)):
+    if f == 'manifest.json':
+        continue
+    p = os.path.join(out_dir, f)
+    files[f] = hashlib.sha256(open(p, 'rb').read()).hexdigest()[:16]
+errors = []
+for f in files:
+    if f.endswith('.meta.json'):
+        m = json.load(open(os.path.join(out_dir, f)))
+        if m.get('consoleErrors'):
+            errors.append({'capture': f, 'consoleErrors': m['consoleErrors']})
+head = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'],
+                      capture_output=True, text=True).stdout.strip()
+json.dump({'label': label, 'git_head': head,
+           'generated_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+           'captures': len([f for f in files if f.endswith('.png')]),
+           'files': files, 'console_error_reports': errors},
+          open(os.path.join(out_dir, 'manifest.json'), 'w'), indent=1)
+print(f"manifest.json: {len([f for f in files if f.endswith('.png')])} PNGs, "
+      f"{len(errors)} capturas com erro de console")
+PYEOF
+else
+  echo "ui-evidence: Playwright saiu com erro (exit=$PW_EXIT) — manifest.json NÃO escrito/atualizado (evita satisfazer o gate com um run falho)." >&2
+fi
+
+echo "ui-evidence: exit playwright=$PW_EXIT — evidência em $OUT_DIR"
+exit "$PW_EXIT"

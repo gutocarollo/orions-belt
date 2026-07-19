@@ -1,0 +1,190 @@
+harness-wiki — NOTICE
+======================
+
+This file is the human-readable attribution required by the license of this
+repository: **Creative Commons Attribution-ShareAlike 4.0 International
+(CC BY-SA 4.0)** — full text in [`LICENSE`](./LICENSE) at the repo root, also
+available at https://creativecommons.org/licenses/by-sa/4.0/legalcode.
+
+Machine-readable, component-by-component detail (upstream repo, commit,
+license, byte-identical vs. modified) is in [`PROVENANCE.json`](./PROVENANCE.json).
+This NOTICE is the prose summary of that inventory, written to satisfy CC
+BY-SA 4.0 Section 3(a): identification of creators, a copyright notice, a
+notice referring to this Public License, a notice referring to the disclaimer
+of warranties, and an indication that modifications were made where they
+were.
+
+------------------------------------------------------------------
+
+## 1. This repository as a whole
+
+Copyright (c) 2026 Augusto Carollo.
+
+Licensed under CC BY-SA 4.0. You may reproduce, share, and adapt this
+framework, including for commercial use, provided you give appropriate
+credit, provide a link to the license, indicate if changes were made, and
+distribute any adaptation under the same license (ShareAlike) — see
+`LICENSE` for the full terms.
+
+**No endorsement.** Nothing in this repository or its license implies that
+any upstream author, project, or company credited below endorses, sponsors,
+or is affiliated with harness-wiki (CC BY-SA 4.0 Section 2(a)(6)).
+
+------------------------------------------------------------------
+
+## 2. Trail of Bits — `trailofbits/skills`
+
+Ten skills in `templates/{% if use_claude %}.claude{% endif %}/skills/`
+(79 files total) are reproduced **verbatim, byte-for-byte**, from:
+
+> Trail of Bits, `skills` (https://github.com/trailofbits/skills),
+> commit `cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af`, licensed under
+> CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/), made by
+> Trail of Bits (https://www.trailofbits.com/).
+
+The ten skills, with their upstream path inside that repo:
+
+| Skill (this repo)          | Upstream path (`trailofbits/skills`)                              | Files |
+|-----------------------------|---------------------------------------------------------------------|------:|
+| `semgrep`                   | `plugins/static-analysis/skills/semgrep/`                           |     7 |
+| `codeql`                    | `plugins/static-analysis/skills/codeql/`                             |    17 |
+| `sarif-parsing`             | `plugins/static-analysis/skills/sarif-parsing/`                      |     4 |
+| `semgrep-rule-creator`      | `plugins/semgrep-rule-creator/skills/semgrep-rule-creator/`          |     4 |
+| `variant-analysis`          | `plugins/variant-analysis/skills/variant-analysis/`                 |    14 |
+| `insecure-defaults`         | `plugins/insecure-defaults/skills/insecure-defaults/`                |     3 |
+| `supply-chain-risk-auditor` | `plugins/supply-chain-risk-auditor/skills/supply-chain-risk-auditor/`|     3 |
+| `agentic-actions-auditor`   | `plugins/agentic-actions-auditor/skills/agentic-actions-auditor/`    |    14 |
+| `audit-context-building`    | `plugins/audit-context-building/skills/audit-context-building/`      |     5 |
+| `fp-check`                  | `plugins/fp-check/skills/fp-check/`                                  |     8 |
+| **Total**                   |                                                                       |**79** |
+
+**Modifications: none.** Every file listed above is an exact, unmodified
+copy (verified with `cmp` against a clean clone of the upstream commit —
+command and result recorded in `PROVENANCE.json`). Because no changes were
+made, there is nothing to flag under CC BY-SA's "indicate if you modified"
+clause for this set — the files are distributed as-is, under the same
+CC BY-SA 4.0 license as the upstream, satisfying the ShareAlike condition
+trivially (same license, same version).
+
+**Trademark note (non-copyright).** The upstream skills shipped a
+`trail-of-bits-mark.svg` — Trail of Bits' logo. A company logo typically
+functions as a trademark (separate from copyright, and not granted by
+CC BY-SA), so all ten copies of that asset were **removed** from this
+framework. The skill text/content is retained verbatim under CC BY-SA 4.0;
+only the brand logo was stripped. This framework asserts no endorsement or
+affiliation with Trail of Bits.
+
+------------------------------------------------------------------
+
+## 3. Diátaxis framework — Daniele Procida
+
+The `diataxis` skill (`templates/{% if use_claude %}.claude{% endif %}/skills/diataxis/`)
+adapts:
+
+> Diátaxis (https://diataxis.fr/), by Daniele Procida, licensed under
+> CC BY-SA 4.0.
+
+**Modified: yes.** `references/` (12 files) is a curated distillation of the
+site's content, not a verbatim reproduction, and the skill adds its own
+pragmatic extensions (templates, worked examples, checklists, named
+patterns) explicitly flagged inline as non-canonical. See
+`skills/diataxis/SKILL.md`'s provenance banner and `skills/diataxis/PROVENANCE.md`
+for the corrected, in-repo-accurate account of what is and is not shipped
+(a prior version of that file described a `PROVENANCE.json`/`INDEX.md`/`pages/`
+snapshot that was never actually part of this repository — corrected in
+H5/B2 of this hardening round).
+
+------------------------------------------------------------------
+
+## 4. Extracted and generalized from a private production harness
+
+Three skills — `owasp-security`, `curate-long-context`, `ai-ui-dev`
+(`templates/{% if use_claude %}.claude{% endif %}/skills/{owasp-security,curate-long-context,ai-ui-dev}/`)
+— were extracted and generalized from a private production harness that the
+same author (Augusto Carollo) operated for months on a live software
+project. Per the README's own provenance statement ("o framework foi
+extraído e generalizado de um harness de produção real, operado por meses
+num projeto de software vivo"), the client's identity is deliberately
+withheld here and in `PROVENANCE.json` — these three skills are the
+author's own generic engineering writing (referencing public standards
+such as OWASP where applicable), not the client's proprietary business
+logic, which was excluded by the same F3/F9 genericity decisions documented
+in the README.
+
+Copyright in these three skills is held by Augusto Carollo, who licenses
+them into this repo under CC BY-SA 4.0 alongside everything else original
+in this repository.
+
+------------------------------------------------------------------
+
+## 5. Ported from the author's own other repositories (same owner)
+
+Two more components are ports from two other repositories also authored
+solely by Augusto Carollo (verified: identical git author identity across
+all three repos; neither `guto-wiki` nor `agent-swarm` carries a `LICENSE`
+file of its own, so there is no third-party license to reconcile — the
+author relicenses his own prior work here by his own decision):
+
+- `engine/lint/docs_wiki_lint.py` and `engine/lint/ref_integrity.py` — ported
+  and parametrized from `guto-wiki`
+  (`padronizacao-documentacao/artefatos/scripts/docs-wiki-lint.py` and
+  `ref-integrity.py`, commit `5bbee35c981059d3982da8348720b3ed39a3f91d`).
+- `engine/contract/` (schemas, witness, ledger, `validate_contract.py`,
+  `render_prompt.py`, `validate_skills.py`) — ported and parametrized from
+  `agent-swarm` (`scripts/validate_contract.py` and siblings, commit
+  `3f155d8eff8c21d13554fea3ea593740d64725f8`).
+
+Both are **modified**, not verbatim — see `PROVENANCE.json` for the specific
+line-count deltas and what was parametrized.
+
+------------------------------------------------------------------
+
+## 6. Design blueprint from Understand Anything (Egonex-AI) — MIT License
+
+`templates/.harness/lib/scan_project.py` reimplements, in Python, the same
+deterministic-scanner design used by:
+
+> Egonex-AI, `Understand-Anything`
+> (https://github.com/Egonex-AI/Understand-Anything), file
+> `understand-anything-plugin/skills/understand/scan-project.mjs`,
+> commit `54754a6f97051d1d76c8758353d8ea41afe502a6`, MIT License.
+
+This is a from-scratch reimplementation for a different runtime (Python vs.
+Node.js) and a different call surface, not a translation or verbatim port
+(647 lines here vs. 802 lines upstream). MIT does not require attribution
+for derivative rewrites, but this project credits the origin anyway (also
+documented in the file's own module docstring), and confirms no license
+conflict: MIT is permissive and does not restrict inclusion of a derivative
+work inside a CC BY-SA 4.0 project.
+
+------------------------------------------------------------------
+
+## 7. Everything else
+
+Any file under this repository not listed in `PROVENANCE.json` and not
+covered by sections 2-6 above is original work authored directly in this
+repo by Augusto Carollo, licensed under the repo-root `LICENSE`
+(CC BY-SA 4.0).
+
+------------------------------------------------------------------
+
+## 8. If you redistribute a project generated from this framework
+
+CC BY-SA 4.0 Section 3(a) requires attribution to travel with the material
+when you Share it — including in modified/rendered form (e.g. a project
+tree produced by `copier copy`/`harness-install.sh`). **Implemented in
+H5/B2:** every rendered project now receives its own root-level `NOTICE`
+(from `templates/NOTICE.jinja`), generated unconditionally because
+`.harness/lib/docs_wiki_lint.py`, `ref_integrity.py`, and `scan_project.py`
+are always installed and carry the guto-wiki/Understand-Anything provenance;
+the file adds a second section (Trail of Bits' ten skills, `diataxis`, and
+the three learnhouse-internal skills) only when `use_claude=true`, matching
+exactly what actually lands in `.claude/skills/`. `harness-install.sh`
+needed no code change for this: the target's `NOTICE` is not one of the four
+"sensitive" merge-tracked files, so it flows through the same generic
+create/overwrite path as every other framework-owned file. This project's
+own `NOTICE` (the one you're reading) is the full, unabridged, always-current
+version; the generated one is the scoped summary that ships downstream —
+if you edit which skills are included in a fork of this framework, keep
+`templates/NOTICE.jinja` in sync (there is no test enforcing that sync yet;
+see `docs/manual/15-limitacoes-conhecidas.md` item 14).

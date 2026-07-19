@@ -1,0 +1,54 @@
+# loop.md — manutenção autônoma de {{ project_name }} (rodar com /loop sem argumentos)
+
+<!--
+PROVENIENCIA (harness-wiki, R5 — plano de resgate §2 P0 item "loop.md, .githooks/pre-commit,
+.github/workflows/docs-integrity.yaml citados como reais por vários templates mas ausentes"):
+generalizado a partir do `.claude/loop.md` de um projeto-doador de referência. Os checks
+genéricos (lessons, docs-wiki-lint, árvore git suja, ref-integrity) apontam para o motor real
+deste framework em `.harness/lib/` — não para `scripts/` (path do doador, não existe aqui). Os
+checks stack-específicos (mining de className, ratchet de design-system) são condicionais aos
+mesmos flags que gateiam os módulos correspondentes (`use_ui_skills`, `use_ds_gate`); nenhum
+comando é emitido para um motor que este projeto não tenha instalado.
+-->
+
+Você está no loop de manutenção (Self-Improvement Loop — ver CLAUDE.md/AGENTS.md §16 ou a
+seção equivalente das instruções deste projeto). Uma passada = os checks abaixo, na ordem,
+consertando o que for barato e reportando o que não for. Estado durável: se
+`{{ harness_runs_dir }}/ACTIVE` existir, a marathon tem prioridade — execute a "Próxima ação"
+do RUN.md e encerre a passada.
+
+## Checks da passada
+
+- **Lessons pendentes de promoção** — `{{ harness_lessons_file }}`: alguma lição repetida 2×+
+  ainda sem `[PROMOVIDA → destino]`? Se sim, promover (regra permanente nas instruções do
+  projeto, ou hook via hookify) e marcar.
+- **Wiki/documentação do repo íntegra** — `python3 .harness/lib/docs_wiki_lint.py`. FAIL →
+  corrigir `{{ harness_docs_dir }}/index.md`, `{{ harness_docs_dir }}/log.md` ou o índice da
+  categoria (regidos por `{{ harness_docs_dir }}/SCHEMA.md`) e re-rodar.
+{%- if use_ui_skills %}
+- **Frescor do mining de className** — sem gate automatizado de staleness nesta versão (P2 do
+  plano de resgate, não portado). Se o código de UI sob `{{ harness_web_app_dir }}` mudou desde
+  a última mineração, regenere manualmente:
+  `node .harness/lib/classname-miner-v2.mjs --root {{ harness_web_app_dir }}` e stage o `.md`
+  atualizado (skill `classname-token-workflow`).
+{%- endif %}
+- **Árvore git suja de artefato órfão** — `git status --short`: arquivo gerado que não deveria
+  ser commitado (PDF, JSON >1MB, print solto em `{{ harness_docs_dir }}/`)? Reportar com path;
+  não deletar nada tracked sem ordem explícita.
+{%- if use_ds_gate %}
+- **Gates de design-system** — `bash .harness/lib/ds-gate.sh` (ratchet anti-hardcode sobre
+  `{{ harness_web_app_dir }}`, lido em runtime de `.harness/harness.conf`). Regressão → reportar
+  cluster e `path:linha`.
+{%- endif %}
+- **Integridade referencial (backstop de rename/delete)** —
+  `python3 .harness/lib/ref_integrity.py --since <ref-da-última-passada-verde>` (report-only:
+  pega o que escapou do pre-commit — bypass `--no-verify`, edição manual, ou projeto onde
+  `.githooks/pre-commit` ainda não foi ativado). Achado `[link]`/`[stale]` → corrigir conforme a
+  skill `ref-integrity` (repoint / desativar / allowlist em `.ref-integrity-allowlist`).
+
+## Regras do loop
+
+- Ação irreversível (push, delete tracked, deploy, prod) = FORA do loop; apenas reportar.
+- Cada passada termina com resumo de 3-6 linhas: o que passou, o que consertou, o que precisa
+  de decisão humana.
+- Nada a fazer em 2 passadas seguidas → encerrar o loop (self-paced: não agendar próxima).

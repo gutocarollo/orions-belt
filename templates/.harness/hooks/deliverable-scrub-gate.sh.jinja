@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# deliverable-scrub-gate — PostToolUse (Write|Edit|MultiEdit).
+# Se o arquivo escrito é um DOC DE CLIENTE (glob da banlist) e o conteúdo contém
+# jargão interno banido, devolve a violação como feedback (exit 2). Não bloqueia
+# o write (já aconteceu); avisa para corrigir antes de entregar/gerar PDF.
+# Origem: auditoria de fricção 2026-07-03, cluster 7.
+#
+# MATERIALIZAÇÃO (F4, harness-wiki): a banlist continua em
+# .claude/deliverable-banlist.txt (não movida para .harness/) — mesma
+# convenção Claude-namespaced que a skill deliverable-contract já usa para
+# .claude/contracts/. Em projeto use_claude=false/use_codex=true o arquivo
+# não existe e o hook fica fail-open (linha abaixo) — mecanismo ainda não
+# generalizado para os dois runtimes; limitação conhecida, não um crash.
+set -uo pipefail
+IN=$(cat)
+command -v jq >/dev/null 2>&1 || exit 0
+FP=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty' <<<"$IN")
+[ -n "$FP" ] || exit 0
+ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+BAN="$ROOT/.claude/deliverable-banlist.txt"
+[ -f "$BAN" ] || exit 0
+REL="${FP#$ROOT/}"
+
+# 1) o arquivo casa algum glob de doc-de-cliente?
+match=0
+while IFS= read -r line; do
+  case "$line" in
+    "glob: "*) g="${line#glob: }"; case "$REL" in $g) match=1; break ;; esac ;;
+  esac
+done < "$BAN"
+[ "$match" -eq 0 ] && exit 0
+[ -f "$FP" ] || exit 0
+
+# 2) roda os padrões banidos contra o conteúdo atual do arquivo
+HITS=""
+while IFS= read -r pat; do
+  case "$pat" in ''|'#'*|'glob: '*) continue ;; esac
+  found=$(grep -niE "$pat" "$FP" 2>/dev/null | head -3)
+  [ -n "$found" ] && HITS+="  [$pat]\n$found\n"
+done < "$BAN"
+[ -z "$HITS" ] && exit 0
+
+{
+  echo "DELIVERABLE-SCRUB: jargão interno em documento de CLIENTE ($REL)."
+  echo "O produto para o cliente é \"{% if client_product_name %}{{ client_product_name }}{% else %}{{ project_name }}{% endif %}\" — processo interno, nome de ferramenta e contexto de outra conta não entram no entregável."
+  echo -e "Ocorrências:\n$HITS"
+  echo "Remova/reescreva antes de gerar PDF ou entregar. Constraint negativa do usuário vale VERBATIM (não converter em item positivo)."
+} >&2
+exit 2

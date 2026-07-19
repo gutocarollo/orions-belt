@@ -1,0 +1,10 @@
+{#-
+  Wrapper (H3/A1, harness-wiki) — fonte única em
+  templates/.harness/skills-shared/marathon/SKILL.md.jinja (que também fixou
+  o hardcode ".claude/runs" para a variável harness_runs_dir, achado real
+  desta rodada — ver comentário na fonte). Mesmo padrão de include de
+  grill-me/SKILL.md.jinja. Materializado também em
+  .agents/skills/marathon/SKILL.md.jinja para o Codex. Editar SÓ a fonte,
+  nunca este wrapper.
+-#}
+{%- include "templates/.harness/skills-shared/marathon/SKILL.md.jinja" -%}

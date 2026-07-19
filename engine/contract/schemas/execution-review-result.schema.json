@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-swarm.local/schemas/execution-review-result.schema.json",
+  "title": "Execution Review Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["adversarial_verification", "gaps_criticos", "proxima_acao"],
+  "properties": {
+    "adversarial_verification": {
+      "type": "string",
+      "enum": ["SATISFEITO", "CORRIGIR", "BLOQUEADO"]
+    },
+    "gaps_criticos": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "proxima_acao": {
+      "type": "string",
+      "enum": ["corrigir", "parar", "pedir decisao"]
+    },
+    "fix_request": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gap", "evidencia", "alteracao_obrigatoria"],
+        "properties": {
+          "gap": { "type": "string", "minLength": 1 },
+          "evidencia": { "type": "string", "minLength": 1 },
+          "alteracao_obrigatoria": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "adversarial_verification": { "const": "CORRIGIR" } },
+        "required": ["adversarial_verification"]
+      },
+      "then": {
+        "required": ["fix_request"],
+        "properties": { "fix_request": { "minItems": 1 } }
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# git-doctor — SessionStart. DETECTA (não auto-muta destrutivamente) estado git
+# que envenena a sessão e reporta com o comando de reparo + status de push.
+# Origem: auditoria de fricção 2026-07-03, cluster 8 (rebase-merge abandonado
+# poluiu semanas de SessionStart; push virava negociação).
+# Filosofia: SessionStart NÃO aborta rebase/merge por conta própria (irreversível
+# demais p/ automatizar). Faz só backup não-destrutivo (stash -u se sujo) e guia.
+set -uo pipefail
+ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+[ -n "$ROOT" ] || exit 0
+cd "$ROOT" || exit 0
+GD=$(git rev-parse --git-dir 2>/dev/null) || exit 0
+
+MSG=""
+if [ -d "$GD/rebase-merge" ] || [ -d "$GD/rebase-apply" ]; then
+  MSG+="REBASE PENDENTE em andamento (.git/rebase-*). Isso quebra SessionStart:resume e vira \"Cannot rebase onto multiple branches\".\n"
+  MSG+="  Resolver: 'git rebase --abort' (descarta o rebase) ou '--continue' (se sabe o que faz).\n"
+fi
+if [ -f "$GD/MERGE_HEAD" ]; then
+  MSG+="MERGE PENDENTE (.git/MERGE_HEAD). Resolver conflitos e commitar, ou 'git merge --abort'.\n"
+fi
+
+if [ -n "$MSG" ]; then
+  # backup NÃO-destrutivo do working tree sujo antes de qualquer coisa que o
+  # usuário/agente faça a seguir (não abortamos nós; só protegemos o conteúdo).
+  if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    git stash push -u -m "git-doctor backup $(date +%FT%T)" >/dev/null 2>&1 \
+      && MSG+="Working tree sujo → salvo em 'git stash' (git stash pop para recuperar).\n"
+  fi
+  {
+    echo "<git-doctor-alerta>"
+    echo -e "$MSG"
+    echo "NÃO prossiga com trabalho novo antes de limpar o estado acima."
+    echo "</git-doctor-alerta>"
+  }
+  exit 0
+fi
+
+# Repo limpo: reporta status de push só se houver commits à frente do remote
+AHEAD=$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
+if [ "${AHEAD:-0}" -gt 0 ]; then
+  echo "<git-doctor-info>${AHEAD} commit(s) à frente de origin.{% if git_remote_url %} Push usa SSH ({{ git_remote_url }}).{% endif %} Escada de credencial e regras de entrega: skill git-delivery.</git-doctor-info>"
+fi
+exit 0

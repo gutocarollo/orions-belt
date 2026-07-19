@@ -1,0 +1,23 @@
+{#
+  {{ _copier_conf.answers_file }}.jinja — mecanismo OBRIGATÓRIO do Copier
+  para gerar o answers-file (F8, achado real desta sessão).
+
+  Confirmado lendo o source instalado do Copier 9.17.0 (_main.py
+  `_render_template`/`_render_parts`): o answers-file (`.harness/answers.yml`,
+  via `_answers_file` no copier.yml raiz) só é escrito se existir, DENTRO do
+  template, um arquivo cujo PATH renderizado bate exatamente com
+  `_copier_conf.answers_file` — configurar só a CHAVE `_answers_file` no
+  copier.yml (o que este repo já fazia desde F0) NÃO É SUFICIENTE. Sem este
+  arquivo, `.harness/answers.yml` nunca é criado — e sem ele, `copier update`
+  falha hard ("Cannot obtain old template references"), porque a doc oficial
+  (copier.readthedocs.io/en/stable/updating/) lista "a valid
+  .copier-answers.yml file no destino" como pré-requisito #1 de `update`.
+
+  Isolado e confirmado em /tmp antes de aplicar aqui: SEM este arquivo,
+  nenhuma combinação de flags (--vcs-ref, git init no destino, _subdirectory)
+  produz o answers-file; COM ele, funciona imediatamente. Padrão real de
+  templates Copier do ecossistema (tratado como "legado" no código-fonte via
+  `deprecate_answers_file_template_path()`, mas ainda funcionalmente
+  obrigatório na 9.17.0 — nenhum mecanismo automático o substitui).
+#}
+{{ _copier_answers|to_nice_yaml }}

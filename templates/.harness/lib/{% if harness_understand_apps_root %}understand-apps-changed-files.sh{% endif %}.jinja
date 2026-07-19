@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Canonical changed-files generator for Understand Anything over {{ harness_understand_apps_root }}/.
+#
+# MATERIALIZAÇÃO (R2, harness-wiki — plano de resgate §2 item "Distribuição de
+# lint"): porte genericizado do script canônico do harness-doador de
+# referência (que vivia em `scripts/understand-apps-changed-files.sh`, com
+# "apps" hardcoded no lugar de {{ harness_understand_apps_root }}). Só é
+# gerado quando `harness_understand_apps_root` está setado (ver copier.yml)
+# — projeto usa um subdiretório monorepo, não a raiz do git, como
+# PROJECT_ROOT do grafo Understand Anything (ver
+# docs/planning/notas-f1.6.md). Materializado em `.harness/lib/`, o MESMO
+# diretório onde `_tooling_conf.py`/`scan_project.py`/`ds-gate.sh` já são
+# instalados no projeto-alvo (F0/F5) — não um `scripts/` de topo separado,
+# para não colidir com scripts próprios do projeto-alvo e manter 1 único
+# namespace para tudo que o framework materializa. `AGENTS.md.jinja`, a
+# skill `understand-apps-incremental`, a skill `{{ project_name }}-delivery-council`
+# e os hooks `understand-apps-diff-guard.sh`/`understand-context-inject.py`
+# citavam este comando como `bash scripts/understand-apps-changed-files.sh`
+# antes de existir em qualquer lugar do projeto-alvo — path-fantasma
+# corrigido junto com esta materialização.
+#
+# Why this exists:
+# - The Git repo root may differ from the Understand Anything graph root.
+# - The Understand Anything graph root is {{ harness_understand_apps_root }}/ (relative to the Git root).
+# - A raw `git diff <last>..HEAD --name-only` emits `{{ harness_understand_apps_root }}/api/...`.
+# - The graph stores paths as `api/...`, `web/...`, etc. (relative to {{ harness_understand_apps_root }}/).
+# Therefore every incremental run over {{ harness_understand_apps_root }}/ MUST use
+# `git diff --relative={{ harness_understand_apps_root }}`.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+APP_ROOT="$ROOT/{{ harness_understand_apps_root }}"
+META="$APP_ROOT/.understand-anything/meta.json"
+OUT="${1:-$APP_ROOT/.understand-anything/tmp/changed-files.txt}"
+
+if [ ! -f "$META" ]; then
+  echo "UNDERSTAND-APPS-DIFF: missing $META; cannot compute incremental diff." >&2
+  exit 2
+fi
+
+LAST="$(
+  node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); process.stdout.write(m.gitCommitHash || '');" "$META"
+)"
+
+if [ -z "$LAST" ]; then
+  echo "UNDERSTAND-APPS-DIFF: meta.json has no gitCommitHash." >&2
+  exit 2
+fi
+
+mkdir -p "$(dirname "$OUT")"
+
+git -C "$ROOT" diff --relative={{ harness_understand_apps_root }} "$LAST"..HEAD --name-only -- {{ harness_understand_apps_root }} \
+  | awk '!/^\.understand-anything\//' \
+  > "$OUT"
+
+if grep -Eq '^({{ harness_understand_apps_root }}/|\.claude/|\.agents/|\.codex/|docs/|scripts/|infra/|docker/|\.github/)' "$OUT"; then
+  echo "UNDERSTAND-APPS-DIFF: invalid non-app-relative paths in $OUT." >&2
+  echo "The file must contain paths like api/... or web/..., never {{ harness_understand_apps_root }}/api/... or repo-root paths." >&2
+  grep -En '^({{ harness_understand_apps_root }}/|\.claude/|\.agents/|\.codex/|docs/|scripts/|infra/|docker/|\.github/)' "$OUT" | sed -n '1,20p' >&2
+  exit 2
+fi
+
+COUNT="$(wc -l < "$OUT" | tr -d ' ')"
+echo "UNDERSTAND-APPS-DIFF: wrote $COUNT app-relative changed files to $OUT"
+echo "UNDERSTAND-APPS-DIFF: last analyzed commit $LAST"

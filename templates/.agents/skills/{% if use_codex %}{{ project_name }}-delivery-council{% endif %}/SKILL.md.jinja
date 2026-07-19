@@ -1,0 +1,10 @@
+{#-
+  Wrapper Codex (M-ALTA/H4, harness-wiki) — fonte única em
+  templates/.harness/skills-shared/delivery-council/SKILL.md.jinja. Gerado
+  só quando use_codex (o diretório pai carrega a condicional no NOME —
+  mesmo padrão de .agents/skills/{% raw %}{% if use_codex %}{% endraw %}
+  grill-me{% raw %}{% endif %}{% endraw %}/). Espelho do wrapper
+  .claude/skills/{{ project_name }}-delivery-council/SKILL.md.jinja (mesma
+  fonte, mesmo include). Editar SÓ a fonte, nunca este wrapper.
+-#}
+{%- include "templates/.harness/skills-shared/delivery-council/SKILL.md.jinja" -%}

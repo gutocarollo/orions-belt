@@ -1,0 +1,36 @@
+import { test as setup } from '@playwright/test'
+import path from 'node:path'
+
+// STUB — o harness não sabe como o projeto "{{ project_name }}" autentica.
+// PORTADO de apps/web/tests/visual/auth.setup.ts (harness-doador de
+// referência) — plano de resgate §R3 item 5.
+//
+// TODO(projeto-alvo): implemente `loginForVisualEvidence(page)` (ex.: num
+// helper `./_helpers/login.ts` não versionado pelo harness) fazendo o que
+// for necessário para autenticar: preencher formulário de login, setar
+// cookie de sessão, chamar API de login e injetar token, etc. Depois troque
+// o corpo deste setup por algo como:
+//
+//   import { loginForVisualEvidence } from './_helpers/login'
+//   setup('authenticate', async ({ page }) => {
+//     await loginForVisualEvidence(page)
+//     await page.context().storageState({ path: authFile })
+//   })
+//
+// Se as rotas capturadas por evidence.spec.ts/baseline.spec.ts forem 100%
+// públicas (sem auth), APAGUE este arquivo e remova o projeto `setup` +
+// `dependencies: ['setup']` de playwright.visual.config.ts — não deixe este
+// stub travando o run.
+const authFile = path.join(__dirname, '../../playwright/.auth/admin.json')
+
+setup('authenticate', async () => {
+  throw new Error(
+    'tests/visual/auth.setup.ts: loginForVisualEvidence(page) não implementado. ' +
+      'Ver o TODO no topo deste arquivo antes de rodar ui-evidence com rotas autenticadas ' +
+      '(ou apague este arquivo + o projeto "setup" se todas as rotas forem públicas).',
+  )
+})
+
+// referência ociosa até a implementação real acima usar authFile — silencia
+// "unused variable" sem mascarar o TODO com um valor mágico.
+void authFile

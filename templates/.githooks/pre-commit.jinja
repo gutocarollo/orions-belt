@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# pre-commit (adaptador fino) — integridade referencial de renames/deletes staged.
+# Fonte única: .harness/lib/ref_integrity.py. Bypass emergencial: git commit --no-verify
+# (o loop de manutenção é o backstop — ver {{ harness_docs_dir }}/SCHEMA.md §5).
+#
+# PROVENIENCIA (harness-wiki, R5): generalizado a partir de um adaptador de 5 linhas de um
+# projeto-doador de referência; path do motor mudou de `scripts/` para `.harness/lib/`.
+#
+# ATIVAÇÃO: git só chama hooks sob um `core.hooksPath` configurado. Este projeto tenta
+# configurar isso sozinho num `_task` do Copier (`git config core.hooksPath .githooks`, gated
+# por `use_pre_commit_framework=false` — ver copier.yml), mas o task é fail-open: se o destino
+# ainda não era um repositório git no momento do `copier copy`/`update`, ele só avisa e não
+# falha a instalação. Se este arquivo existe mas não está rodando no seu `git commit`, ative
+# manualmente: `git config core.hooksPath .githooks`.
+{%- if use_pre_commit_framework %}
+#
+# ESTE PROJETO TAMBÉM GEROU `.pre-commit-config.yaml` (`use_pre_commit_framework=true`) — as
+# duas mecânicas de hook são MUTUAMENTE EXCLUSIVAS (mesma regra anti-double-fire do resto do
+# harness): o framework `pre-commit` escreve seu próprio hook em
+# `$(git rev-parse --git-path hooks)/pre-commit`, que resolve para DENTRO de `.githooks/` se
+# `core.hooksPath` já apontar pra cá — rodar `pre-commit install` SOBRESCREVERIA este arquivo.
+# Por isso o `_task` acima é desligado quando `use_pre_commit_framework=true`: escolha UM
+# mecanismo (este arquivo direto, ou `pre-commit install`) e não rode `git config
+# core.hooksPath .githooks` manualmente se optou pelo framework `pre-commit`.
+{%- endif %}
+exec python3 "$(git rev-parse --show-toplevel)/.harness/lib/ref_integrity.py" --staged

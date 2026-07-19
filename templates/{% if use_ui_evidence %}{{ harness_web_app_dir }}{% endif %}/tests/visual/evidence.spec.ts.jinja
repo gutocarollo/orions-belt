@@ -1,0 +1,196 @@
+import { test, expect, type Page } from '@playwright/test'
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import path from 'node:path'
+import { THEME_STATES } from './theme-map.config'
+
+/* ui-evidence — captura de EVIDÊNCIA visual (PNG full-page + erros de
+   console) para o protocolo da skill `ui-evidence` e para o Stop hook
+   ui-evidence-gate. NÃO é assertion de regressão (isso é baseline.spec.ts):
+   aqui NADA compara com snapshot; o produto são artefatos rotulados em
+   {{ harness_evidence_dir }}/<label>/.
+
+   PORTADO de apps/web/tests/visual/evidence.spec.ts (harness-doador de
+   referência) — plano de resgate §R3 item 2. `waitForVisualAssets()` é o
+   núcleo genérico que resolve um bug real de captura prematura (screenshot
+   disparado antes de <img>/background-image terminarem de carregar). BUG
+   CORRIGIDO nesta porta (não hipotético — provado com um regex.test contra
+   um valor real de getComputedStyle().backgroundImage): a regex de extração
+   de URL do CSS `url\\(...\\)` na fonte tinha escape duplo — `\\(`/`\\)` em
+   vez de `\(`/`\)` — o que a fazia exigir uma barra invertida LITERAL antes
+   dos parênteses no valor computado; nenhum navegador produz isso, então a
+   metade "esperar background-image" da função nunca casava nada na fonte
+   (0 matches sempre) — só a metade de `<img>` funcionava. Corrigido para
+   `\(`/`\)` (escape simples, o correto para escapar parênteses literais
+   dentro de um regex literal).
+   Genericização vs. a versão-fonte:
+     - THEME_STATES (antes hardcoded com os 2 nomes de marca/tema do app
+       doador + seed de localStorage específico dele) -> extraído para
+       ./theme-map.config.ts, que o projeto-alvo customiza.
+     - REPO_ROOT por profundidade fixa de path (../../../..) -> `git
+       rev-parse --show-toplevel` (robusto p/ HARNESS_WEB_APP_DIR="." ou
+       monorepo; a versão-fonte quebraria no caso "." — subiria acima da
+       raiz real do repo).
+     - máscara de screenshot hardcoded (img[alt="User Avatar"]) ->
+       HARNESS_UI_EVIDENCE_MASK_SELECTORS (env, CSV de seletores; vazio =
+       sem máscara).
+
+   Env:
+   - UI_EVIDENCE_LABEL   before | after | <slug>   (default: after)
+   - UI_EVIDENCE_ROUTES  csv de paths (default: todas de routes.json)
+   - UI_EVIDENCE_THEMES  csv de nomes definidos em theme-map.config.ts
+                          (default: TODOS os temas de THEME_STATES)
+   - HARNESS_UI_EVIDENCE_MASK_SELECTORS  csv de seletores CSS mascarados no
+                          screenshot (default: nenhum)
+
+   H2/A5.3 (auditoria adversarial pós-v1.0.0, bypass REPRODUZIDO): uma rota
+   que responde HTTP 500 ainda renderiza ALGUMA página (a tela de erro), o
+   Playwright reportava "1 passed" e o PNG + manifest.json (captures:1)
+   satisfaziam o ui-evidence-gate mesmo sem nenhuma evidência de UI válida.
+   Fix: oráculo de status alinhado com baseline.spec.ts — `expect(status).
+   toBeLessThan(400)` roda ANTES do screenshot/meta.json; falha a captura
+   (Playwright sai != 0) em vez de gravar uma evidência de página de erro. */
+
+type Route = { name: string; path: string }
+const allRoutes: Route[] = JSON.parse(
+  readFileSync(path.join(__dirname, 'routes.json'), 'utf-8'),
+)
+
+const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+  cwd: __dirname,
+  encoding: 'utf-8',
+}).trim()
+const LABEL = process.env.UI_EVIDENCE_LABEL || 'after'
+const OUT_DIR = path.join(REPO_ROOT, '{{ harness_evidence_dir }}', LABEL)
+
+const routesCsv = process.env.UI_EVIDENCE_ROUTES
+const routes: Route[] = routesCsv
+  ? routesCsv.split(',').map((p) => ({
+      name: p.trim().replace(/^\//, '').replace(/[/?=&]+/g, '_') || 'home',
+      path: p.trim(),
+    }))
+  : allRoutes
+
+const themesArg = process.env.UI_EVIDENCE_THEMES
+const themes = (
+  themesArg
+    ? themesArg.split(',').map((t) => t.trim()).filter((t) => t in THEME_STATES)
+    : Object.keys(THEME_STATES)
+)
+
+const MASK_SELECTORS = (process.env.HARNESS_UI_EVIDENCE_MASK_SELECTORS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+
+mkdirSync(OUT_DIR, { recursive: true })
+
+async function waitForVisualAssets(page: Page) {
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {})
+  await page
+    .evaluate(async () => {
+      const waitForElementImages = Array.from(document.images).map((img) => {
+        if (img.complete) return Promise.resolve()
+        return new Promise<void>((resolve) => {
+          img.addEventListener('load', () => resolve(), { once: true })
+          img.addEventListener('error', () => resolve(), { once: true })
+        })
+      })
+
+      const backgroundUrls = new Set<string>()
+      for (const element of Array.from(document.querySelectorAll<HTMLElement>('*'))) {
+        const backgroundImage = getComputedStyle(element).backgroundImage
+        for (const match of backgroundImage.matchAll(/url\(["']?([^"')]+)["']?\)/g)) {
+          if (match[1] && !match[1].startsWith('data:')) backgroundUrls.add(match[1])
+        }
+      }
+
+      const waitForBackgrounds = Array.from(backgroundUrls).map((url) =>
+        new Promise<void>((resolve) => {
+          const image = new Image()
+          const timeout = window.setTimeout(resolve, 3_000)
+          const done = () => {
+            window.clearTimeout(timeout)
+            resolve()
+          }
+          image.addEventListener('load', done, { once: true })
+          image.addEventListener('error', done, { once: true })
+          image.src = url
+        }),
+      )
+
+      await Promise.all([...waitForElementImages, ...waitForBackgrounds])
+    })
+    .catch(() => {})
+}
+
+for (const theme of themes) {
+  const state = THEME_STATES[theme]
+  for (const route of routes) {
+    test(`evidence: ${route.name} [${theme}]`, async ({ page }) => {
+      if (state.seedLocalStorage) {
+        // init script roda ANTES do documentElement existir -> só localStorage aqui.
+        await page.addInitScript((seed) => {
+          for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, v)
+        }, state.seedLocalStorage)
+      }
+      const consoleErrors: string[] = []
+      page.on('console', (msg) => {
+        if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0, 500))
+      })
+      page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${String(err).slice(0, 500)}`))
+
+      const applyTheme = () =>
+        page.evaluate((s) => {
+          for (const [k, v] of Object.entries(s.documentAttrs || {}))
+            document.documentElement.setAttribute(k, v)
+          for (const c of s.documentClasses || []) document.documentElement.classList.add(c)
+        }, state)
+
+      const resp = await page.goto(route.path, { waitUntil: 'load' })
+      // CONTENT ORACLE (A5.3): página de erro (>=400) não é evidência válida
+      // — falha ANTES de screenshot()/writeFileSync, então nenhum PNG nem
+      // manifest "captures:1" chega a existir para essa rota/tema.
+      expect(
+        resp?.status(),
+        `${route.name} [${theme}]: HTTP ${resp?.status()} (404/erro?) — página de erro não é evidência válida`,
+      ).toBeLessThan(400)
+      await page.evaluate(() => (document as any).fonts?.ready)
+      await page.waitForSelector('main', { state: 'visible' }).catch(() => {})
+      // tema aplicado pós-hidratação, deterministicamente
+      await applyTheme()
+      // conteúdo real, não skeleton: espera os placeholders animate-pulse sumirem
+      await page
+        .waitForFunction(() => !document.querySelector('.animate-pulse'), { timeout: 10_000 })
+        .catch(() => {})
+      await page.waitForTimeout(400) // transições de cor do tema assentarem
+      await waitForVisualAssets(page)
+      await applyTheme() // reforça após o assentamento (algumas libs resetam classe no reflow)
+
+      const base = `${route.name}__${theme}__${test.info().project.name}`
+      await page.screenshot({
+        path: path.join(OUT_DIR, `${base}.png`),
+        fullPage: true,
+        animations: 'disabled',
+        caret: 'hide',
+        ...(MASK_SELECTORS.length
+          ? { mask: MASK_SELECTORS.map((s) => page.locator(s)) }
+          : {}),
+      })
+      writeFileSync(
+        path.join(OUT_DIR, `${base}.meta.json`),
+        JSON.stringify(
+          {
+            route: route.path,
+            theme,
+            httpStatus: resp?.status() ?? null,
+            consoleErrors,
+            capturedAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+      )
+    })
+  }
+}

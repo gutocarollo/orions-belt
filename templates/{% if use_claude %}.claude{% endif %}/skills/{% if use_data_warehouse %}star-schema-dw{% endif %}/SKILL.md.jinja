@@ -1,0 +1,278 @@
+---
+name: star-schema-dw
+description: "Modelagem dimensional + nomenclatura/tipagem de um data warehouse PostgreSQL (star schema). Cobre prefixos medallion dim_/fct_/rpt_/stg_, naming dbt-style + lei do `__` (uma fronteira semântica por nome), tabela normativa de tipos (numeric(18,4) para dinheiro, timestamptz, text, bigint GENERATED ALWAYS AS IDENTITY), SCD2 (is_current+valid_from+valid_to), COMMENT-ON-COLUMN como sistema de JOIN lido pelo postgres MCP, e o validador determinístico scripts/validate_dw.py. Use ao criar/renomear/revisar tabela, coluna, tipo, fato, dimensão ou DDL num data warehouse dimensional — mesmo sem a palavra 'convenção'."
+allowed-tools:
+  - Read
+  - Glob
+  - Grep
+  - Write
+  - Edit
+  - Bash
+metadata:
+  tags: [postgres, sql, star-schema, dimensional, scd2, iso-11179, dw-naming, typing, dim, fct, rpt, stg, surrogate-key, natural-key, comment-on-column, medallion]
+  context: project
+  version: 1.0.0
+  complexity: medium
+---
+
+# Star Schema DW — modelagem dimensional (naming + tipagem)
+
+> Origem: generalizado de uma spec normativa real de data warehouse dimensional
+> (PostgreSQL, convenção dbt-style/medallion) de um projeto doador de referência.
+> O que sobreviveu é o PADRÃO — Kimball (modelagem dimensional), a documentação
+> oficial do PostgreSQL (tipos) e a convenção dbt/medallion (naming) — não a
+> configuração daquele banco específico. O que foi removido: os nomes literais de
+> schema/território daquele projeto, o vocabulário fechado de fontes/domínios (são
+> os fornecedores/parceiros REAIS daquele negócio — cada projeto tem os seus, não
+> faz sentido herdar os de outro), e o dicionário conformado de colunas daquele
+> domínio de negócio. Também não portamos a árvore de `rules/*.md`/`references/*.md`
+> que a fonte original referenciava — citar esses arquivos sem portá-los criaria
+> referência quebrada (o mesmo modo de falha que a wiki Karpathy deste harness
+> existe para prevenir); este documento é **autocontido**: a regra completa está
+> aqui, não num índice para arquivos externos.
+
+Documento **normativo** que define o PADRÃO de modelagem dimensional
+(`dim_`/`fct_`/`rpt_`/`stg_`), o naming dbt-style/medallion + a lei do `__`, a
+tipagem PostgreSQL, SCD2, `COMMENT ON COLUMN` como sistema de JOIN, e o
+validador `scripts/validate_dw.py`.
+
+Princípio fundador: a spec define uma **arquitetura unificada** ancorada em
+best-practice atemporal — modelagem dimensional de Kimball, documentação
+oficial do PostgreSQL e convenção dbt/medallion. Cada regra se sustenta no
+PRINCÍPIO, não no estado momentâneo de um banco específico. Onde a
+best-practice diverge de um padrão legado do seu projeto, a **exceção legada
+deve ser escrita explicitamente como ressalva qualitativa** (ex.: tabela nova
+prescreve `bigint GENERATED ALWAYS AS IDENTITY`; tabelas legadas podem usar
+`nextval` — não reescrever em massa, migrar via shadow+paridade).
+
+**Eixo de design de 1ª classe — consumo por IA (MCP):** decida ANTES de
+modelar se a tabela será consultada por um LLM/Copilot via SQL livre. Nesse
+regime a temporalidade vai **dentro do objeto** (acúmulo de grão FCT / view
+`_current` / cubo de um semantic layer), **nunca** num predicado implícito
+(`is_current`) que o modelo precisa lembrar e omite silenciosamente.
+
+## Antes de modelar: adapte o vocabulário fechado ao SEU projeto
+
+O validador (`scripts/validate_dw.py`) usa 3 tabelas de vocabulário fechado
+que são **exemplos ilustrativos**, não uma lista definitiva:
+
+- `VOCAB_SOURCE` — sistemas/fontes externas mono-origem (ex.: `salesforce`,
+  `stripe`, `hubspot`, `zendesk`, `internal`). Edite para os fornecedores/SaaS
+  reais que este projeto integra.
+- `VOCAB_DOMAIN` — domínios de negócio cross-fonte (ex.: `sales`, `finance`,
+  `marketing`, `product`, `ops`). Edite para os domínios reais deste negócio.
+- `CONFORMED_DICT` — dicionário conformado (conceito → tipo canônico) além dos
+  nomes de auditoria universais (`created_at`/`updated_at`/`valid_from`/
+  `valid_to`/`is_current`, já genéricos e não precisam de edição). Adicione
+  aqui os conceitos de negócio recorrentes (≥3 tabelas) deste projeto.
+
+Um token fora do vocabulário fechado é rejeitado de propósito (§2.2/§2.3
+abaixo) — é o freio de mão contra fonte/domínio inventado ad-hoc. Adicionar
+token exige decisão consciente (edite o script ou abra PR ao time de dados),
+não digitação livre.
+
+## Stack (adapte às convenções do seu projeto)
+
+- PostgreSQL. Territórios sugeridos (adapte os nomes de schema reais do seu
+  banco a esta hierarquia — a hierarquia é o padrão, os nomes são exemplo):
+  - **T1 — core do DW**: schema(s) onde vivem `dim_`/`fct_`/`rpt_`/`stg_` sob
+    a gramática medallion completa (este documento).
+  - **T2 — espelho de fonte externa**: schema(s) que replicam 1:1 uma fonte
+    (nomes/casing/tipos PRESERVADOS da origem, isentos da gramática).
+  - **T3 — ORM/vendor**: schema(s) gerados por ferramenta (ex.: Prisma,
+    NextAuth, uma plataforma de CRM/chat) — isentos de gramática+tipo, mas
+    sujeitos às regras de COMMENT/qualificação (§16).
+  - **T4 — quarentena**: `test`, `legacy`, sandbox/experimento — fora do
+    contrato de produção.
+- Dado sensível (PII, financeiro): schema isolado, acesso **temporário e
+  revogado ao fim** — nunca permissão permanente sem justificativa de
+  negócio.
+- Refresh via procedures (`proc_refresh_*`/`sp_refresh_*`/
+  `create_or_replace_*`/`sp_upsert_*`) orquestradas pelo seu agendador
+  (Airflow, dbt Cloud, Dagster, cron — o padrão de naming da procedure
+  independe de qual).
+- Tool de auditoria: o MCP Postgres disponível na sua sessão (ex.:
+  `mcp__postgres__execute_sql` ou o nome configurado neste projeto) para
+  distinct values, `EXPLAIN`, checagem de catálogo. Dado sensível é
+  INTOCÁVEL sem autorização temporária explícita + REVOKE ao fim.
+
+## Prefixos (camada) + sufixos (papel/grão)
+
+| Prefixo | Camada | Conteúdo | Exemplo |
+|---|---|---|---|
+| `raw_<source>__<entity>` | bronze | payload cru (jsonb), 1:1 com extração | `raw_stripe__charge` |
+| `stg_<source>__<entity>[_<role>]` | bronze→prata | espelho tipado 1:1 da fonte | `stg_salesforce__lead` |
+| `dim_<entity>` | prata | dimensão conformada — **sem namespace** | `dim_customer` |
+| `fct_<namespace>__<entity>[_<grain>\|_<role>]` | prata | fato (transacional/snapshot) | `fct_salesforce__opportunity` |
+| `rpt_<namespace>__<entity>[_<grain>]` | ouro | agregado p/ consumo (BI/app) | `rpt_sales__pipeline` |
+| `ref_<entity>` | — | referência estática/seed | `ref_currency_daily` |
+| `_<entity>` | — | estado operacional interno (fora do medallion) | `_sync_runs` |
+
+`<role>` = `latest` (snapshot corrente, TRUNCATE+INSERT) · `history`
+(append-only). `<grain>` = `daily`/`weekly`/`monthly`/`intraday`. View/matview
+**não muda o prefixo** (camada > materialização).
+
+**A camada medallion é o PREFIXO** (dialeto dbt, não schema-por-camada):
+`raw_`/`stg_` = bronze · `int_`/`dim_`/`fct_` = silver · `rpt_`/marts = gold.
+**1 invariante de dependência: cada camada só lê a de baixo** — BI/IA consome
+`dim_`/`fct_`/`rpt_` (ou a camada semântica), **nunca `stg_`/`raw_` cru**
+(convenção dbt: "only staging selects from sources").
+
+### Sufixos de COLUNA — taxonomia canônica
+
+> Quatro semânticas distintas de sufixo. `_sk` e `_key` **não** são sinônimos
+> de surrogate.
+
+| Sufixo | Semântica | Tipo prescrito (tabela nova) | Ressalva legada |
+|---|---|---|---|
+| `_sk` | **surrogate key** gerada pelo banco | `bigint GENERATED ALWAYS AS IDENTITY` | tabelas legadas podem ter `integer` via `nextval`; não reescrever |
+| `_key` | **chave de DATA/período** (grão de snapshot) — **NÃO surrogate** | `date` | colunas legadas grandfathered podem ser `varchar`/`text`; não reescrever |
+| `_code` | **natural key** textual (visível ao usuário) | `text` | exceções pinadas pelo dicionário conformado do seu projeto |
+| `_id` | **identificador de entidade** | `bigint` interno novo · `text` p/ ID externo textual (ex.: Salesforce) · `uuid` se nasce fora | `integer` interno é legado comum, não padrão novo |
+
+O validador bloqueia `_sk` que não seja `bigint`, `_id` genérico em
+`integer`, `_amount/_rate/_pct` sem escala, e emite warning de `_key` com
+remediação semântica (`_sk` para surrogate, `_id` para entidade, `_key`
+apenas para data/grão). Ele ainda **não prova IDENTITY/PK** sem catálogo;
+valide isso manualmente.
+
+## Lista mestra de constraints (regras normativas)
+
+1. **Prefixo certo, sempre.** `raw_/stg_/dim_/fct_/rpt_/ref_/_`. Nunca tabela sem prefixo no território do DW.
+2. **Lei do `__`: no máximo UM por nome.** `__` = fronteira namespace↔entidade; `_` = palavras dentro de uma parte (uma fronteira semântica por nome). Exceção: `stg_salesforce__<obj>__c` (convenção real da API do Salesforce para campo/objeto custom, 2 `__`) e `zz_deprecated__<old>`. `fct_salesforce_calls` ❌ → `fct_salesforce__calls`.
+3. **`dim_` NÃO leva namespace.** Dimensão conformada integra fontes. Homônimo `dim_<entity>` em outro schema T1 → BLOQUEIA até consolidar/qualificar.
+4. **Namespace = source (mono-fonte) | domain (≥2 fontes / cálculo interno).** Vocabulários FECHADOS do seu projeto (validador hard-enforça — edite `VOCAB_SOURCE`/`VOCAB_DOMAIN`). Desempate: domínio de quem **escreve**.
+5. **`<entity>` singular** (no idioma do seu projeto) em dim/fct/rpt; em stg/raw espelha a fonte (idioma+número da origem).
+6. **Sufixos de tabela proibidos** em schema produtivo: `_hist/_final/_new/_old/_bkp/_bak/_copy/_test/_baseline/_v<N>/YYYYMMDD`. Único versionamento: `_latest`/`_history`/`_<grain>`. Backup/shadow → schema `sandbox` com TTL no COMMENT.
+7. **PK obrigatória** em toda tabela persistente. Surrogate novo = `_sk bigint GENERATED ALWAYS AS IDENTITY`. **NUNCA `serial`/`bigserial`** — `IDENTITY` é o substituto moderno de `serial` nos docs PostgreSQL. `nextval`+SEQUENCE explícita é o legado documentado: tabela existente não se reescreve só por isso. **O validador NÃO checa PK** (auditoria manual).
+8. **Dinheiro = `numeric(18,4)`.** `numeric(18,2)` aceito p/ valor transacional com grão de 2 casas. PROIBIDO `real`/`double precision`/`money`/`float`/`text` — float perde precisão em dinheiro. `_rate`→`numeric(18,6)`; `_pct`→`numeric(9,6)`.
+9. **Instante = `timestamptz`** (`*_at`, audit, SCD2 `valid_from`/`valid_to`). `*_date`→`date`; `*_month`→`date` (1º do mês). Razão: `timestamp` sem tz descarta o fuso horário silenciosamente. Tabelas legadas podem ter colunas sem tz — não reescrever em massa, migrar via shadow+paridade.
+10. **Texto = `text`.** `varchar(n)` só com regra de negócio p/ `n` (prefira `text + CHECK`). `char(n)` PROIBIDO.
+11. **Booleano = `boolean` + prefixo `is_`/`has_`/`was_`/`does_`.** Proibido flag `'Sim'/'Nao'`/`0,1`/char(1) e boolean sem prefixo.
+12. **Dicionário conformado vence.** Mesmo conceito = mesmo nome+tipo em todo o DW. Precedência: entrada do dicionário > default genérico. Conceito recorrente (≥3 tabelas) entra no dicionário conformado do seu projeto antes da 3ª ocorrência.
+13. **SCD2** em dim que versiona atributo relevante: `valid_from`/`valid_to`/`is_current`, exatamente 1 `is_current=true` por NK, PK surrogate (`_sk`), índice parcial `WHERE is_current=true`. Filtrar presente com `is_current=true` (não `valid_to>NOW()`). **Se consumida por IA: exponha SEMPRE via view `_current` + COMMENT (nunca crua) — ver #13b.**
+13b. **Padrão temporal p/ consumo por IA: acúmulo de grão FCT é o default.** Tabela consultada por LLM via SQL livre carrega o seletor temporal como coluna de 1ª classe (FCT-grain `date_key`/`timestamp_key`), não como predicado implícito. SCD2 só p/ baixa-frequência e **sempre** atrás de view `vw_<dim>_current WITH (security_barrier)` + COMMENT `(SCD Tipo 2)`.
+14. **FK lógica via COMMENT, não física** em fct/rpt. `[JOINS] ↔ → ←` na coluna FK. Razão: refresh em massa (TRUNCATE+INSERT) quebra FK física. Lookup de dim pequena PODE ter FK onde a ordem de carga é controlada.
+15. **COMMENT ON TABLE obrigatório no CREATE;** COMMENT ON COLUMN em toda chave/monetária/flag, meta = 100%. Procedure DROP+CREATE re-aplica COMMENT no próprio corpo. **Validador NÃO checa COMMENT** (auditoria manual).
+16. **Schema SEMPRE qualificado** + `SET search_path` em function. Proibido criar homônimo cross-schema; quando já existir (mesmo nome em schemas distintos com tipo divergente), tratar como tradeoff documentado — não "consertar" em silêncio. Schema de dado sensível: INTOCÁVEL sem autorização temporária.
+
+## Decision Tree — qual tipo de tabela?
+
+```
+O que vou armazenar é:
+(a) EVENTO/transação (pedido, pagamento, ligação, envio)?
+    mono-fonte → fct_<source>__<entity>      (fct_stripe__charge)
+    cruza ≥2 fontes / cálculo interno → fct_<domain>__<entity>   (fct_sales__pipeline)
+(b) ENTIDADE com atributos (cliente, produto, conta, time)?
+    → dim_<entity>   (sem namespace)
+    versiona atributo relevante no tempo? Sim → SCD2 (valid_from/valid_to/is_current)
+                                          Não → SCD1 (só created_at/updated_at)
+    ⚠ será CONSULTADA POR IA? default temporal = acúmulo de grão FCT (c);
+      SCD2 só baixa-freq atrás de view _current
+(c) SNAPSHOT periódico (saldo diário, MRR mês-a-mês, ranking semanal)?
+    → fct_<namespace>__<entity>_<grain>   (fct_finance__mrr_monthly)
+(d) RELATÓRIO pronto p/ dashboard (agregado, regra aplicada)?
+    → rpt_<namespace>__<entity>[_<grain>]   (rpt_sales__pipeline_daily)
+(e) Dado BRUTO recém-extraído?
+    cru/jsonb → raw_<source>__<entity>   ·   tipado → stg_<source>__<entity>
+(f) AJUSTE MANUAL humano (correção, override, cobertura)?
+    fato → <entity>_adjustments_manual   (fct_billing_adjustments_manual)
+    override de dim → <entity>_coverages_manual   (dim_account_coverages_manual)
+    `_` SIMPLES; nunca FK; alimenta RPT via procedure.
+```
+
+## Decision Tree — schema / território
+
+```
+Onde criar?
+(a) Fonte externa integrada (CRM, billing, marketing, suporte)
+    ou catálogo canônico consumido por TUDO → schema core do DW  (T1)
+(b) Dim/fct LOCAL do produto/negócio (cache, fila, métrica de API própria)
+    → schema core do DW (T1, se o schema também hospeda o app)
+(c) Espelho literal de fonte → schema de mirror (T2): nomes/casing/tipos PRESERVADOS
+(d) ORM/vendor (Prisma, NextAuth, plataforma vendor) → schema T3: isento de gramática+tipo
+(e) Dado sensível (PII, financeiro) → PROIBIDO sem autorização temporária + REVOKE ao fim
+(f) Backup/shadow/experimento → schema sandbox, COMMENT 'Status: shadow — dropar após <data>'
+
+Dúvida: ver onde tabela análoga existe. Homônimo cross-schema com tipo divergente é
+tradeoff documentado — NÃO "consertar" em silêncio.
+```
+
+## Workflow operacional — criar tabela nova
+
+1. **Tipo** (decision tree) → dim/fct/rpt/stg/ref/_ops.
+2. **Território/schema** (decision tree) → T1 / T2 / T3 / sandbox.
+3. **Pré-existente?** Liste objetos + busque referências no código (procedures/DAGs/views) via o MCP Postgres/grep deste projeto p/ não duplicar nem criar homônimo.
+4. **Namespace** (só stg/raw/fct/rpt): source mono-fonte | domain cross-fonte. `dim_` = nenhum.
+5. **Entity:** singular no idioma do projeto (dim/fct/rpt) | espelho da fonte (stg/raw).
+6. **Colunas em ordem canônica:** PK (`_sk`) → NK (`_code`/`_id`) → FKs → atributos → métricas (fct) → `valid_from`/`valid_to`/`is_current` (SCD2) → `created_at`/`updated_at`. Tipos via **dicionário conformado do seu projeto primeiro**, senão a tabela de tipos acima.
+7. **DDL versionado** no diretório de migrações do seu projeto: CREATE + constraints + índices + COMMENTs.
+8. **COMMENT ON COLUMN com `[JOINS] ↔/→/←`** em toda FK (alimenta o MCP Postgres — ver seção abaixo).
+9. **SCD2:** índice parcial `WHERE is_current=true` nas colunas de filtro/JOIN.
+10. **Procedure de refresh** (`proc_refresh_*`/`create_or_replace_*`/`sp_upsert_*`) se não populada inline; re-aplica COMMENT se DROP+CREATE.
+11. **Validar:** `python scripts/validate_dw.py --table <schema>.<nome>` e `--column <col> --type <tipo>`.
+12. **Auditar via MCP** (PK, COMMENT, SCD2, homônimo, EXPLAIN) — dimensões que o validador NÃO cobre.
+
+## Do — práticas imitáveis
+
+- Dim SCD2 com COMMENT em todas as chaves é o arquétipo de dimensão — imitar como template.
+- Fato transacional enxuto (FK por código, sem FK física) é o arquétipo de fato.
+- `applied_rule` como coluna de RPT rastreando a origem da agregação — útil sempre que um relatório aplica regra de negócio não-trivial.
+- `COMMENT ON COLUMN` no formato `descrição. | [JOINS] ↔ ... | → ... | ← ...` — é o que o MCP Postgres lê para inferir JOIN em NL.
+- SCD2: filtrar com `WHERE is_current=true` (o índice parcial só ativa assim).
+- Conceito recorrente → registrar no dicionário conformado do seu projeto por PR antes da 3ª ocorrência.
+
+## Don't — armadilhas
+
+- `serial`/`bigserial` em DDL novo; `float`/`double`/`money` p/ dinheiro; `timestamp` sem tz; `char(n)`; `varchar(n)` sem regra de `n`.
+- 2+ `__` num nome (salvo `__c` e `zz_deprecated__`); namespace em `dim_`; entidade plural em dim/fct/rpt.
+- FK física (`REFERENCES`) em fato de alto volume; `CASCADE` em DROP/ALTER (procedures dependem do estado).
+- Apagar coluna sem checar se procedures/DAGs/views dependem dela.
+- Nome genérico de coluna sozinho (`date`, `id`, `name`, `value`, `type`, `month`).
+- Grafia `__manual` (duplo) — o correto é `_manual` simples; e **NÃO** proibir dim manual (`dim_<entity>_coverages_manual` é dim SCD2 válida).
+- Confiar no validador para PK/COMMENT/SCD2/homônimo/qualificação — ele NÃO checa nada disso.
+
+## Validador — `scripts/validate_dw.py`
+
+Gate determinístico **a nível de nome + acoplamento nome→família-de-tipo**
+(stdlib, sem acesso a DB/catálogo). Roda em code review/CI. **Antes de usar,
+edite `VOCAB_SOURCE`/`VOCAB_DOMAIN`/`CONFORMED_DICT` no topo do script para
+o vocabulário real do seu projeto** (seção acima).
+
+```bash
+python scripts/validate_dw.py --table public.fct_salesforce__opportunity
+python scripts/validate_dw.py --column customer_code --type text
+python scripts/validate_dw.py --file nomes.txt        # "table:..." / "column:NOME|TIPO"
+python scripts/validate_dw.py --self-test             # roda os exemplos-padrão → "self-test: OK"
+```
+
+- **Exit 0** = sem erros · **Exit 1** = erros. **WARNINGS não falham o exit** (`Report.ok()` = `not self.errors`).
+- **ERROR (bloqueia):** charset `^[a-z][a-z0-9_]*$`, >63 bytes, >1 `__`, sufixo/regex proibido (`_v2`, `_YYYYMMDD`, `_old`…), token source/domain desconhecido, coluna bare-proibida, tipo fora do dicionário conformado, rep-term com tipo errado, `*_at` não-timestamptz, tipo proibido (`money`/`real`/`double precision`/`float`/`timestamp` sem tz/`char(`), boolean↔prefixo incoerente.
+- **WARNING (não bloqueia):** `_key` em coluna nova (remediar por semântica: `_sk` para surrogate, `_id` para entidade, `_key` apenas para data/grão), `zz_deprecated__`, prefixo `_` líder, `dim_` com `__`, `varchar(`.
+- **NÃO checa:** PK, COMMENT, lineage, lógica de refresh, qualificação de schema, homônimo cross-schema. Essas são **auditoria manual via MCP Postgres**. Não substitui o protocolo shadow+paridade de migração.
+- **Seam conhecido:** para `_sk`, o validador bloqueia tipo não-`bigint`, mas **não prova `GENERATED ALWAYS AS IDENTITY`** sem catálogo.
+
+## Como o MCP Postgres usa o COMMENT
+
+O MCP Postgres da sua sessão (se disponível) lê os `COMMENT ON COLUMN` como
+grafo de JOIN. Pergunta NL "quanto o cliente C-12345 comprou em outubro?":
+
+1. Acha `dim_customer.customer_code = 'C-12345'` pelo metadado.
+2. Segue o `[JOINS] ↔` para `fct_billing__order.customer_code`.
+3. Filtra `order_date` e soma `order_amount`.
+
+Sem COMMENT bem escrito o MCP infere relação por nome — pode errar. Por isso
+a constraint #15 é crítica para a ferramenta. Use **apenas setas ASCII**
+(`↔ → ←`), sem emoji.
+
+## Audit Steps — antes de mergear DDL nova
+
+1. Confirme via MCP Postgres que a tabela não duplica existente nem cria homônimo cross-schema.
+2. Confirme (via MCP Postgres/grep) que colunas removidas/renomeadas não quebram procedures/DAGs/views.
+3. `python scripts/validate_dw.py --table <schema>.<nome>` retorna exit 0 (nomes/tipos).
+4. **PK existe** (validador NÃO checa) — confirmar via catálogo.
+5. **COMMENT ON TABLE + COMMENT em FK/monetária/flag** (validador NÃO checa) — confirmar via `pg_description`.
+6. **SCD2:** índice parcial `WHERE is_current=true` existe; exatamente 1 `is_current=true` por NK.
+7. Procedure de refresh tem `ON CONFLICT`/`TRUNCATE+INSERT` consistente com a vizinha e **re-aplica COMMENT** se DROP+CREATE.
+8. `EXPLAIN` (via MCP) em query realista mostra índices ativos; sugestões de índice faltante aplicadas quando fizer sentido.
+9. Permissões em schema de dado sensível REVOGADAS se concedidas para teste.

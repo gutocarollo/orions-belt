@@ -1,0 +1,67 @@
+{#-
+  Fonte única (harness-wiki) — este arquivo NÃO é copiado para o projeto-alvo
+  (excluído nominalmente em copier.yml `_exclude`); existe só para ser
+  {% raw %}{% include %}{% endraw %} pelos dois wrappers reais:
+  `.claude/skills/grill-me/SKILL.md.jinja` (Claude Code, gerado quando
+  use_claude=true) e `.agents/skills/{% raw %}{% if use_codex %}{% endraw %}grill-me{% raw %}{% endif %}{% endraw %}/SKILL.md.jinja`
+  (Codex, gerado quando use_codex=true). Substitui a antiga skill
+  `clarification-plan`: grill-me = a entrevista relentless + a disciplina de
+  trade-offs D[n] (2 exemplos aplicados bons + 2 ruins reais + Opção C) que
+  antes vivia na clarification-plan, agora fundidas numa skill só.
+
+  Skill 100% runtime-neutra e 100% genérica: sem hardcode de path/evento de
+  runtime, sem qualquer conteúdo de projeto e — deliberadamente — sem NENHUMA
+  regra do Delivery Council. O Council apenas INVOCA esta skill (via Gate
+  Condicional de Grill / status SABATINAR); a skill nunca conhece o Council.
+  Editar SÓ aqui — os wrappers são 1 linha de include, nunca duplicar o corpo.
+-#}
+---
+name: grill-me
+description: Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
+---
+
+Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+
+Ask the questions one at a time.
+
+If a question can be answered by exploring the codebase, explore the codebase instead.
+
+For every question, explain the concrete trade-offs before asking it:
+
+- State the behavior of each option.
+- Give at least two real applied good examples and two real applied bad examples: one good and one bad example for each of Options A and B.
+- Each example must use the actual context: an entity, flow, table, column, file, command, endpoint, screen, job, metric, or plan scenario. Do not use generic analogies or invent facts.
+- State when to choose each option.
+- Include Option C when neither A nor B is sufficient; explain why and when to choose it.
+
+Use this format for each question:
+
+```md
+### D[n] — [concrete decision]
+
+**Option A — [name]**
+
+- **Behavior:** [concrete effect].
+- **Applied good example 1:** [real favorable result].
+- **Applied bad example 1:** [real cost, risk, or failure].
+- **When to choose:** [objective criterion].
+
+**Option B — [name]**
+
+- **Behavior:** [concrete effect].
+- **Applied good example 2:** [real favorable result].
+- **Applied bad example 2:** [real cost, risk, or failure].
+- **When to choose:** [objective criterion].
+
+**Option C — [hybrid, spike, or fallback]** *(only when A and B are insufficient)*
+
+- **Behavior:** [concrete effect].
+- **Why A and B are insufficient:** [concrete gap].
+- **When to choose:** [objective criterion].
+
+**Recommended answer:** [option and evidence-based reason].
+
+**Question:** [one question only].
+```
+
+After each answer, record the decision, its rationale, and the branches eliminated. Ask the next question only after resolving dependencies of the current branch. Finish only when every material branch is resolved or explicitly assumed; state residual risks and deferred decisions.

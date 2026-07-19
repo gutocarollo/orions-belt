@@ -1,0 +1,41 @@
+{
+  "schema": "agent-swarm-witness/v1",
+  "fixes": [
+    {
+      "id": "PLAN-REQUEST-001",
+      "desc": "Plan review transports actionable replan request",
+      "file": ".harness/skills-shared/delivery-council/SKILL.md.jinja",
+      "marker": "REPLAN-REQUEST:"
+    },
+    {
+      "id": "PLAN-CONSUMED-001",
+      "desc": "Council records consumed replan request before next review",
+      "file": ".harness/skills-shared/delivery-council/SKILL.md.jinja",
+      "marker": "REPLAN-CONSUMED:"
+    },
+    {
+      "id": "EXEC-REQUEST-001",
+      "desc": "Execution review transports actionable fix request",
+      "file": ".harness/skills-shared/delivery-council/SKILL.md.jinja",
+      "marker": "FIX-REQUEST:"
+    },
+    {
+      "id": "EXEC-CONSUMED-001",
+      "desc": "Council records consumed fix request before next review",
+      "file": ".harness/skills-shared/delivery-council/SKILL.md.jinja",
+      "marker": "FIX-CONSUMED:"
+    },
+    {
+      "id": "PLAN-FINAL-GATE-001",
+      "desc": "Final replan blocks execution",
+      "file": ".harness/skills-shared/delivery-council/SKILL.md.jinja",
+      "marker": "execucao NAO pode comecar"
+    },
+    {
+      "id": "EXEC-FINAL-GATE-001",
+      "desc": "Final fix request blocks satisfied execution claim",
+      "file": ".harness/skills-shared/delivery-council/SKILL.md.jinja",
+      "marker": "nao declare `ADVERSARIAL-VERIFICATION: SATISFEITO`"
+    }
+  ]
+}

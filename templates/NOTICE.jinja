@@ -1,0 +1,63 @@
+{#-
+NOTICE.jinja — atribuição mínima que acompanha o PROJETO-ALVO instalado
+(H5/B2). Gerado sempre (arquivo incondicional, como .gitignore.jinja/
+AGENTS.md.jinja) porque `.harness/lib/docs_wiki_lint.py`, `ref_integrity.py`
+e `scan_project.py` são SEMPRE instalados, independente de use_claude/
+use_codex — e carregam proveniência de terceiros/outros repos do mesmo autor
+que precisa viajar com o projeto-alvo (CC BY-SA 4.0 Section 3(a)). O bloco
+das 10 skills trailofbits + diataxis + 3 skills learnhouse-internas só entra
+quando use_claude=true, porque só nesse caso elas são materializadas em
+.claude/skills/ (ver templates/{% raw %}{% if use_claude %}{% endraw %}.claude{% raw %}{% endif %}{% endraw %}/skills/).
+Fonte completa e sempre atualizada: NOTICE + PROVENANCE.json na raiz do
+repo harness-wiki (github.com/<owner>/harness-wiki) — este arquivo é um
+RESUMO escopado ao que este projeto especificamente instalou, não uma cópia
+completa (ver harness-wiki/NOTICE §8 e docs/manual/15-limitacoes-conhecidas.md
+item 14 para o porquê de ser um resumo e não uma cópia integral).
+-#}
+{{ project_name }} — NOTICE (proveniência de terceiros herdada do harness instalado)
+======================================================================
+
+Este projeto instalou partes de código/skills sob **Creative Commons
+Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)** — texto completo
+em https://creativecommons.org/licenses/by-sa/4.0/legalcode. Este arquivo é
+a atribuição mínima exigida pela licença para o material herdado; a fonte
+completa (inventário máquina-legível componente-a-componente) é o
+`NOTICE`/`PROVENANCE.json` do próprio harness-wiki (o framework que gerou
+este projeto), não deste repositório.
+
+## Sempre instalado (`.harness/lib/`)
+
+- `docs_wiki_lint.py`, `ref_integrity.py` — portados e parametrizados de
+  `guto-wiki` (mesmo autor do harness-wiki; sem conflito de licença de
+  terceiro). Modificados em relação ao original.
+- `scan_project.py` — blueprint reimplementado (não copiado verbatim) a
+  partir de `scan-project.mjs` do Understand Anything
+  (https://github.com/Egonex-AI/Understand-Anything, MIT License). MIT é
+  permissivo e não exige ShareAlike; citado aqui por boa prática.
+
+{% if use_claude %}
+## Skills instaladas em `.claude/skills/` (use_claude=true)
+
+- **Dez skills copiadas byte-a-byte de [trailofbits/skills](https://github.com/trailofbits/skills)**
+  (commit `cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af`, CC BY-SA 4.0, feito por
+  Trail of Bits — https://www.trailofbits.com/): `semgrep`, `codeql`,
+  `sarif-parsing`, `semgrep-rule-creator`, `variant-analysis`,
+  `insecure-defaults`, `supply-chain-risk-auditor`, `agentic-actions-auditor`,
+  `audit-context-building`, `fp-check`. Nenhuma modificação — sem conflito de
+  licença (mesma CC BY-SA 4.0 deste projeto). Nenhum endorsement da Trail of
+  Bits a este projeto é implicado (CC BY-SA 4.0 Seção 2(a)(6)). Oito dessas
+  skills incluem também o logo da Trail of Bits (`trail-of-bits-mark.svg`),
+  que além de copyright é marca registrada — presente aqui só como parte do
+  material copiado, não como afirmação de parceria.
+- **`diataxis`** — adapta o framework Diátaxis (https://diataxis.fr/, por
+  Daniele Procida, CC BY-SA 4.0); é uma adaptação curada, não uma cópia
+  verbatim do site.
+- **`owasp-security`, `curate-long-context`, `ai-ui-dev`** — extraídas e
+  generalizadas de um harness de produção privado pelo mesmo autor do
+  harness-wiki (nome do cliente original omitido por decisão do autor); sem
+  conflito de licença de terceiro.
+
+Fonte completa (por que cada uma, hash de verificação, revisão de
+compatibilidade de licença): `NOTICE`/`PROVENANCE.json` do repositório
+harness-wiki.
+{% endif %}

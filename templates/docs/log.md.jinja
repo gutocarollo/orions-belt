@@ -1,0 +1,21 @@
+{% raw -%}
+<!-- PROVENIENCIA (harness-wiki, F3): seed com o cabeçalho-contrato do docs/log.md do
+     harness-doador de referência — sem as entradas históricas (são daquele repo,
+     não deste). Formato/contrato copiado; conteúdo real começa do zero neste projeto.
+     A 1ª entrada abaixo (data "sem-data") é o próprio seed de instalação — satisfaz
+     `check_log_format` (docs_wiki_lint.py exige >=1 heading "## [...]"; "sem-data" é o
+     valor sancionado pelo formato para quando a data exata não é conhecida no
+     momento do render — não dá para embutir a data real do `copier copy` sem a
+     extensão Jinja `jinja2-time`, que não é dependência garantida de quem roda
+     `uvx copier copy`). Troque/complemente por entradas reais assim que este
+     projeto começar a editar `docs/`. -->
+{% endraw -%}
+# log.md — índice temporal do {{ harness_docs_dir }}/
+
+> Cronológico append-only, mais recente primeiro (padrão Karpathy — ver `{{ harness_docs_dir }}/SCHEMA.md`
+> §4-5). Formato: `## [YYYY-MM-DD] tipo · categoria` seguido de 1 linha com link + resumo do que mudou.
+> Toda entrada de doc novo/renomeado/removido precisa de uma linha aqui no mesmo diff.
+
+## [sem-data] chore · instalação
+
+harness-wiki instalado neste projeto via `copier copy` (ver `{{ harness_docs_dir }}/SCHEMA.md` e `.harness/harness.conf`). Substitua esta entrada-seed por entradas reais conforme `{{ harness_docs_dir }}/` evoluir.

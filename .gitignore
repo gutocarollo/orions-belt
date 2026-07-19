@@ -1,0 +1,36 @@
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+# understand-anything (se instalado sobre este próprio repo)
+.understand-anything/
+**/.understand-anything/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+
+# segredos — nunca versionar (o fixture de teste em engine/hooks/tests/fixture-project/
+# não tem .env; é só um .harness/harness.conf sintético, sem credenciais)
+**/.env
+**/.env.local
+**/.env.*.local
+
+# artefatos gerados pelo test_subagent_throttle.sh se ele for interrompido no meio
+# (o script normalmente limpa sozinho no fim — isto é só uma rede de segurança)
+engine/hooks/tests/fixture-project/.claude/
+
+# idem para o ledger de teste do engine/contract/ (test_agent_contract.py limpa o
+# run_dir específico no finally, mas o .agent-swarm/runs/ pai pode sobrar vazio)
+engine/contract/.agent-swarm/
+engine/contract/tests/fixtures/sample-project/.agent-swarm/
+
+# NOTA: .harness/answers.yml e .harness/harness.conf NÃO entram aqui de propósito.
+# Este repo é o TEMPLATE (agent-harness em si) — não é um projeto-alvo com Copier já
+# rodado. Quando este framework for instalado EM um projeto-alvo, o answers.yml e o
+# harness.conf gerados lá são o config central do projeto e devem ser versionados.

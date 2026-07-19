@@ -1,0 +1,68 @@
+import { defineConfig, devices } from '@playwright/test'
+
+// PORTADO de apps/web/playwright.visual.config.ts (harness-doador de
+// referência) — plano de resgate §R3 item 4, quase verbatim (a matriz de
+// viewports, o projeto setup+storageState e maxDiffPixelRatio são ~95%
+// boilerplate genérico). Único valor trocado: a porta default do WEB_URL,
+// que agora vem de HARNESS_DEV_WEB_PORT ({{ harness_dev_web_port }}) em vez
+// de hardcoded.
+const WEB_URL = process.env.PLAYWRIGHT_WEB_URL || 'http://localhost:{{ harness_dev_web_port }}'
+const STORAGE = 'playwright/.auth/admin.json'
+
+const mobileSm = { width: 360, height: 740 }
+const mobileMd = { width: 390, height: 844 }
+const tablet = { width: 768, height: 1024 }
+const desktop = { width: 1440, height: 900 }
+
+// Config VISUAL separado do e2e (playwright.config.ts, se este projeto tiver
+// um). fullyParallel:false + workers:1 evita contenção num DB/stack dev
+// compartilhado entre workers.
+export default defineConfig({
+  testDir: './tests/visual',
+  fullyParallel: false,
+  workers: 1,
+  reporter: [['html', { outputFolder: 'playwright-visual-report', open: 'never' }]],
+  use: { baseURL: WEB_URL },
+  expect: {
+    toHaveScreenshot: {
+      animations: 'disabled',
+      caret: 'hide',
+      scale: 'css',
+      maxDiffPixelRatio: 0.01,
+    },
+  },
+  projects: [
+    // 1) autentica 1x via tests/visual/auth.setup.ts e salva storageState
+    //    (STUB — implemente loginForVisualEvidence antes de rodar rotas
+    //    autenticadas; ver o TODO em auth.setup.ts). Projeto SEM auth: remova
+    //    este projeto e a `dependencies: ['setup']` abaixo.
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    // 2) projetos visuais reusam o estado autenticado; 1 baseline por viewport
+    {
+      name: 'mobile-sm',
+      use: { ...devices['Pixel 5'], viewport: mobileSm, storageState: STORAGE },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'mobile-md',
+      use: { ...devices['iPhone 13'], viewport: mobileMd, storageState: STORAGE },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'tablet',
+      use: { ...devices['iPad Mini'], viewport: tablet, storageState: STORAGE },
+      dependencies: ['setup'],
+    },
+    {
+      name: 'desktop',
+      use: { viewport: desktop, storageState: STORAGE },
+      dependencies: ['setup'],
+    },
+  ],
+  {%- if project_name %}
+  // SEM webServer: suba a stack de dev do seu jeito antes de rodar (ver
+  // skill run-{{ project_name }}, se este projeto a tiver instalada).
+  {%- else %}
+  // SEM webServer: suba a stack de dev antes de rodar este config.
+  {%- endif %}
+})

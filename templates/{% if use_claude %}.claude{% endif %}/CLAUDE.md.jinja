@@ -1,0 +1,20 @@
+{#
+  CLAUDE.md.jinja — Claude Code só lê CLAUDE.md/.claude/CLAUDE.md (confirmado
+  via docs oficiais code.claude.com/docs/en/settings nesta sessão F5: NÃO
+  existe fallback para AGENTS.md do lado Claude — achado real, corrige a
+  leitura equivocada de "project_doc_fallback_filenames" no research 05, que
+  é uma chave do CODEX (project aceitar CLAUDE.md como nome alternativo),
+  não do Claude aceitar AGENTS.md). Fonte única de conteúdo continua sendo
+  AGENTS.md.jinja (F1.6) — este arquivo só {% raw %}{% include %}{% endraw %}
+  o mesmo template, byte-idêntico após render, sem duplicar o corpo de 547
+  linhas. Gerado só quando use_claude=true.
+
+  PATH DO INCLUDE (F8, achado real): desde que copier.yml migrou pra raiz do
+  repo com `_subdirectory: templates` (ver copier.yml raiz), o search path
+  do loader Jinja do Copier é a RAIZ DO CLONE (= raiz do repo git), não mais
+  `templates/` — confirmado pelo erro real `TemplateNotFound: 'AGENTS.md.jinja'
+  not found in search path: '/tmp/copier._vcs.clone.xxx'` ao testar F8 antes
+  deste fix. Por isso o include abaixo é `templates/AGENTS.md.jinja` (path
+  completo desde a raiz do repo), não mais `AGENTS.md.jinja` sozinho.
+#}
+{%- include "templates/AGENTS.md.jinja" -%}

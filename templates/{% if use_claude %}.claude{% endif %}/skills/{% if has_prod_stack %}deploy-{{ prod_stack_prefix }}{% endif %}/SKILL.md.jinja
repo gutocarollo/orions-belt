@@ -1,0 +1,134 @@
+---
+name: deploy-{{ prod_stack_prefix }}
+description: >
+  Procedimento canônico de deploy/diagnóstico da PRODUÇÃO {{ prod_stack_prefix }}
+  {% if prod_host_name %}nesta VPS{% endif %} (Docker Swarm{% if prod_registry_url %} + registry local{% endif %}).
+  Use SEMPRE que a tarefa mencionar: deploy, produção, prod, "no
+  ar", "está deployado?", "imagem fresca", rebuild, rollback, hotfix,
+  crash-loop, logs de produção, registry. PROIBIDO afirmar estado de
+  deploy sem rodar o state-check da seção 2.
+---
+
+# Deploy {{ prod_stack_prefix }} — prod É esta máquina
+
+Origem: adaptado de um protocolo do harness-doador de referência (guidance de infra
+improvisada, validação no alvo errado, rollback destruído por prune). Todos os
+comandos abaixo seguem a forma verificada no projeto de origem — confirme os nomes de
+serviço/porta reais deste projeto antes de rodar em prod pela primeira vez.
+
+## 1. Realidade do ambiente (ler antes de opinar)
+
+- Esta sessão pode rodar **NO servidor de produção**{% if prod_host_name %} (hostname `{{ prod_host_name }}`){% endif %}.
+  Prod = Docker **Swarm**{% if prod_registry_url %} gerido via registry local `{{ prod_registry_url }}`{% endif %}.
+- Serviços: `{{ prod_stack_prefix }}_*`{% if prod_protected_services %} + serviços protegidos adicionais: {{ prod_protected_services }}{% endif %}
+  (ex.: gateway de entrada única, painel de gestão — nunca remover por conta própria).
+{%- if prod_registry_url %}
+- Registry local `{{ prod_registry_url }}`. Se este registry contiver MÚLTIPLAS famílias de
+  imagem (builds antigos/legados junto dos atuais), confirme a família correta antes de
+  atualizar produção — deployar a imagem errada já causou incidentes reais em projetos assim.
+  Única fonte válida: `{{ prod_registry_url }}/{{ prod_stack_prefix }}-{api,web,...}`.
+{%- endif %}
+{%- if prod_public_web_url %}
+- URLs públicas: `{{ prod_public_web_url }}` (raiz 200){% if prod_public_api_url %}; API em
+  `{{ prod_public_api_url }}` (raiz 404 pode ser NORMAL — confirme o health-path real do projeto).{% endif %}
+{%- endif %}
+- Quando o dono do projeto disser "deployado/produção/no ar", o alvo é isto — NUNCA
+  localhost:{{ harness_dev_web_port }}/{{ harness_dev_api_port }} (stack dev que pode coexistir nesta máquina).
+- Banco de produção: service `{{ prod_stack_prefix }}_postgres` (ou equivalente). Este banco é
+  SEPARADO do Postgres dev `{{ project_name }}-db-dev` (`localhost:{{ harness_dev_db_port }}`). Mesmos
+  counts/seed não significam sincronização contínua.
+{%- if harness_mcp_db_prod_port %}
+- MCP canônico de prod: `postgres-{{ project_name }}-prod`, **restricted/read-only**, exposto para
+  agentes por HTTP local em `http://127.0.0.1:{{ harness_mcp_db_prod_port }}/mcp`.
+{%- endif %}
+
+## 2. State-check (obrigatório antes de qualquer afirmação sobre prod)
+
+```bash
+docker service ls --format '{{ '{{' }}.Name{{ '}}' }}\t{{ '{{' }}.Replicas{{ '}}' }}\t{{ '{{' }}.Image{{ '}}' }}' | grep {{ prod_stack_prefix }}
+docker service ps {{ prod_stack_prefix }}_api --format '{{ '{{' }}.CurrentState{{ '}}' }}\t{{ '{{' }}.Error{{ '}}' }}' | head -3
+{%- if prod_registry_url %}
+# "Imagem fresca?" = digest RODANDO vs digest do REGISTRY:
+S=api  # repetir p/ outros serviços
+REG=$(curl -s -D - -o /dev/null http://{{ prod_registry_url }}/v2/{{ prod_stack_prefix }}-$S/manifests/latest \
+  -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+  | grep -i docker-content-digest | awk '{print $2}' | tr -d '\r')
+RUN=$(docker image inspect $(docker inspect --format '{{ '{{' }}.Image{{ '}}' }}' \
+  $(docker ps -q --filter label=com.docker.swarm.service.name={{ prod_stack_prefix }}_$S | head -1)) \
+  --format '{{ '{{' }}index .RepoDigests 0{{ '}}' }}' | cut -d@ -f2)
+[ "$REG" = "$RUN" ] && echo "$S: FRESCA ($RUN)" || echo "$S: DEFASADA reg=$REG run=$RUN"
+{%- endif %}
+{%- if prod_public_web_url %}
+# Health público (pela borda real):
+curl -s -o /dev/null -w 'web=%{http_code} ' {{ prod_public_web_url }}
+{%- if prod_public_api_url %}
+curl -s -o /dev/null -w 'api=%{http_code}\n' {{ prod_public_api_url }}
+{%- endif %}
+{%- endif %}
+```
+
+## 3. Deploy (build → backup do rollback → push → update → validar)
+
+```bash
+S=web  # ajuste ao serviço real deste projeto
+# 3.0 ÁRVORE LIMPA no contexto do build — build a partir de working tree sujo já regrediu
+#     prod em projetos assim (arquivo não commitado só existia na working tree local).
+[ -z "$(git -C <worktree-do-build> status --porcelain -- apps/$S)" ] || { echo "ABORTA: apps/$S sujo — commit ou stash antes do build"; }
+# 3.1 CONFERIR .dockerignore presente (segredo já quase vazou pra imagem por isso faltar)
+ls apps/$S/.dockerignore
+{%- if prod_registry_url %}
+# 3.2 build
+docker build -t {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:latest -f apps/$S/Dockerfile apps/$S
+# 3.3 PRESERVAR ROLLBACK antes de sobrescrever :latest
+docker tag {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:latest {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:prev-$(date +%Y%m%d)
+docker push {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:prev-$(date +%Y%m%d)
+# 3.4 push do novo
+docker push {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:latest
+# 3.5 update — confirme a config de update PERSISTIDA (start-first + monitor) antes de
+#     assumir o default; monitor curto demais faz o Swarm marcar task saudável como falha
+docker service update --force --image {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:latest {{ prod_stack_prefix }}_$S
+{%- endif %}
+# 3.6 validar: seção 2 inteira (digest fresca + health público 200)
+```
+
+## 4. Rollback
+
+```bash
+docker service rollback {{ prod_stack_prefix }}_$S            # volta ao spec anterior; OU
+{%- if prod_registry_url %}
+docker service update --image {{ prod_registry_url }}/{{ prod_stack_prefix }}-$S:prev-<data> {{ prod_stack_prefix }}_$S
+{%- endif %}
+docker service ps {{ prod_stack_prefix }}_$S | head -5        # confirmar RUNNING sem Error
+```
+
+## 5. Logs e diagnóstico
+
+```bash
+docker service logs {{ prod_stack_prefix }}_api --since 15m --tail 200 2>&1 | grep -viE 'healthcheck|GET /health' | tail -60
+docker service ps {{ prod_stack_prefix }}_api --no-trunc | head -5   # erro de task (crash-loop mostra aqui)
+```
+
+{%- if harness_mcp_db_prod_port %}
+
+DB prod read-only via MCP:
+
+```text
+MCP: postgres-{{ project_name }}-prod
+Modo: restricted (SELECT/diagnóstico; sem mutação)
+Uso: confirmar dados reais de prod antes de afirmar que a imagem/usuário/senha/tenant está correto.
+```
+{%- endif %}
+
+## 6. Regras rígidas (guards hookify ativos neste projeto)
+
+- `docker prune` = BLOQUEADO (destrói rollback).
+- `service/stack rm` de `{{ prod_stack_prefix }}`{% if prod_protected_services %}/{{ prod_protected_services }}{% endif %} = BLOQUEADO.
+{%- if prod_registry_url %}
+- `--image` fora de `{{ prod_registry_url }}/{{ prod_stack_prefix }}-*` = BLOQUEADO (stock image).
+{%- endif %}
+- push `:latest` sem tag `prev-` antes = WARN com o procedimento 3.3.
+- NUNCA abrir porta no firewall local achando que protege container — Docker costuma
+  bypassar firewalls locais (ufw/iptables); confirme onde o firewall REAL deste ambiente vive
+  (nuvem/provedor vs host) antes de assumir que uma regra local protege algo.
+- Segredos: `docker service inspect` mostra env — NUNCA colar saída de
+  inspect com env em doc/commit/chat sem redigir.

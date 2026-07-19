@@ -1,0 +1,185 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/dev-doctor.sh\" status 2>/dev/null || true",
+            "timeout": 10,
+            "statusMessage": "dev-doctor: snapshot da stack dev"
+          }
+        ]
+      },
+      {
+        "matcher": "compact|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-reinject.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/git-doctor.sh\"",
+            "timeout": 15,
+            "statusMessage": "git-doctor: checando estado do repo"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/lessons-inject.sh\"",
+            "timeout": 10,
+            "statusMessage": "lessons: injetando lições de sessões anteriores"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/lei-zero-kickoff.py\"",
+            "timeout": 10
+          }
+        ]
+      }{% if harness_understand_apps_root %},
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-context-inject.py\"",
+            "timeout": 10,
+            "statusMessage": "understand: injetando regra de diff relativo {{ harness_understand_apps_root }}"
+          }
+        ]
+      }
+      {%- endif %}
+    ],
+    "PreToolUse": [
+      {%- if harness_understand_apps_root %}
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-apps-diff-guard.sh\"",
+            "timeout": 10,
+            "statusMessage": "understand: checando diff relativo {{ harness_understand_apps_root }}"
+          }
+        ]
+      },
+      {%- endif %}
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-throttle.sh\"",
+            "timeout": 10,
+            "statusMessage": "throttle: checando slots de subagents (cap {{ harness_subagent_max_concurrent }})"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {%- if use_ds_gate %}
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/ds-gate-posttool.sh\"",
+            "timeout": 30,
+            "statusMessage": "ds-gate: checando tokenização do design system"
+          }
+        ]
+      },
+      {%- endif %}
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-release.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/deliverable-scrub-gate.sh\"",
+            "timeout": 15,
+            "statusMessage": "scrub: checando jargão interno em doc de cliente"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-release.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-precompact.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate.py\"",
+            "timeout": 15,
+            "statusMessage": "completion-gate: checando claim de conclusão vs evidência"
+          },
+          {%- if use_ui_evidence %}
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/ui-evidence-gate.sh\"",
+            "timeout": 15,
+            "statusMessage": "ui-evidence-gate: checando mudança de UI vs evidência visual"
+          },
+          {%- endif %}
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-stop-gate.sh\"",
+            "timeout": 10,
+            "statusMessage": "marathon: checando maratona ativa vs checklist"
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/reap-leaks.sh\"",
+            "timeout": 10,
+            "statusMessage": "reap-leaks: reapando chromium/orfaos vazados"
+          }
+        ]
+      }
+    ]
+  }
+}

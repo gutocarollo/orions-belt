@@ -1,0 +1,12 @@
+{
+  "adversarial_verification": "CORRIGIR",
+  "gaps_criticos": 1,
+  "proxima_acao": "corrigir",
+  "fix_request": [
+    {
+      "gap": "endpoint sem checagem de tenant",
+      "evidencia": "apps/api/routers/course.py linha 88",
+      "alteracao_obrigatoria": "adicionar filtro org_id na query"
+    }
+  ]
+}

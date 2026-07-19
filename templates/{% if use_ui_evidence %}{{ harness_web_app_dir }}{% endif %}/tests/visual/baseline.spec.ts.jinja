@@ -1,0 +1,63 @@
+import { test, expect } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+
+/* baseline.spec.ts — regressão visual (toHaveScreenshot, baselines
+   commitadas) + oráculo de conteúdo determinístico (status HTTP < 400 +
+   seletor de erro opcional). Complementa evidence.spec.ts: aquele produz
+   EVIDÊNCIA rotulada para revisão humana/agente; este é o teste de
+   REGRESSÃO que falha o build.
+
+   PORTADO de apps/web/tests/visual/baseline.spec.ts (harness-doador de
+   referência) — plano de resgate §R3 item 3. Genericização vs. a
+   versão-fonte: o seletor de erro ([data-testid="route-error"]) e as
+   máscaras de screenshot (img[alt="User Avatar"]) eram hardcoded ao app
+   doador — agora configuráveis via env, ambos default vazio (sem
+   comportamento assumido para um app desconhecido):
+
+   Env:
+   - HARNESS_UI_EVIDENCE_ERROR_SELECTOR   seletor CSS de uma tela de erro
+     renderizada SOB o mesmo layout que as páginas normais (ex.: um
+     componente <RouteError data-testid="route-error"/> do error boundary
+     deste projeto). Vazio = oráculo de erro pulado (só o status HTTP
+     continua sendo checado).
+   - HARNESS_UI_EVIDENCE_MASK_SELECTORS   csv de seletores CSS mascarados no
+     screenshot (avatares, conteúdo dinâmico não determinístico). Vazio =
+     sem máscara. */
+
+type Route = { name: string; path: string }
+// lido SÍNCRONO no top-level (a coleta precisa dos testes antes do worker)
+const routes: Route[] = JSON.parse(
+  readFileSync(path.join(__dirname, 'routes.json'), 'utf-8'),
+)
+
+const ERROR_SELECTOR = process.env.HARNESS_UI_EVIDENCE_ERROR_SELECTOR || ''
+const MASK_SELECTORS = (process.env.HARNESS_UI_EVIDENCE_MASK_SELECTORS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean)
+
+for (const route of routes) {
+  test(`baseline: ${route.name}`, async ({ page }) => {
+    const resp = await page.goto(route.path, { waitUntil: 'load' }) // baseURL; NÃO 'networkidle'
+    // CONTENT ORACLE (1): independe de i18n — status HTTP < 400 (404/erro real).
+    expect(resp?.status(), `${route.name}: HTTP ${resp?.status()} (404/erro?)`).toBeLessThan(400)
+    await page.evaluate(() => (document as any).fonts?.ready)
+    await page.waitForSelector('main', { state: 'visible' })
+    // CONTENT ORACLE (2), opcional: sentinela de erro renderizado sob <main>
+    // (ex.: SPA que responde 200 mas mostra tela de erro client-side).
+    if (ERROR_SELECTOR) {
+      await expect(
+        page.locator(ERROR_SELECTOR),
+        `${route.name} resolveu para tela de erro sob <main>`,
+      ).toHaveCount(0)
+    }
+    await expect(page).toHaveScreenshot(`${route.name}.png`, {
+      animations: 'disabled',
+      caret: 'hide',
+      ...(MASK_SELECTORS.length
+        ? { mask: MASK_SELECTORS.map((s) => page.locator(s)) }
+        : {}),
+    })
+  })
+}

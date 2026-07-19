@@ -1,0 +1,153 @@
+# .harness/harness.conf — config central do harness deste projeto.
+# GERADO pelo Copier (templates/copier.yml) a partir de .harness/answers.yml —
+# NÃO editar à mão (risco R5 do plano: os dois formatos driftam; a fonte de
+# verdade é o answers.yml, este arquivo é derivado). Para mudar um valor, rode
+# `copier update` (ou edite via `harness-init`) e deixe o Copier regravar.
+#
+# Formato: KEY=value · comentário com '#' (precedido de espaço se for trailing)
+# · CSV inline (`item1,item2`) · `${OUTRA_KEY}` expande sequencialmente
+# (top-to-bottom), mesma semântica de `source` em bash.
+# Parser único: engine/_tooling_conf.py (get_config/get_config_csv/
+# get_config_int/get_config_bool) — nenhum script duplica esta lógica.
+#
+# Fonte do schema: docs/planning/research/03-hardcodes.md §3.
+
+# =========================================================================
+# --- identidade ---
+# =========================================================================
+PROJECT_NAME={{ project_name }}
+PROJECT_ROOT={{ project_root }}
+{%- if client_name %}
+CLIENT_NAME="{{ client_name }}"
+{%- else %}
+# CLIENT_NAME vazio = sem camada de cliente (projeto interno/produto próprio)
+CLIENT_NAME=
+{%- endif %}
+{%- if client_product_name %}
+CLIENT_PRODUCT_NAME="{{ client_product_name }}"
+{%- endif %}
+{%- if client_org_slug %}
+CLIENT_ORG_SLUG={{ client_org_slug }}
+{%- endif %}
+OWNER_NAME={{ owner_name }}
+{%- if git_remote_owner %}
+GIT_REMOTE_OWNER={{ git_remote_owner }}
+{%- endif %}
+{%- if git_remote_url %}
+GIT_REMOTE_URL={{ git_remote_url }}
+{%- endif %}
+
+# =========================================================================
+# --- dev stack ---
+# =========================================================================
+HARNESS_DEV_API_PORT={{ harness_dev_api_port }}  # porta padrão do backend/API em dev
+HARNESS_DEV_WEB_PORT={{ harness_dev_web_port }}
+{%- if harness_dev_collab_port %}
+HARNESS_DEV_COLLAB_PORT={{ harness_dev_collab_port }}
+{%- endif %}
+HARNESS_DEV_DB_PORT={{ harness_dev_db_port }}
+HARNESS_DEV_DB_INTERNAL_PORT={{ harness_dev_db_internal_port }}
+HARNESS_DEV_REDIS_PORT={{ harness_dev_redis_port }}
+{%- if harness_reserved_ports %}
+HARNESS_RESERVED_PORTS={{ harness_reserved_ports }}         # portas que o dev NÃO pode usar (ex.: painel de deploy local)
+{%- endif %}
+HARNESS_DEV_CONTAINER_PREFIX=${PROJECT_NAME}-   # -db-dev, -redis-dev, -worker-dev, -gotenberg-dev etc.
+{%- if harness_mcp_db_dev_port %}
+HARNESS_MCP_DB_DEV_PORT={{ harness_mcp_db_dev_port }}
+{%- endif %}
+{%- if harness_mcp_db_prod_port %}
+HARNESS_MCP_DB_PROD_PORT={{ harness_mcp_db_prod_port }}
+{%- endif %}
+{%- if harness_mcp_proxy_image %}
+HARNESS_MCP_PROXY_IMAGE={{ harness_mcp_proxy_image }}
+{%- endif %}
+
+{%- if has_prod_stack %}
+
+# =========================================================================
+# --- prod (bloco só existe se has_prod_stack=true; ausente = sem guardas de prod) ---
+# =========================================================================
+PROD_STACK_PREFIX={{ prod_stack_prefix }}
+PROD_PROTECTED_SERVICES="{{ prod_protected_services }}"
+PROD_REGISTRY_URL={{ prod_registry_url }}
+PROD_PUBLIC_WEB_URL={{ prod_public_web_url }}
+{%- if prod_public_api_url %}
+PROD_PUBLIC_API_URL={{ prod_public_api_url }}
+{%- endif %}
+{%- if prod_host_name %}
+PROD_HOST_NAME={{ prod_host_name }}
+{%- endif %}
+{%- endif %}
+
+# =========================================================================
+# --- caps do harness ---
+# =========================================================================
+HARNESS_SUBAGENT_MAX_CONCURRENT={{ harness_subagent_max_concurrent }}
+HARNESS_SUBAGENT_SLOT_STALE_MINUTES={{ harness_subagent_slot_stale_minutes }}
+HARNESS_LESSONS_INJECT_MAX_LINES={{ harness_lessons_inject_max_lines }}
+HARNESS_UI_EVIDENCE_SKIP_TTL_SECONDS={{ harness_ui_evidence_skip_ttl_seconds }}
+HARNESS_UI_EVIDENCE_THEMES={{ harness_ui_evidence_themes }}
+HARNESS_REAP_CHROMIUM_MAX_AGE_SECONDS={{ harness_reap_chromium_max_age_seconds }}
+HARNESS_RUNAWAY_CPU_PCT={{ harness_runaway_cpu_pct }}
+HARNESS_RUNAWAY_MIN_AGE_SECONDS={{ harness_runaway_min_age_seconds }}
+HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS={{ harness_marathon_max_blocks_without_progress }}
+HARNESS_PLAN_REVIEW_MAX={{ harness_plan_review_max }}
+HARNESS_EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}
+HARNESS_ADVERSARIAL_REVIEWER_MODEL={{ harness_adversarial_reviewer_model }}
+{%- if use_codex %}
+HARNESS_CODEX_MAX_THREADS={{ harness_codex_max_threads }}
+HARNESS_CODEX_MAX_DEPTH={{ harness_codex_max_depth }}
+HARNESS_CODEX_PROJECT_DOC_MAX_BYTES={{ harness_codex_project_doc_max_bytes }}
+{%- endif %}
+
+# =========================================================================
+# --- convenções (defaults = padrão das ferramentas; raramente mudar) ---
+# =========================================================================
+HARNESS_DOCS_DIR={{ harness_docs_dir }}
+HARNESS_LESSONS_FILE={{ harness_lessons_file }}
+HARNESS_RUNS_DIR={{ harness_runs_dir }}
+HARNESS_EVIDENCE_DIR={{ harness_evidence_dir }}
+IGNORED_TOOL_DIRS={{ harness_ignored_tool_dirs }}
+{%- if harness_understand_apps_root %}
+HARNESS_UNDERSTAND_APPS_ROOT={{ harness_understand_apps_root }}
+{%- endif %}
+{%- if use_ui_evidence or use_ds_gate %}
+HARNESS_WEB_APP_DIR={{ harness_web_app_dir }}
+{%- endif %}
+
+{%- if use_ds_gate %}
+
+# =========================================================================
+# --- design system (ds-gate; .harness/lib/ds-gate.sh, ds-pairs-check.py,
+#     ds-pair-eval.py — motor genérico). Defaults vazios de propósito:
+#     nenhuma string de marca do harness-doador de referência vaza para o
+#     projeto-alvo; edite à mão (ou via harness-init futuro) para o
+#     vocabulário do SEU design system. ---
+# =========================================================================
+DS_GATE_CSS_PATH=styles/globals.css   # relativo a HARNESS_WEB_APP_DIR; onde vivem os tokens CSS (--var) do projeto
+DS_BRAND_EXCLUDE_PATTERNS=            # CSV de padrões ERE extra a excluir do ratchet (ex.: nome de escala de marca tipo "acme-gray", ou path do arquivo de tokens da marca)
+PROJECT_THEMES=                       # CSV de valores de atributo data-theme do design system (ex.: "acme,acme-dark-brand"); vazio = só a base :root/.dark (sem overlay de marca)
+{%- endif %}
+
+# =========================================================================
+# --- skills/council (engine/contract/scripts/validate_skills.py) ---
+# =========================================================================
+HARNESS_SKILLS_DIR={{ harness_skills_dir }}
+HARNESS_REQUIRED_SKILLS={{ harness_required_skills }}
+{%- if use_codex %}
+HARNESS_CODEX_AGENTS_DIR={{ harness_codex_agents_dir }}
+HARNESS_CODEX_CONFIG_PATH={{ harness_codex_config_path }}
+{%- endif %}
+{%- if harness_council_skill_name %}
+HARNESS_COUNCIL_SKILL_NAME={{ harness_council_skill_name }}
+{%- endif %}
+HARNESS_LEDGER_DIR=${HARNESS_RUNS_DIR}/agent-swarm
+
+{%- if has_e2e %}
+
+# =========================================================================
+# --- e2e ---
+# =========================================================================
+E2E_ADMIN_EMAIL={{ e2e_admin_email }}
+E2E_ADMIN_PASSWORD={{ e2e_admin_password }}
+{%- endif %}

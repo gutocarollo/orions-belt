@@ -1,0 +1,17 @@
+{#- F9-fixes: dedupe — quando prod_protected_services == prod_stack_prefix
+    (o default do copier.yml), o regex antigo saía "(acme|acme)". Monta a
+    lista, junta com o prefixo e aplica `unique` antes de virar alternância. -#}
+{%- set _protected = ([prod_stack_prefix] + ((prod_protected_services | default("")).split() if prod_protected_services else [])) | unique | select | list -%}
+---
+name: {{ prod_stack_prefix }}-prod-destroy
+enabled: true
+event: bash
+action: block
+pattern: docker\s+(service\s+rm|stack\s+rm)[\s\S]*({{ _protected | join("|") }})|docker\s+service\s+scale[\s\S]*{{ prod_stack_prefix }}_[a-z]+=0
+---
+
+BLOQUEADO: remoção/zeramento de serviço de PRODUÇÃO ({{ _protected | join(", ") }}).
+
+Isso derruba o ambiente de produção na hora{% if _protected | length > 1 %} (entre os serviços protegidos pode estar o único caminho de entrada, ex.: um tunnel){% endif %}. Não existe cenário em que um agente deva remover esses serviços por conta própria.
+
+Se a intenção é reiniciar/atualizar: `docker service update --force <svc>` (com a config de update persistida start-first/monitor longo) — via skill `deploy-{{ prod_stack_prefix }}`. Remoção de verdade = decisão do dono do projeto, executada por ele.

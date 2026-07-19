@@ -1,0 +1,21 @@
+# .gitignore — seed mínimo do harness-wiki (G10, revisão adversarial pós-v1.0.0).
+# Cobre só o que o PRÓPRIO harness gera em runtime e nunca deveria ser committado —
+# não tenta ser um .gitignore genérico de linguagem/stack (isso é conteúdo do
+# projeto). Primeira instalação: cria do zero. Se o projeto já tiver um
+# .gitignore, o Copier trata como qualquer outro arquivo pré-existente (prompt de
+# conflito/merge manual) — mesma mecânica de qualquer arquivo B do template.
+
+# Evidência visual (PNG + manifest por rodada) — regenera a cada captura, não é
+# fonte de verdade committável (skill ui-evidence, capítulo 09 do manual).
+{{ harness_evidence_dir }}/
+
+# Estado durável de execuções longas (marathon) — RUN.md por execução em
+# andamento; artefato de trabalho, não histórico a preservar (capítulo 08).
+{{ harness_runs_dir }}/
+
+# Bytecode Python dos módulos shipados em .harness/lib/ — os hooks importam
+# _tooling_conf.py via `python3 .../script.py` a cada disparo (Edit/Write/Stop),
+# o que materializa __pycache__/ já no primeiro commit se este .gitignore não
+# existir antes do `git add -A`.
+__pycache__/
+*.py[cod]

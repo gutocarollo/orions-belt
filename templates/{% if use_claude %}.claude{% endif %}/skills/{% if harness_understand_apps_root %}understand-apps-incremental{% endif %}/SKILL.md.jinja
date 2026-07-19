@@ -1,0 +1,61 @@
+---
+name: understand-apps-incremental
+description: >-
+  Use sempre que a tarefa mencionar /understand, Understand Anything,
+  .understand-anything, knowledge-graph, grafo de codigo, compute-batches ou
+  atualizacao incremental do grafo de {{ project_name }}.
+---
+
+{# Só gerada quando harness_understand_apps_root está setado — projeto usa um
+   subdiretório monorepo (ex.: "apps") como PROJECT_ROOT do Understand Anything,
+   diferente do git root. Ver copier.yml/harness_understand_apps_root e
+   docs/planning/notas-f1.6.md (regra do PROJECT_ROOT≠git-root herdada do
+   harness-doador de referência). #}
+# Understand Anything incremental em {{ harness_understand_apps_root }}/
+
+Antes de qualquer acao com Understand Anything neste repo, leia:
+
+- `.claude/CLAUDE.md` (ou `AGENTS.md`)
+- a doc de arquitetura que documenta este mecanismo neste projeto (se houver)
+
+## Regra bloqueante
+
+O grafo principal do produto usa `PROJECT_ROOT={{ harness_understand_apps_root }}`, mas o Git root real é a raiz do repo. Portanto, a lista incremental de arquivos alterados deve ser relativa a `{{ harness_understand_apps_root }}/`.
+
+Use:
+
+```bash
+bash .harness/lib/understand-apps-changed-files.sh
+```
+
+ou, manualmente:
+
+```bash
+LAST=$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('{{ harness_understand_apps_root }}/.understand-anything/meta.json','utf8')); process.stdout.write(m.gitCommitHash)")
+git diff --relative={{ harness_understand_apps_root }} "$LAST"..HEAD --name-only -- {{ harness_understand_apps_root }} | rg -v '^\.understand-anything/'
+```
+
+O hash de referência do grafo atual **não é uma constante** — leia-o sempre de
+`{{ harness_understand_apps_root }}/.understand-anything/meta.json` (campo `gitCommitHash`,
+comando `LAST=` acima). Não fixe um hash decorado no doc/skill: ele dessincroniza a
+cada `/understand` incremental (achado real do harness-doador — o hash citado num doc
+estático já driftou do grafo real mais de uma vez).
+
+## Proibido
+
+Não usar:
+
+```bash
+git diff <lastCommitHash>..HEAD --name-only
+git -C {{ harness_understand_apps_root }} diff <lastCommitHash>..HEAD --name-only
+```
+
+Esses comandos emitem `{{ harness_understand_apps_root }}/api/...`, mas `compute-batches` espera `api/...` quando o projeto analisado é `{{ harness_understand_apps_root }}/`.
+
+## Checklist
+
+1. Confirmar que `{{ harness_understand_apps_root }}/.understand-anything/meta.json` existe.
+2. Gerar changed files com `.harness/lib/understand-apps-changed-files.sh`.
+3. Validar que a lista não contém `{{ harness_understand_apps_root }}/`, `.claude/`, `.agents/`, `docs/`, `scripts/` ou outros paths da raiz.
+4. Rodar incremental sem `--full`.
+5. Se atualizar dashboard, lembrar que ele lê `{{ harness_understand_apps_root }}/.understand-anything/knowledge-graph.json`.

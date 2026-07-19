@@ -1,0 +1,13 @@
+{
+  "plan_adversarial_verification": "REPLANEJAR",
+  "gaps_criticos": 1,
+  "decisao_escolhida": "pendente",
+  "proxima_acao": "replanejar",
+  "replan_request": [
+    {
+      "gap": "plano não cobre rollback",
+      "evidencia": "docs/architecture/06-visao-deployment.md linha 40",
+      "alteracao_obrigatoria": "adicionar passo de rollback ao plano"
+    }
+  ]
+}

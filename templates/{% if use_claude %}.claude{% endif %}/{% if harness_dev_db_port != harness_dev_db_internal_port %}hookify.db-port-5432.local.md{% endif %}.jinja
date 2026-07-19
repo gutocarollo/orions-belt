@@ -1,0 +1,17 @@
+---
+name: db-port-5432
+enabled: true
+event: bash
+action: warn
+conditions:
+  - field: command
+    operator: regex_match
+    pattern: (^|[^0-9]){{ harness_dev_db_internal_port }}([^0-9]|$)
+  - field: command
+    operator: regex_match
+    pattern: psql|postgres|pg_|DATABASE_URL|asyncpg|sqlalchemy
+---
+
+ATENÇÃO: o Postgres DEV desta máquina escuta em **{{ harness_dev_db_port }}** (host), não {{ harness_dev_db_internal_port }} — `{{ project_name }}-db-dev` mapeia {{ harness_dev_db_port }}→{{ harness_dev_db_internal_port }}. Comandos apontando {{ harness_dev_db_internal_port }} no host falham com connection refused ou, pior, acertam OUTRO postgres.
+
+Dentro do container a porta é {{ harness_dev_db_internal_port }} (aí está certo: `docker exec {{ project_name }}-db-dev psql -U {{ project_name }} ...`). No host: `psql -h localhost -p {{ harness_dev_db_port }}`.

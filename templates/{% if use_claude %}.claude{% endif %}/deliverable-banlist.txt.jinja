@@ -1,0 +1,34 @@
+# Banlist de jargão interno para documentos de CLIENTE (uma ERE por linha; # = comentário).
+# O hook deliverable-scrub-gate roda estes padrões contra Write/Edit em arquivos
+# cujo path casa um dos globs abaixo. Objetivo: nunca vazar processo interno /
+# nome de ferramenta / contexto de outra conta para um entregável do cliente.
+# Origem: auditoria de fricção do harness-doador de referência, cluster 7 ("NUNCA MENCIONA O NOME INTERNO DO
+# PROJETO", jargão interno em doc de cliente). Seed genérico — customize os
+# globs/termos abaixo para a convenção de nomes de doc-de-cliente deste projeto.
+
+# --- globs de arquivos-alvo (prefixo 'glob:'; relativos à raiz do repo) ---
+glob: docs/commercial/Proposta-*
+glob: docs/commercial/Orcamento-*
+glob: docs/commercial/Relatorio-*
+glob: docs/commercial/RELATORIO-*
+glob: docs/commercial/Cronograma*
+glob: docs/commercial/Matriz-*
+glob: docs/commercial/manual-usuario/*
+
+# --- padrões banidos (ERE, case-insensitive) ---
+\bLEI ZERO\b
+CLAUDE\.md
+\bhookify\b
+\bsubagents?\b
+\bworkflow de (sub)?agentes?\b
+\bonda [0-9]
+pós-auditoria
+auditoria adversarial
+\bClaude Code\b
+vscode-webview://
+{%- if client_product_name %}
+# nome interno do projeto: o produto para o cliente é "{{ client_product_name }}"
+{%- else %}
+# nome interno do projeto (customize/adicione o nome comercial do produto entregue ao cliente):
+{%- endif %}
+\b{{ project_name }}\b

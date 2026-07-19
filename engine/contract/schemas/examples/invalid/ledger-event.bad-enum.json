@@ -1,0 +1,9 @@
+{
+  "ts": "2026-07-18T12:00:00Z",
+  "run_id": "run-2026-07-18-01",
+  "loop": "execution",
+  "round": 1,
+  "event": "this-event-does-not-exist-in-the-enum",
+  "status": "CORRIGIR",
+  "payload": {}
+}

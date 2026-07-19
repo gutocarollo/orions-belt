@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# PreToolUse guard for Bash commands that can corrupt/silently no-op the
+# Understand Anything incremental path when PROJECT_ROOT={{ harness_understand_apps_root }}.
+#
+# MATERIALIZAÇÃO (F4, harness-wiki): só é gerado quando
+# `harness_understand_apps_root` está setado (ver copier.yml). Todo literal
+# "apps" do original vira {{ harness_understand_apps_root }}.
+set -uo pipefail
+
+IN="$(cat)"
+command -v jq >/dev/null 2>&1 || exit 0
+
+CMD="$(jq -r '.tool_input.command // empty' <<<"$IN")"
+[ -n "$CMD" ] || exit 0
+
+ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+[ -n "${ROOT:-}" ] || ROOT="$(pwd)"
+
+mentions_understand() {
+  grep -Eiq 'understand|\.understand-anything|knowledge-graph|compute-batches|changed-files\.txt' <<<"$CMD"
+}
+
+print_notice() {
+  cat >&2 <<EOF
+UNDERSTAND-APPS-INCREMENTAL-GUARD
+{{ project_name }} uses {{ harness_understand_apps_root }}/ as the Understand Anything graph root, but Git root is the repo root.
+Incremental changed-files MUST be generated with:
+  git diff --relative={{ harness_understand_apps_root }} <lastCommitHash>..HEAD --name-only -- {{ harness_understand_apps_root }}
+or:
+  bash .harness/lib/understand-apps-changed-files.sh
+Never feed compute-batches paths like {{ harness_understand_apps_root }}/api/...; it expects api/..., web/..., cli/...
+EOF
+}
+
+block() {
+  print_notice
+  cat >&2 <<'EOF'
+
+BLOCKED: unsafe Understand Anything incremental command.
+This command can make the run look fast by producing zero/few matching batches.
+Regenerate changed-files with:
+  bash .harness/lib/understand-apps-changed-files.sh
+EOF
+  exit 2
+}
+
+if ! mentions_understand; then
+  exit 0
+fi
+
+if grep -Eq 'git([[:space:]]+-C[[:space:]]+{{ harness_understand_apps_root }})?[[:space:]]+diff' <<<"$CMD" \
+  && grep -q -- '--name-only' <<<"$CMD" \
+  && ! grep -q -- '--relative={{ harness_understand_apps_root }}' <<<"$CMD"; then
+  block
+fi
+
+if grep -q 'compute-batches.mjs' <<<"$CMD" && grep -q -- '--changed-files=' <<<"$CMD"; then
+  CHANGED_FILE="$(
+    sed -nE "s/.*--changed-files=(\"[^\"]+\"|'[^']+'|[^[:space:]]+).*/\\1/p" <<<"$CMD" \
+      | sed -E "s/^['\"]//; s/['\"]$//" \
+      | tail -1
+  )"
+  CHANGED_FILE="${CHANGED_FILE//\$CLAUDE_PROJECT_DIR/$ROOT}"
+  CHANGED_FILE="${CHANGED_FILE//\$PROJECT_ROOT/$ROOT/{{ harness_understand_apps_root }}}"
+  if [ -n "$CHANGED_FILE" ] && [ -f "$CHANGED_FILE" ]; then
+    if grep -Eq '^({{ harness_understand_apps_root }}/|\.claude/|\.agents/|\.codex/|docs/|scripts/|infra/|docker/|\.github/)' "$CHANGED_FILE"; then
+      block
+    fi
+  fi
+fi
+
+print_notice
+exit 0

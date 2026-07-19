@@ -1,0 +1,22 @@
+---
+name: mass-sed-em-codigo
+enabled: true
+event: bash
+action: warn
+conditions:
+  - field: command
+    operator: regex_match
+    pattern: sed\s+-[a-zA-Z]*i
+  - field: command
+    operator: regex_match
+    pattern: apps/(web|api)|\*\.(tsx?|css|py)|xargs|find\s
+---
+
+CUIDADO — `sed -i` em massa sobre código já corrompeu repos: um `sed hover:scale-105` capturou substring e corrompeu ocorrências de `group-hover:scale-105` (detectado pela queda na contagem e restaurado à mão).
+
+Protocolo para substituição em massa (LEI ZERO §0.6 e §14 — sequencial, 1 por vez):
+1. CONTE antes: `grep -rc 'padrão' <escopo>` — anote o total.
+2. Regex com âncoras/lookaround para não pegar substring (`(?<![\w-])padrão`).
+3. Aplique em UM arquivo, confira o diff, depois expanda.
+4. CONTE depois e reconcilie os números; qualquer delta inesperado = reverter.
+Prefira Edit/MultiEdit (diff auditável) a sed quando forem <10 arquivos.

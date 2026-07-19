@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# ds-gate-posttool — PostToolUse (Edit|Write|MultiEdit).
+# Feedback do design system SEGUNDOS depois da edição, não dias depois em
+# review humano: roda o ratchet .harness/lib/ds-gate.sh (9 dimensões,
+# baseline por ratchet) e o contrato de pares .harness/lib/ds-pairs-check.py
+# sempre que um arquivo de UI muda dentro de HARNESS_WEB_APP_DIR.
+# exit 2 = violação vai como feedback para o modelo (turno continua).
+# Origem: apps/web/scripts/{ds-gate.sh,ds-pairs-check.py} do harness-doador de
+# referência (auditoria de fricção real, cluster 5 — cânone não aplicado).
+#
+# GATED por `use_ds_gate` (copier.yml): quando false, este arquivo nem é
+# GERADO — padrão condicional-no-nome-do-arquivo (mesmo de
+# `ui-evidence-gate.sh.jinja`/`understand-apps-diff-guard.sh.jinja`) — e o
+# registro em settings.json/hooks.json some junto (ambos também gateados por
+# `use_ds_gate`). Dupla garantia: mesmo que o registro sobrevivesse sozinho,
+# este script nunca existiria para ser chamado.
+#
+# REGRESSÃO CORRIGIDA (plano de resgate §1, item 1): a versão anterior
+# registrava este hook INCONDICIONALMENTE e chamava `bash scripts/ds-gate.sh`
+# relativo a apps/web SEM portar o script para o projeto-alvo — todo projeto
+# gerado batia `bash: scripts/ds-gate.sh: No such file or directory` (exit
+# 127) a cada Edit/Write. Agora o motor vive em `.harness/lib/` (sempre
+# instalado, path fixo, genérico — ver ds-gate.sh/ds-pairs-check.py) e o
+# diretório do app web é lido em RUNTIME de `.harness/harness.conf`
+# (HARNESS_WEB_APP_DIR, default ".") em vez de hardcoded "apps/web" — mesma
+# escolha de design de `ui-evidence-gate.sh.jinja` (lido em runtime via
+# _tooling_conf.py, não baked via substituição Jinja, para não exigir
+# `copier update` só para propagar uma edição manual do .conf).
+set -uo pipefail
+IN=$(cat)
+command -v jq >/dev/null 2>&1 || exit 0
+FP=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty' <<<"$IN")
+[ -n "$FP" ] || exit 0
+
+ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+[ -n "$ROOT" ] || exit 0
+cd "$ROOT" || exit 0
+
+CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
+_conf_get() {
+  local val
+  if command -v python3 >/dev/null 2>&1 && [ -f "$CONF_PY" ]; then
+    val="$(HARNESS_PROJECT_ROOT="$ROOT" python3 "$CONF_PY" get "$1" "$2" 2>/dev/null)"
+    [ -n "$val" ] && { echo "$val"; return 0; }
+  fi
+  echo "$2"
+}
+
+WEB_APP_DIR="$(_conf_get HARNESS_WEB_APP_DIR .)"
+WEB_APP_DIR="${WEB_APP_DIR%/}"
+[ -z "$WEB_APP_DIR" ] && WEB_APP_DIR="."
+
+# só arquivos de UI (.tsx/.ts/.css); se HARNESS_WEB_APP_DIR != "." (monorepo),
+# exige também que o path contenha esse subdiretório.
+case "$FP" in
+  *.tsx|*.css|*.ts) ;;
+  *) exit 0 ;;
+esac
+if [ "$WEB_APP_DIR" != "." ]; then
+  case "$FP" in
+    */"$WEB_APP_DIR"/*|"$WEB_APP_DIR"/*) ;;
+    *) exit 0 ;;
+  esac
+fi
+
+WEB_DIR="$ROOT"
+[ "$WEB_APP_DIR" != "." ] && WEB_DIR="$ROOT/$WEB_APP_DIR"
+[ -d "$WEB_DIR" ] || exit 0   # layout desta stack não tem o app web esperado — fail-open
+
+LIB="$ROOT/.harness/lib"
+[ -f "$LIB/ds-gate.sh" ] && [ -f "$LIB/ds-pairs-check.py" ] || exit 0   # motor ausente (instalação parcial) — fail-open
+
+FAIL=0; MSG=""
+GATE=$(bash "$LIB/ds-gate.sh" 2>&1) || { FAIL=1; MSG+="ds-gate (ratchet de tokenização) FALHOU:\n$(tail -12 <<<"$GATE")\n"; }
+PAIRS=$(python3 "$LIB/ds-pairs-check.py" 2>&1) || { FAIL=1; MSG+="ds-pairs-check (contrato de rótulos/contraste) FALHOU:\n$(grep -v ' OK$' <<<"$PAIRS" | tail -10)\n"; }
+[ "$FAIL" -eq 0 ] && exit 0
+
+{
+  echo "DS-GATE: a edição em $FP introduziu violação do design system."
+  echo -e "$MSG"
+  echo "Regras: valores hardcoded -> token."
+  echo "Exceção legítima e justificada: comentário '// ds-allow: <motivo>' na linha, ou glob em ${WEB_APP_DIR}/.ds-allowlist."
+} >&2
+exit 2

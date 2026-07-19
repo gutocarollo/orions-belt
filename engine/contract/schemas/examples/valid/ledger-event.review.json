@@ -1,0 +1,13 @@
+{
+  "ts": "2026-07-18T12:00:00Z",
+  "run_id": "run-2026-07-18-01",
+  "loop": "execution",
+  "round": 1,
+  "event": "fix-request",
+  "status": "CORRIGIR",
+  "payload": {
+    "gap": "g",
+    "evidencia": "e",
+    "alteracao_obrigatoria": "a"
+  }
+}

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# SessionStart hook — injeta o arquivo de lições no contexto (AGENTS.md/CLAUDE.md
+# §16, self-improvement loop). Saída em stdout vira contexto da sessão. Cap de
+# linhas para não inflar o prompt.
+#
+# MATERIALIZAÇÃO (F4, harness-wiki): path do arquivo de lições
+# (HARNESS_LESSONS_FILE, default tasks/lessons.md) e o cap de linhas
+# (HARNESS_LESSONS_INJECT_MAX_LINES, default 80) vêm de .harness/harness.conf
+# via .harness/lib/_tooling_conf.py — mesmo padrão do subagent-throttle.sh
+# (F0). O original do harness-doador tinha os dois hardcoded (path e MAX_LINES=80).
+set -euo pipefail
+ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
+
+_conf_get() {
+  # $1=key $2=default
+  local val
+  if command -v python3 >/dev/null 2>&1 && [ -f "$CONF_PY" ]; then
+    val="$(HARNESS_PROJECT_ROOT="$ROOT" python3 "$CONF_PY" get "$1" "$2" 2>/dev/null)"
+    [ -n "$val" ] && { echo "$val"; return 0; }
+  fi
+  echo "$2"
+}
+_conf_int() {
+  local val
+  if command -v python3 >/dev/null 2>&1 && [ -f "$CONF_PY" ]; then
+    val="$(HARNESS_PROJECT_ROOT="$ROOT" python3 "$CONF_PY" getint "$1" "$2" 2>/dev/null)"
+    [[ "$val" =~ ^-?[0-9]+$ ]] && { echo "$val"; return 0; }
+  fi
+  echo "$2"
+}
+
+LESSONS_FILE_REL="$(_conf_get HARNESS_LESSONS_FILE tasks/lessons.md)"
+MAX_LINES="$(_conf_int HARNESS_LESSONS_INJECT_MAX_LINES 80)"
+FILE="$ROOT/$LESSONS_FILE_REL"
+[ -f "$FILE" ] || exit 0
+echo "<lessons-learned source=\"$LESSONS_FILE_REL\">"
+echo "Lições de sessões anteriores (AGENTS.md/CLAUDE.md §16). Reler as do domínio da tarefa atual; após correção do usuário, fazer append imediato; 2ª recorrência → promover a regra/hook."
+tail -n "$MAX_LINES" "$FILE"
+echo "</lessons-learned>"

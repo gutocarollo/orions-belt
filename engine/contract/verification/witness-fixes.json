@@ -1,0 +1,17 @@
+{
+  "schema": "agent-swarm-witness/v1",
+  "fixes": [
+    {
+      "id": "TEST-PAYLOAD-SCOPE-001",
+      "desc": "Regression tests validate payload fields inside the correct sentinel block",
+      "file": "tests/test_agent_contract.py",
+      "marker": "assert_payload_block"
+    },
+    {
+      "id": "LOCAL-CONTRACT-001",
+      "desc": "Contract validation is local/manual, not GitHub Actions",
+      "file": "README.md",
+      "marker": "Nao ha GitHub Actions neste pacote"
+    }
+  ]
+}

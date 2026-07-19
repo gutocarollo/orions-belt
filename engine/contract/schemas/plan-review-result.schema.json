@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-swarm.local/schemas/plan-review-result.schema.json",
+  "title": "Plan Review Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plan_adversarial_verification", "gaps_criticos", "decisao_escolhida", "proxima_acao"],
+  "properties": {
+    "plan_adversarial_verification": {
+      "type": "string",
+      "enum": ["SATISFEITO", "REPLANEJAR", "BLOQUEADO"]
+    },
+    "gaps_criticos": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "decisao_escolhida": {
+      "type": "string"
+    },
+    "proxima_acao": {
+      "type": "string",
+      "enum": ["executar", "replanejar", "pedir decisao"]
+    },
+    "replan_request": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gap", "evidencia", "alteracao_obrigatoria"],
+        "properties": {
+          "gap": { "type": "string", "minLength": 1 },
+          "evidencia": { "type": "string", "minLength": 1 },
+          "alteracao_obrigatoria": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "plan_adversarial_verification": { "const": "REPLANEJAR" } },
+        "required": ["plan_adversarial_verification"]
+      },
+      "then": {
+        "required": ["replan_request"],
+        "properties": { "replan_request": { "minItems": 1 } }
+      }
+    }
+  ]
+}

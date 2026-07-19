@@ -1,0 +1,4 @@
+name = "sample-agent"
+description = "Custom agent sintético de fixture — prova validate_toml() parametrizado (HARNESS_CODEX_AGENTS_DIR)."
+sandbox_mode = "read-only"
+developer_instructions = "Fixture apenas; nunca é invocado de verdade."

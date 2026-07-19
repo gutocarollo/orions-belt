@@ -1,0 +1,5 @@
+interface: openai
+display_name: Sample Skill (fixture)
+short_description: Fixture companion do teste de validate_skills.py — HARNESS_COUNCIL_SKILL_NAME.
+default_prompt: |
+  Use $sample-skill.

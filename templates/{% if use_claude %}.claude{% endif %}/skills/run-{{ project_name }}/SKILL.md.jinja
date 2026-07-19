@@ -1,0 +1,107 @@
+---
+name: run-{{ project_name }}
+description: Inicializa o app {{ project_name }} em desenvolvimento local (monorepo). Use quando o usuário pedir "rodar/iniciar/subir o {{ project_name }}", "como inicio o app", "start the app", "sobe o projeto", "run dev", ou quando precisar levantar infra + backend + frontend para validar uma mudança ao vivo. Ajuste a sequência de comandos/portas/gotchas abaixo ao stack real deste projeto — o esqueleto vem de um protocolo real (FastAPI+Next.js), mas os comandos de processo (uvicorn, next dev, docker compose) são exemplo, não universais.
+---
+
+# Run {{ project_name }} (dev local)
+
+Monorepo com apps independentes, se este projeto for um monorepo (caso do exemplo de origem:
+`apps/api` + `apps/web` + `apps/collab`). Um `docker-compose.dev.yml` sobe **só a infra**;
+backend e frontend rodam na mão, cada um em seu terminal — adapte se este projeto usar outra
+topologia.
+
+## Ordem (exemplo — 3 passos obrigatórios + 1 opcional)
+
+### 1. Infra (Docker — background)
+```bash
+docker compose -f .{{ project_name }}/docker-compose.dev.yml up -d
+```
+Sobe (exemplo; ajuste aos serviços reais deste projeto):
+- **db** — Postgres, publicado em **`{{ harness_dev_db_port }}:{{ harness_dev_db_internal_port }}`** (host {{ harness_dev_db_internal_port }} pode já estar ocupada por outro Postgres). user/pass/db = `{{ project_name }}`.
+- **redis** — `{{ harness_dev_redis_port }}:{{ harness_dev_redis_port }}`.
+- outros serviços auxiliares deste projeto (fila de jobs, geração de PDF, etc.).
+
+Aguardar healthchecks ficarem `healthy`:
+```bash
+docker compose -f .{{ project_name }}/docker-compose.dev.yml ps
+```
+
+### 2. Backend (terminal próprio)
+```bash
+cd apps/api && uvicorn app:app --reload --port {{ harness_dev_api_port }}
+```
+- Ajuste o comando de start ao framework real deste projeto (uvicorn/gunicorn/outro).
+- Health: `curl -s -o /dev/null -w "%{http_code}" http://localhost:{{ harness_dev_api_port }}/api/v1/health` deve dar **200** (ajuste o path de health real).
+
+### 3. Frontend (outro terminal)
+```bash
+cd apps/web && npm run dev -- -p {{ harness_dev_web_port }}
+```
+- Roda em **:{{ harness_dev_web_port }}** neste projeto{% if harness_reserved_ports %} (NÃO {{ harness_reserved_ports }} — ver reserva de porta abaixo){% endif %}.
+- Health: abrir `http://localhost:{{ harness_dev_web_port }}`.
+
+### 4. (Opcional) Serviços auxiliares
+Só necessário se este projeto tiver um serviço de colaboração/websocket em tempo real ou
+similar (`{{ harness_dev_collab_port }}` reservado para isso no schema, se aplicável).
+
+## Portas (resumo)
+| Serviço | Porta | Onde |
+|---------|-------|------|
+| Postgres | {{ harness_dev_db_port }} → {{ harness_dev_db_internal_port }} | Docker |
+| Redis | {{ harness_dev_redis_port }} | Docker |
+| API | {{ harness_dev_api_port }} | processo (mão) |
+| Web | {{ harness_dev_web_port }} | processo (mão) |
+{%- if harness_dev_collab_port %}
+| Collab | {{ harness_dev_collab_port }} | processo (mão, opcional) |
+{%- endif %}
+
+## Postgres dev{% if has_prod_stack %} vs prod{% endif %} + MCP
+
+{% if has_prod_stack -%}
+Existem **dois Postgres diferentes** neste ambiente:
+
+- **Dev local:** `{{ project_name }}-db-dev`, porta host **{{ harness_dev_db_port }}**, connection
+  string `postgresql://{{ project_name }}:{{ project_name }}@localhost:{{ harness_dev_db_port }}/{{ project_name }}`.
+  É o banco usado pela API local em `:{{ harness_dev_api_port }}`.
+- **Prod:** service `{{ prod_stack_prefix }}_postgres`. Não é exposto diretamente no host.
+{%- else -%}
+- **Dev local:** `{{ project_name }}-db-dev`, porta host **{{ harness_dev_db_port }}**, connection
+  string `postgresql://{{ project_name }}:{{ project_name }}@localhost:{{ harness_dev_db_port }}/{{ project_name }}`.
+  É o banco usado pela API local em `:{{ harness_dev_api_port }}`.
+{%- endif %}
+
+{% if harness_mcp_db_dev_port %}
+MCPs canônicos (se este projeto tiver MCP de banco configurado):
+
+- `postgres-{{ project_name }}-dev` — `unrestricted`, para investigação e correções locais, via `http://127.0.0.1:{{ harness_mcp_db_dev_port }}/mcp`.
+{%- if has_prod_stack and harness_mcp_db_prod_port %}
+- `postgres-{{ project_name }}-prod` — `restricted`/read-only, para diagnóstico em produção, via `http://127.0.0.1:{{ harness_mcp_db_prod_port }}/mcp`.
+{%- endif %}
+{%- if harness_mcp_proxy_image %}
+
+Os endpoints HTTP são servidos por containers persistentes, imagem `{{ harness_mcp_proxy_image }}`.
+{%- endif %}
+
+Regra: se a pergunta envolve localhost `:{{ harness_dev_api_port }}/:{{ harness_dev_web_port }}` ou testes locais, use o MCP dev.
+{%- if has_prod_stack %} Se envolve produção, imagem deployada ou usuário real, use o MCP prod (read-only) ou os comandos da skill `deploy-{{ prod_stack_prefix }}`.{% endif %}
+{%- endif %}
+
+## Gotchas (exemplo — verificar se algo equivalente ocorrer neste projeto)
+1. **Conflito de porta**: se outra ferramenta local usar a mesma porta do dev web, mude a porta
+   com a flag `-p` em vez de editar o `.env.local` — evita colisão sem tocar config compartilhada.
+2. **Cache de bundler corrompido**: sintoma "Can't resolve '<pacote>' in ...": limpar o cache do
+   bundler (`.next`, `.turbo`, `node_modules/.cache`, conforme a ferramenta) costuma resolver.
+3. **DB não sobe / `PANIC` / search_path vazio**: conferir que a connection string aponta para a
+   porta host correta ({{ harness_dev_db_port }}) e que o role `{{ project_name }}` tem `search_path` configurado.
+4. **Orphan-storm de processo dev**: alguns SOs não matam processos filhos ao fechar o terminal.
+   Sempre encerrar com `Ctrl+C`; se travar a máquina, matar processos cujo cmdline bata o path do projeto.
+5. **Venv/node_modules contaminado por root**: se algum container de infra faz bind-mount + install
+   como root, o resultado no host fica com owner root e quebra o `run`/`uv run` local. Fix comum:
+   usar um diretório de venv/deps SEPARADO no host (ex.: `UV_PROJECT_ENVIRONMENT=.venv-host` no
+   caso Python/uv) para não colidir com o que o container escreveu.
+
+## Encerrar
+```bash
+# Ctrl+C nos terminais dos processos, depois:
+docker compose -f .{{ project_name }}/docker-compose.dev.yml down
+```

@@ -1,0 +1,82 @@
+import { test, expect } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+
+/* overflow.spec.ts — oráculo DETERMINÍSTICO e sem-golden para scroll
+   horizontal indesejado: scrollWidth > clientWidth significa que ALGO
+   estoura a largura do viewport. Imune a volatilidade de conteúdo (não
+   compara pixels) — complementa baseline.spec.ts (que só fotografa o load
+   estático e não abre drawers/modais) e evidence.spec.ts.
+
+   PORTADO de apps/web/tests/visual/overflow.spec.ts (harness-doador de
+   referência) — plano de resgate §R6 item 3. Genericização vs. a
+   versão-fonte: o segundo teste do doador ("org-menu drawer aberto")
+   assumia um componente específico daquele app (seletor
+   `aria-label="Toggle menu"`, rota fixa "home") e foi REMOVIDO — este
+   harness não sabe se o projeto-alvo tem um drawer de navegação mobile. O
+   oráculo abaixo (a varredura por rota via routes.json) é 100% genérico e
+   é o que sobrevive; o TODO no fim do arquivo documenta o padrão para
+   estender a um estado de interação real deste projeto, se ele existir. */
+
+type Route = { name: string; path: string }
+const routes: Route[] = JSON.parse(
+  readFileSync(path.join(__dirname, 'routes.json'), 'utf-8'),
+)
+
+// tolerância: 1px para arredondamento sub-pixel.
+const TOL = 1
+
+const overflowReport = () =>
+  // roda no browser: retorna o overflow do documento + o pior elemento culpado
+  // eslint-disable-next-line
+  (() => {
+    const docOverflow = document.documentElement.scrollWidth - document.documentElement.clientWidth
+    let worst: { tag: string; cls: string; over: number } | null = null
+    const vw = document.documentElement.clientWidth
+    document.querySelectorAll('*').forEach((el) => {
+      const r = (el as HTMLElement).getBoundingClientRect()
+      const over = Math.round(r.right - vw)
+      if (over > (worst?.over ?? 1)) {
+        worst = {
+          tag: (el as HTMLElement).tagName.toLowerCase(),
+          cls: ((el as HTMLElement).className || '').toString().slice(0, 80),
+          over,
+        }
+      }
+    })
+    return { docOverflow, worst }
+  })
+
+for (const route of routes) {
+  test(`no-hscroll: ${route.name}`, async ({ page }, testInfo) => {
+    // só faz sentido em viewports estreitos (mobile/tablet)
+    const vw = page.viewportSize()?.width ?? 9999
+    test.skip(vw > 900, 'oracle de overflow só roda em mobile/tablet')
+
+    const resp = await page.goto(route.path, { waitUntil: 'load' })
+    expect(resp?.status(), `${route.name}: HTTP ${resp?.status()}`).toBeLessThan(400)
+    await page.waitForSelector('main', { state: 'visible' })
+    await page.evaluate(() => (document as any).fonts?.ready)
+
+    const { docOverflow, worst } = await page.evaluate(overflowReport())
+    testInfo.annotations.push({ type: 'overflow', description: JSON.stringify({ route: route.name, docOverflow, worst }) })
+    expect(docOverflow, `${route.name} estoura ${docOverflow}px @${vw}. Pior culpado: ${JSON.stringify(worst)}`).toBeLessThanOrEqual(TOL)
+  })
+}
+
+// TODO(projeto-alvo, opcional): um estado de INTERAÇÃO que só existe depois
+// de um clique (drawer/modal/accordion mobile) fica INVISÍVEL ao loop acima,
+// que só fotografa o load estático — esse é o blind spot conhecido do gate.
+// Se este projeto tiver um componente assim, adicione um teste seguindo o
+// padrão (troque os placeholders <...> pelos reais deste projeto):
+//
+//   test('no-hscroll: <nome-do-componente> aberto', async ({ page }) => {
+//     const vw = page.viewportSize()?.width ?? 9999
+//     test.skip(vw >= 768, '<componente> só existe <md (768px)')
+//     await page.goto('<rota-que-renderiza-o-componente>', { waitUntil: 'load' })
+//     await page.waitForSelector('main', { state: 'visible' })
+//     await page.getByRole('button', { name: '<aria-label do trigger>' }).click()
+//     await page.waitForTimeout(400) // animação de abertura
+//     const { docOverflow, worst } = await page.evaluate(overflowReport())
+//     expect(docOverflow, `estoura ${docOverflow}px @${vw}. Culpado: ${JSON.stringify(worst)}`).toBeLessThanOrEqual(TOL)
+//   })

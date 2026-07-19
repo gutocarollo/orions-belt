@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""Inject the {{ project_name }} Understand Anything {{ harness_understand_apps_root }}/ diff rule into prompt context.
+
+Claude hooks print stdout from UserPromptSubmit into the next model context. This
+hook is intentionally narrow: it only fires when the prompt mentions the
+Understand Anything workflow or its artifacts.
+
+MATERIALIZAÇÃO (F4, harness-wiki): só é gerado quando
+`harness_understand_apps_root` está setado (ver copier.yml) — o projeto usa um
+subdiretório monorepo, não a raiz do git, como PROJECT_ROOT do grafo. O hash de
+grafo hardcoded do original do harness-doador foi REMOVIDO (dessincroniza a cada
+/understand incremental); a regra agora é sempre ler de meta.json.
+"""
+import json
+import re
+import sys
+
+TRIGGER_RE = re.compile(
+    r"(?i)(/understand|understand[- ]anything|\.understand-anything|knowledge-graph|"
+    r"grafo\s+de\s+(codigo|c[oó]digo|conhecimento)|compute-batches|changed-files\.txt)"
+)
+
+MESSAGE = """<understand-apps-incremental-guard>
+REGRA BLOQUEANTE — Understand Anything em {{ project_name }}:
+- Escopo semantico do grafo do produto = {{ harness_understand_apps_root }}/.
+- Git root real = raiz do repo; {{ harness_understand_apps_root }}/ e subdiretorio.
+- Portanto o incremental de {{ harness_understand_apps_root }}/ NUNCA pode usar diff bruto:
+  git diff <lastCommitHash>..HEAD --name-only
+- Use SEMPRE diff relativo a {{ harness_understand_apps_root }}:
+  LAST=$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('{{ harness_understand_apps_root }}/.understand-anything/meta.json','utf8')); process.stdout.write(m.gitCommitHash)")
+  git diff --relative={{ harness_understand_apps_root }} "$LAST"..HEAD --name-only -- {{ harness_understand_apps_root }} | rg -v '^\\.understand-anything/'
+- O hash de referência do grafo NAO e uma constante — leia sempre de
+  {{ harness_understand_apps_root }}/.understand-anything/meta.json (campo gitCommitHash, comando LAST= acima).
+- Preferir o script canônico:
+  bash .harness/lib/understand-apps-changed-files.sh
+- changed-files para compute-batches deve conter api/..., web/..., cli/...; NUNCA {{ harness_understand_apps_root }}/api/... ou paths da raiz.
+- /understand --full NAO e incremental; --full força rebuild.
+</understand-apps-incremental-guard>"""
+
+
+def main() -> int:
+    try:
+        data = json.load(sys.stdin)
+    except Exception:
+        return 0
+    prompt = data.get("prompt") or ""
+    if TRIGGER_RE.search(prompt):
+        print(MESSAGE)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

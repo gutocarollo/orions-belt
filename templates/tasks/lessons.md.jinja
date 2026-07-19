@@ -1,0 +1,12 @@
+{% raw -%}
+<!-- PROVENIENCIA (harness-wiki, F3): seed vazio com o cabeçalho-contrato do tasks/lessons.md do
+     harness-doador de referência — sem as lições históricas (são daquele repo, não
+     deste). Formato/contrato copiado; conteúdo começa do zero neste projeto. -->
+{% endraw -%}
+# lessons.md — self-improvement loop
+
+> Formato: `## [YYYY-MM-DD] sintoma → regra`. Capturar IMEDIATAMENTE após correção do usuário,
+> review adversarial que derrubou algo, ou ponto cego descoberto. 2-4 linhas, padrão concreto, não
+> desabafo. Lição repetida 2× → promover a regra do CLAUDE.md/AGENTS.md ou hook determinístico e
+> marcar `[PROMOVIDA → destino]`. Injetado em toda sessão nova via `.harness/hooks/lessons-inject.sh`
+> (SessionStart), até `{{ harness_lessons_inject_max_lines }}` linhas.
