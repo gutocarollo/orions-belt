@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 """Self-contained validation for agent-harness skills and agent metadata.
 
-Porte de `agent-swarm/codex/scripts/validate_skills.py` — PARAMETRIZADO
-(instrução explícita do plano F1): os 3 hardcodes originais viram config,
-lida via `engine/_tooling_conf.py`:
+Port of `agent-swarm/codex/scripts/validate_skills.py` — PARAMETERIZED
+(explicit instruction of plan F1): the 3 original hardcodes became config,
+read via `engine/_tooling_conf.py`:
 
-  original hardcoded                        -> chave de config (default = valor original)
-  ROOT = parents[1] (repo do agent-swarm)    -> _tooling_conf.project_root() (raiz do PROJETO-ALVO,
-                                                 não deste pacote — diferente de verify_witness.py)
-  SKILL_DIR = ROOT/".agents"/"skills"        -> HARNESS_SKILLS_DIR (default ".agents/skills")
-  REQUIRED_SKILLS = ("learnhouse-...", ...)  -> HARNESS_REQUIRED_SKILLS (CSV, default vazio —
-                                                 nenhuma skill é obrigatória por padrão; cada
-                                                 projeto-alvo declara as suas via copier.yml)
-  ".codex"/"agents", ".codex"/"config.toml"  -> HARNESS_CODEX_AGENTS_DIR, HARNESS_CODEX_CONFIG_PATH
-  openai.yaml de "learnhouse-delivery-...".  -> HARNESS_COUNCIL_SKILL_NAME (opcional; vazio = pula
-                                                 a checagem, fail-open — nem todo projeto tem
-                                                 companion OpenAI-interface na skill de council)
+  original hardcoded                         -> config key (default = original value)
+  ROOT = parents[1] (agent-swarm repo)        -> _tooling_conf.project_root() (TARGET PROJECT root,
+                                                  not this package — unlike verify_witness.py)
+  SKILL_DIR = ROOT/".agents"/"skills"         -> HARNESS_SKILLS_DIR (default ".agents/skills")
+  REQUIRED_SKILLS = ("learnhouse-...", ...)   -> HARNESS_REQUIRED_SKILLS (CSV, empty default —
+                                                  no skill is required by default; each
+                                                  target project declares its own via copier.yml)
+  ".codex"/"agents", ".codex"/"config.toml"   -> HARNESS_CODEX_AGENTS_DIR, HARNESS_CODEX_CONFIG_PATH
+  openai.yaml of "learnhouse-delivery-...".   -> HARNESS_COUNCIL_SKILL_NAME (optional; empty = skips
+                                                  the check, fail-open — not every project has a
+                                                  companion OpenAI-interface in the council skill)
 
-Fail-open adicional em relação ao original: se HARNESS_CODEX_AGENTS_DIR /
-HARNESS_CODEX_CONFIG_PATH não existirem no projeto-alvo, a validação de
-TOML é pulada em vez de falhar — um projeto que só usa Claude (use_codex=
-false no copier.yml) não tem `.codex/` para validar.
+Additional fail-open relative to the original: if HARNESS_CODEX_AGENTS_DIR /
+HARNESS_CODEX_CONFIG_PATH do not exist in the target project, the TOML
+validation is skipped instead of failing — a project that only uses Claude
+(use_codex=false in copier.yml) has no `.codex/` to validate.
 """
 
 from __future__ import annotations
@@ -74,11 +74,11 @@ def validate_skill(name: str) -> None:
 
 def validate_openai_yaml() -> None:
     if not COUNCIL_SKILL_NAME:
-        print("skill-contract: HARNESS_COUNCIL_SKILL_NAME nao configurado — validacao de openai.yaml pulada")
+        print("skill-contract: HARNESS_COUNCIL_SKILL_NAME not configured — openai.yaml validation skipped")
         return
     path = SKILL_DIR / COUNCIL_SKILL_NAME / "agents" / "openai.yaml"
     if not path.exists():
-        fail(f"HARNESS_COUNCIL_SKILL_NAME={COUNCIL_SKILL_NAME!r} configurado mas {path} nao existe")
+        fail(f"HARNESS_COUNCIL_SKILL_NAME={COUNCIL_SKILL_NAME!r} configured but {path} does not exist")
     text = path.read_text(encoding="utf-8")
     for marker in ("interface:", "display_name:", "short_description:", "default_prompt:"):
         if marker not in text:
@@ -87,7 +87,7 @@ def validate_openai_yaml() -> None:
 
 def validate_toml() -> None:
     if not CODEX_CONFIG_PATH.exists() and not CODEX_AGENTS_DIR.exists():
-        print("skill-contract: .codex nao encontrado no projeto-alvo — validacao de TOML pulada (use_codex=false)")
+        print("skill-contract: .codex not found in target project — TOML validation skipped (use_codex=false)")
         return
     if CODEX_CONFIG_PATH.exists():
         tomllib.loads(CODEX_CONFIG_PATH.read_text(encoding="utf-8"))

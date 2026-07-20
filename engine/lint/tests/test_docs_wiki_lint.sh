@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# test_docs_wiki_lint.sh — prova F1 (Parte A): roda engine/lint/docs_wiki_lint.py
-# em 3 cenários e confirma o exit code esperado em cada um.
+# test_docs_wiki_lint.sh — F1 proof (Part A): runs engine/lint/docs_wiki_lint.py
+# in 3 scenarios and confirms the expected exit code in each one.
 #
-# 1. Smoke real: contra o docs/ do PRÓPRIO agent-harness (HARNESS_PROJECT_ROOT
-#    default = raiz git real) — deve dar OK (docs/log.md cobre planning/*).
-# 2. Fixture limpa (clean-docs/): citação individual + coleção — deve dar OK.
-# 3. Fixture quebrada (broken-docs/): orphan.md deliberadamente sem menção —
-#    deve dar FAIL e citar exatamente esse arquivo.
+# 1. Real smoke: against the agent-harness's OWN docs/ (HARNESS_PROJECT_ROOT
+#    default = real git root) — must be OK (docs/log.md covers planning/*).
+# 2. Clean fixture (clean-docs/): individual citation + collection — must be OK.
+# 3. Broken fixture (broken-docs/): orphan.md deliberately unmentioned —
+#    must FAIL and cite exactly that file.
 #
-# Uso: bash engine/lint/tests/test_docs_wiki_lint.sh
+# Usage: bash engine/lint/tests/test_docs_wiki_lint.sh
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -19,36 +19,36 @@ LINT="$LINT_DIR/docs_wiki_lint.py"
 FAIL=0
 
 assert_exit() {
-  # $1 = descrição, $2 = exit obtido, $3 = exit esperado
+  # $1 = description, $2 = obtained exit, $3 = expected exit
   if [ "$2" -eq "$3" ]; then
     echo "PASS: $1 (exit=$2)"
   else
-    echo "FAIL: $1 (esperado exit=$3, obtido exit=$2)"
+    echo "FAIL: $1 (expected exit=$3, got exit=$2)"
     FAIL=1
   fi
 }
 
-echo "=== Cenário 1: smoke real contra docs/ do próprio agent-harness ==="
+echo "=== Scenario 1: real smoke test against orions-belt's own docs/ ==="
 HARNESS_PROJECT_ROOT="$REPO_ROOT" python3 "$LINT" >/tmp/lint-out-$$ 2>&1
 rc=$?
-assert_exit "docs/ real do agent-harness deve passar (docs/log.md cobre planning/)" "$rc" 0
+assert_exit "orions-belt real docs/ must pass (docs/log.md covers planning/)" "$rc" 0
 cat /tmp/lint-out-$$
 
 echo
-echo "=== Cenário 2: fixture limpa (clean-docs/) ==="
+echo "=== Scenario 2: clean fixture (clean-docs/) ==="
 HARNESS_PROJECT_ROOT="$HERE/fixtures/clean-docs" python3 "$LINT" >/tmp/lint-out-$$ 2>&1
 rc=$?
-assert_exit "clean-docs deve passar (a.md citado, collection/ coberta)" "$rc" 0
+assert_exit "clean-docs must pass (a.md cited, collection/ covered)" "$rc" 0
 
 echo
-echo "=== Cenário 3: fixture quebrada (broken-docs/) — orphan.md proposital ==="
+echo "=== Scenario 3: broken fixture (broken-docs/) — intentional orphan.md ==="
 HARNESS_PROJECT_ROOT="$HERE/fixtures/broken-docs" python3 "$LINT" >/tmp/lint-out-$$ 2>&1
 rc=$?
-assert_exit "broken-docs deve FALHAR (orphan.md sem menção)" "$rc" 1
+assert_exit "broken-docs must FAIL (orphan.md unmentioned)" "$rc" 1
 if grep -q "orphan.md" /tmp/lint-out-$$; then
-  echo "PASS: saída cita orphan.md como órfão"
+  echo "PASS: output cites orphan.md as an orphan"
 else
-  echo "FAIL: saída não cita orphan.md — $(cat /tmp/lint-out-$$)"
+  echo "FAIL: output does not cite orphan.md — $(cat /tmp/lint-out-$$)"
   FAIL=1
 fi
 
@@ -56,9 +56,9 @@ rm -f /tmp/lint-out-$$
 
 echo
 if [ "$FAIL" -eq 0 ]; then
-  echo "RESULTADO: TODOS OS CENÁRIOS PASSARAM"
+  echo "RESULT: ALL SCENARIOS PASSED"
   exit 0
 else
-  echo "RESULTADO: HÁ FALHAS — ver linhas FAIL acima"
+  echo "RESULT: THERE ARE FAILURES — see FAIL lines above"
   exit 1
 fi

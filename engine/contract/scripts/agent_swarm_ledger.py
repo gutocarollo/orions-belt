@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """Append and inspect agent-harness loop ledger events.
 
-Porte de `agent-swarm/codex/scripts/agent_swarm_ledger.py` — PARAMETRIZADO
-(instrução explícita do plano F1): `RUNS_DIR = ROOT / ".agent-swarm" /
-"runs"` (ROOT = repo do agent-swarm) virou `HARNESS_LEDGER_DIR` lida via
-`engine/_tooling_conf.py`, resolvida contra a raiz do PROJETO-ALVO (não
-deste pacote) via `project_root()` — mesmo motivo de `validate_skills.py`:
-o ledger de execução pertence ao projeto instalado, não ao motor.
+Port of `agent-swarm/codex/scripts/agent_swarm_ledger.py` — PARAMETERIZED
+(explicit instruction of plan F1): `RUNS_DIR = ROOT / ".agent-swarm" /
+"runs"` (ROOT = agent-swarm repo) became `HARNESS_LEDGER_DIR` read via
+`engine/_tooling_conf.py`, resolved against the TARGET PROJECT root (not
+this package) via `project_root()` — same reason as `validate_skills.py`:
+the execution ledger belongs to the installed project, not to the engine.
 
-Default de `HARNESS_LEDGER_DIR` no `templates/.harness/harness.conf.jinja`
-é `${HARNESS_RUNS_DIR}/agent-swarm` — reaproveita o diretório de run-state
-que o marathon já usa (`.claude/runs`) em vez de introduzir um segundo
-diretório-raiz `.agent-swarm/` paralelo (unificação deliberada; ver commit
-desta mudança). Se `HARNESS_LEDGER_DIR` não estiver configurado, cai no
-valor literal original `.agent-swarm/runs` (fail-open, comportamento
-idêntico ao script fonte quando não há config central)."""
+The default of `HARNESS_LEDGER_DIR` in `templates/.harness/harness.conf.jinja`
+is `${HARNESS_RUNS_DIR}/agent-swarm` — it reuses the run-state directory
+that marathon already uses (`.claude/runs`) instead of introducing a second
+parallel `.agent-swarm/` root directory (deliberate unification; see the
+commit for this change). If `HARNESS_LEDGER_DIR` is not configured, it falls
+back to the original literal value `.agent-swarm/runs` (fail-open, behavior
+identical to the source script when there is no central config)."""
 
 from __future__ import annotations
 

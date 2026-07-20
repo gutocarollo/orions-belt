@@ -1,42 +1,42 @@
 #!/usr/bin/env python3
-"""_tooling_conf — módulo ÚNICO de carregamento da config central do harness.
+"""_tooling_conf — the SINGLE module for loading the harness central config.
 
-Por que este módulo existe (o erro que ele corrige): o `guto-wiki`
-(docs/planning/research/01-guto-wiki.md §b, "Observações estruturais" item 1)
-implementou o MESMO `load_config()`/`config_csv()` (formato `KEY=value`,
-comentário `#`, CSV inline) três vezes, byte-a-byte idênticas, em
-`docs-wiki-lint.py`, `ref-integrity.py` e `scope-wiki-lint.py` — sem nenhuma
-abstração compartilhada entre eles. Este é o DRY que eles próprios não fizeram.
-Todo script do `engine/` (hooks, lint, contract) importa `get_config()`/
-`get_config_csv()`/`get_config_int()`/`get_config_bool()` daqui em vez de
-reimplementar o parser.
+Why this module exists (the mistake it corrects): `guto-wiki`
+(docs/planning/research/01-guto-wiki.md §b, "Structural observations" item 1)
+implemented the SAME `load_config()`/`config_csv()` (format `KEY=value`,
+`#` comment, inline CSV) three times, byte-for-byte identical, in
+`docs-wiki-lint.py`, `ref-integrity.py` and `scope-wiki-lint.py` — with no
+shared abstraction between them. This is the DRY they themselves did not do.
+Every `engine/` script (hooks, lint, contract) imports `get_config()`/
+`get_config_csv()`/`get_config_int()`/`get_config_bool()` from here instead of
+reimplementing the parser.
 
-Formato do `.harness/harness.conf` (docs/planning/research/03-hardcodes.md §3):
+Format of `.harness/harness.conf` (docs/planning/research/03-hardcodes.md §3):
 
     KEY=value
-    # comentário de linha inteira ou trailing (precedido de espaço)
-    CSV_KEY=item1,item2,item3          # get_config_csv() faz o split
-    DERIVED_KEY=${OUTRA_KEY}-sufixo    # expansão sequencial top-to-bottom,
-                                        # mesma semântica de `source` em bash
+    # whole-line or trailing comment (preceded by a space)
+    CSV_KEY=item1,item2,item3          # get_config_csv() does the split
+    DERIVED_KEY=${OTHER_KEY}-suffix    # sequential top-to-bottom expansion,
+                                        # same semantics as `source` in bash
 
-Zero dependência externa (stdlib puro) — mesma decisão de design do guto-wiki
-(docs/planning/research/01-guto-wiki.md §"Observações estruturais" item 2):
-`configparser` exigiria seções `[x]` que o formato não usa; `tomllib` é
-stdlib só a partir do 3.11. `KEY=value` + `split("#", 1)` é suficiente e roda
-em qualquer Python 3.
+Zero external dependency (pure stdlib) — same design decision as guto-wiki
+(docs/planning/research/01-guto-wiki.md §"Structural observations" item 2):
+`configparser` would require `[x]` sections that the format does not use;
+`tomllib` is stdlib only from 3.11 on. `KEY=value` + `split("#", 1)` is
+enough and runs on any Python 3.
 
-Consumidores bash (a maioria dos hooks reais do learnhouse são `.sh`, não
-`.py` — ver `engine/hooks/subagent-throttle.sh`) não importam este módulo
-diretamente; chamam o modo CLI (`python3 _tooling_conf.py get KEY default`).
-Isso evita a alternativa óbvia-mas-errada de reimplementar o parser em bash
-puro (`source` direto no `.conf` funcionaria para o caso feliz, mas
-divergiria silenciosamente do parser Python em 2 pontos: comentário colado
-sem espaço antes do `#`, e fallback multi-nome de arquivo) — exatamente o
-tipo de duplicação DRY-violável que este módulo existe para evitar.
+Bash consumers (most of the real learnhouse hooks are `.sh`, not `.py` — see
+`engine/hooks/subagent-throttle.sh`) do not import this module directly; they
+call the CLI mode (`python3 _tooling_conf.py get KEY default`). This avoids
+the obvious-but-wrong alternative of reimplementing the parser in pure bash
+(a direct `source` of the `.conf` would work for the happy path, but would
+silently diverge from the Python parser in 2 spots: a comment stuck without
+a space before the `#`, and the multi-name file fallback) — exactly the kind
+of DRY-violating duplication this module exists to avoid.
 
-Fail-open (docs/planning/research/07-autoconfig-patterns.md §Síntese-3):
-arquivo ausente, ilegível ou malformado -> os getters devolvem o `default` do
-chamador. Nunca levanta exceção, nunca derruba o hook que o invoca.
+Fail-open (docs/planning/research/07-autoconfig-patterns.md §Synthesis-3):
+missing, unreadable or malformed file -> the getters return the caller's
+`default`. Never raises an exception, never brings down the hook invoking it.
 """
 from __future__ import annotations
 
@@ -45,13 +45,14 @@ import re
 import subprocess
 from pathlib import Path
 
-# Nomes candidatos dentro do diretório-raiz encontrado, em ordem de
-# precedência (o primeiro que existir vence). Combina duas convenções:
-# 1. o par oficial dentro de `.harness/` (convenção deste framework: ver
+# Candidate names inside the root directory found, in order of
+# precedence (the first that exists wins). Combines two conventions:
+# 1. the official pair inside `.harness/` (this framework's convention: see
 #    templates/.harness/harness.conf.jinja);
-# 2. nomes soltos na raiz do projeto, para compat com quem copiou só o
-#    `.conf` sem o diretório, ou migrou de docs-tooling.conf/wiki-tooling.conf
-#    (o padrão de fallback de 3 nomes do guto-wiki, adaptado).
+# 2. loose names at the project root, for compat with someone who copied only
+#    the `.conf` without the directory, or migrated from
+#    docs-tooling.conf/wiki-tooling.conf (guto-wiki's 3-name fallback pattern,
+#    adapted).
 _CANDIDATE_RELATIVE_PATHS: tuple[str, ...] = (
     ".harness/harness.conf",
     ".harness/.harness.conf",
@@ -59,26 +60,26 @@ _CANDIDATE_RELATIVE_PATHS: tuple[str, ...] = (
     ".harness.conf",
 )
 
-# Override de teste/CI: aponta direto para um arquivo .conf, pulando toda a
-# resolução de root (usado pelos fixtures em engine/hooks/tests/).
+# Test/CI override: points directly to a .conf file, skipping all root
+# resolution (used by the fixtures in engine/hooks/tests/).
 _ENV_CONF_PATH = "HARNESS_CONF_PATH"
-# Hints de root, em ordem de precedência quando `start` não é passado
-# explicitamente. HARNESS_PROJECT_ROOT é a hint canônica deste framework;
-# CLAUDE_PROJECT_DIR é reconhecida porque os hooks Claude Code já a exportam
-# (mesmo padrão usado em subagent-throttle.sh original:
+# Root hints, in order of precedence when `start` is not passed explicitly.
+# HARNESS_PROJECT_ROOT is this framework's canonical hint; CLAUDE_PROJECT_DIR
+# is recognized because the Claude Code hooks already export it (same pattern
+# used in the original subagent-throttle.sh:
 # `ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}"`).
 _ENV_ROOT_HINTS: tuple[str, ...] = ("HARNESS_PROJECT_ROOT", "CLAUDE_PROJECT_DIR")
 
 _VAR_REF_RE = re.compile(r"\$\{(\w+)\}")
 
-_MAX_CLIMB = 64  # teto de segurança — nunca sobe mais que isso
+_MAX_CLIMB = 64  # safety ceiling — never climbs more than this
 
 
 def _find_root_with_candidate(start: Path) -> Path | None:
-    """Sobe diretórios a partir de `start` até achar um diretório que
-    contenha um dos `_CANDIDATE_RELATIVE_PATHS`, ou até cruzar a raiz de um
-    repositório git (não sobe além dela — evita vazar para diretórios de
-    usuário fora do projeto), ou até a raiz do filesystem."""
+    """Climbs directories from `start` until it finds a directory that
+    contains one of `_CANDIDATE_RELATIVE_PATHS`, or until it crosses the root
+    of a git repository (it does not climb past it — avoids leaking into user
+    directories outside the project), or until the filesystem root."""
     current = start.resolve()
     for _ in range(_MAX_CLIMB):
         for rel in _CANDIDATE_RELATIVE_PATHS:
@@ -94,16 +95,16 @@ def _find_root_with_candidate(start: Path) -> Path | None:
 
 
 def project_root(start: Path | None = None) -> Path:
-    """Resolve a raiz do projeto-alvo para consumidores que precisam de um
-    diretório-base além do `.conf` em si (docs_wiki_lint.py, ref_integrity.py,
-    validate_skills.py, agent_swarm_ledger.py — engine/lint/ e engine/contract/
-    usam esta função em vez de cada um reimplementar
-    `git rev-parse --show-toplevel`, o mesmo tipo de duplicação DRY que este
-    módulo já corrige para o parser de `.conf`).
+    """Resolve the target project root for consumers that need a base
+    directory beyond the `.conf` itself (docs_wiki_lint.py, ref_integrity.py,
+    validate_skills.py, agent_swarm_ledger.py — engine/lint/ and engine/contract/
+    use this function instead of each reimplementing
+    `git rev-parse --show-toplevel`, the same kind of DRY duplication this
+    module already corrects for the `.conf` parser).
 
-    Ordem de precedência: `start` explícito -> HARNESS_PROJECT_ROOT ->
+    Order of precedence: explicit `start` -> HARNESS_PROJECT_ROOT ->
     CLAUDE_PROJECT_DIR -> `git rev-parse --show-toplevel` -> cwd. Fail-open:
-    nunca lança exceção; se nada resolver, devolve o cwd."""
+    never raises an exception; if nothing resolves, returns the cwd."""
     if start is not None:
         return start.resolve()
     for env_name in _ENV_ROOT_HINTS:
@@ -151,10 +152,10 @@ def _resolve_conf_path(start: Path | None = None) -> Path | None:
 
 
 def _expand_refs(value: str, values_so_far: dict[str, str]) -> str:
-    """Expande `${OUTRA_KEY}` usando as chaves já parseadas até esta linha
-    (top-to-bottom) ou variáveis de ambiente — mesma semântica sequencial de
-    `source` em bash. Referência não resolvida fica literal (fail-open: não
-    levanta erro por chave desconhecida)."""
+    """Expands `${OTHER_KEY}` using the keys already parsed up to this line
+    (top-to-bottom) or environment variables — same sequential semantics as
+    `source` in bash. An unresolved reference stays literal (fail-open: does
+    not raise an error for an unknown key)."""
 
     def _sub(match: re.Match[str]) -> str:
         key = match.group(1)
@@ -164,9 +165,9 @@ def _expand_refs(value: str, values_so_far: dict[str, str]) -> str:
 
 
 def load_config(start: Path | None = None) -> dict[str, str]:
-    """Localiza e parseia o `.harness/harness.conf` do projeto-alvo (ver
-    `_resolve_conf_path`). Fail-open: arquivo ausente ou erro de leitura ->
-    dict vazio, nunca exceção."""
+    """Locates and parses the target project's `.harness/harness.conf` (see
+    `_resolve_conf_path`). Fail-open: missing file or read error ->
+    empty dict, never an exception."""
     values: dict[str, str] = {}
     path = _resolve_conf_path(start)
     if path is None:
@@ -197,9 +198,9 @@ def _conf() -> dict[str, str]:
 
 
 def reset_cache_for_tests() -> None:
-    """Só para testes: força re-leitura do `.conf` na próxima chamada
-    (o processo principal usa cache de processo — hooks são short-lived,
-    então isso normalmente não importa fora de testes)."""
+    """Tests only: forces a re-read of the `.conf` on the next call
+    (the main process uses a per-process cache — hooks are short-lived,
+    so this normally does not matter outside tests)."""
     global _CONF_CACHE
     _CONF_CACHE = None
 
@@ -216,8 +217,8 @@ def get_config_csv(key: str, default: list[str] | None = None) -> list[str]:
 
 
 def get_config_int(key: str, default: int) -> int:
-    """Caps numéricos (docs/planning/research/03-hardcodes.md §2.9) são
-    sempre int no schema A. Fail-open: valor ausente ou não-numérico ->
+    """Numeric caps (docs/planning/research/03-hardcodes.md §2.9) are
+    always int in schema A. Fail-open: missing or non-numeric value ->
     default."""
     raw = _conf().get(key)
     if raw is None:

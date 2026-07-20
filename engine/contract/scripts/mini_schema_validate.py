@@ -1,36 +1,38 @@
 #!/usr/bin/env python3
-"""Validador mínimo de JSON Schema (subset), stdlib puro.
+"""Minimal JSON Schema validator (subset), pure stdlib.
 
-Porque (M2/H4, auditoria adversarial): `validate_contract.py` só fazia
-`json.loads()` nos schemas — nunca validava uma INSTÂNCIA de exemplo contra
-eles. Prova real da auditoria: mudar o bloco `then` de um schema para uma
-regra inócua (ex.: exigir uma propriedade que já é `required` no `type`
-raiz, tornando o `if/then` sem efeito prático) mantinha `validate_contract.py`
-saindo 0 — o único teste que tocava o assunto
-(`test_json_schemas_parse_and_enforce_conditional_payloads`) apenas checava
-que as strings "then"/"fix_request" apareciam em algum lugar do JSON
-serializado, nunca que o `then` de fato REJEITA uma instância que o viola.
+Why (M2/H4, adversarial audit): `validate_contract.py` only ran
+`json.loads()` on the schemas — it never validated an example INSTANCE
+against them. Real proof from the audit: changing the `then` block of a
+schema to an innocuous rule (e.g. requiring a property that is already
+`required` in the root `type`, making the `if/then` practically ineffective)
+kept `validate_contract.py` exiting 0 — the only test that touched the
+subject (`test_json_schemas_parse_and_enforce_conditional_payloads`) merely
+checked that the strings "then"/"fix_request" appeared somewhere in the
+serialized JSON, never that the `then` actually REJECTS an instance that
+violates it.
 
-Decisão de biblioteca (declarada, LEI ZERO §9.1 delta de custo):
-`engine/contract/README.md` linha 5 é explícito — "stdlib puro (zero
-dependência externa)" é a arquitetura DECLARADA deste pacote (e do
-framework inteiro: não há `pyproject.toml`/`requirements.txt` em lugar
-nenhum do repo — todo script roda com `python3 script.py` cru, no
-projeto-alvo instalado via Copier, sem gerenciador de pacotes). Adotar
-`jsonschema` (mesmo só "se disponível, senão fallback") tornaria o
-comportamento do gate DEPENDENTE do ambiente onde ele roda — o mesmo
-projeto-alvo validaria diferente com/sem o pacote instalado, o oposto do
-que "self-contained" promete. Por isso a escolha aqui é: SEMPRE este
-validador mínimo, nunca `jsonschema` opcional. Cobre exatamente o subset de
-JSON Schema (draft 2020-12) usado pelos 3 schemas deste pacote: `type`,
-`additionalProperties`, `required`, `properties.*` (`type`, `enum`,
-`minimum`, `minLength`, `pattern`, `items`), e `allOf` de blocos
-`if`/`then` (com `if.properties.*.const` + `if.required` e
-`then.required`/`then.properties.*.minItems`). Não é um validador de JSON
-Schema genérico — não implementa `$ref`, `oneOf`, `patternProperties` etc.,
-porque nenhum schema deste pacote usa essas features; se um schema novo
-precisar de algo fora deste subset, este módulo precisa crescer (ou a
-decisão de adotar uma lib real precisa ser revisitada com dado novo).
+Library decision (declared, LEI ZERO §9.1 cost delta):
+`engine/contract/README.md` line 5 is explicit — "pure stdlib (zero
+external dependency)" is the DECLARED architecture of this package (and of
+the whole framework: there is no `pyproject.toml`/`requirements.txt`
+anywhere in the repo — every script runs with a bare `python3 script.py`,
+in the target project installed via Copier, with no package manager).
+Adopting `jsonschema` (even just "if available, else fallback") would make
+the gate's behavior DEPENDENT on the environment where it runs — the same
+target project would validate differently with/without the package
+installed, the opposite of what "self-contained" promises. That is why the
+choice here is: ALWAYS this minimal validator, never optional `jsonschema`.
+It covers exactly the subset of JSON Schema (draft 2020-12) used by the 3
+schemas of this package: `type`, `additionalProperties`, `required`,
+`properties.*` (`type`, `enum`, `minimum`, `minLength`, `pattern`, `items`),
+and `allOf` of `if`/`then` blocks (with `if.properties.*.const` +
+`if.required` and `then.required`/`then.properties.*.minItems`). It is not a
+generic JSON Schema validator — it does not implement `$ref`, `oneOf`,
+`patternProperties` etc., because no schema in this package uses those
+features; if a new schema needs something outside this subset, this module
+needs to grow (or the decision to adopt a real lib needs to be revisited
+with new data).
 """
 
 from __future__ import annotations
@@ -40,7 +42,7 @@ from typing import Any
 
 
 class SchemaValidationError(Exception):
-    """Uma ou mais violações de schema. `.errors` tem a lista completa."""
+    """One or more schema violations. `.errors` holds the full list."""
 
     def __init__(self, errors: list[str]) -> None:
         self.errors = errors
@@ -60,27 +62,27 @@ def _type_ok(value: Any, expected: str) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool)
     if expected == "boolean":
         return isinstance(value, bool)
-    return True  # tipo não coberto pelo subset -- não bloqueia
+    return True  # type not covered by the subset -- does not block
 
 
 def _validate_property(path: str, value: Any, subschema: dict, errors: list[str]) -> None:
     expected_type = subschema.get("type")
     if expected_type and not _type_ok(value, expected_type):
-        errors.append(f"{path}: esperado type={expected_type}, veio {type(value).__name__}")
+        errors.append(f"{path}: expected type={expected_type}, got {type(value).__name__}")
         return
 
     if "enum" in subschema and value not in subschema["enum"]:
-        errors.append(f"{path}: valor {value!r} fora do enum {subschema['enum']}")
+        errors.append(f"{path}: value {value!r} outside enum {subschema['enum']}")
 
     if "minimum" in subschema and isinstance(value, (int, float)) and value < subschema["minimum"]:
         errors.append(f"{path}: {value} < minimum {subschema['minimum']}")
 
     if "minLength" in subschema and isinstance(value, str) and len(value) < subschema["minLength"]:
-        errors.append(f"{path}: string mais curta que minLength {subschema['minLength']}")
+        errors.append(f"{path}: string shorter than minLength {subschema['minLength']}")
 
     if "pattern" in subschema and isinstance(value, str):
         if not re.search(subschema["pattern"], value):
-            errors.append(f"{path}: {value!r} não casa pattern {subschema['pattern']!r}")
+            errors.append(f"{path}: {value!r} does not match pattern {subschema['pattern']!r}")
 
     if expected_type == "array" and "items" in subschema and isinstance(value, list):
         item_schema = subschema["items"]
@@ -90,19 +92,19 @@ def _validate_property(path: str, value: Any, subschema: dict, errors: list[str]
 
 def _validate_object(path: str, instance: Any, schema: dict, errors: list[str]) -> None:
     if schema.get("type") == "object" and not isinstance(instance, dict):
-        errors.append(f"{path}: esperado objeto, veio {type(instance).__name__}")
+        errors.append(f"{path}: expected object, got {type(instance).__name__}")
         return
 
     if isinstance(instance, dict):
         for required_key in schema.get("required", []):
             if required_key not in instance:
-                errors.append(f"{path}: falta propriedade obrigatória '{required_key}'")
+                errors.append(f"{path}: missing required property '{required_key}'")
 
         properties = schema.get("properties", {})
         if schema.get("additionalProperties") is False:
             for key in instance:
                 if key not in properties:
-                    errors.append(f"{path}: propriedade '{key}' não declarada (additionalProperties=false)")
+                    errors.append(f"{path}: property '{key}' not declared (additionalProperties=false)")
 
         for key, value in instance.items():
             if key in properties:
@@ -122,10 +124,10 @@ def _if_condition_matches(instance: dict, if_clause: dict) -> bool:
 
 
 def validate_instance(instance: Any, schema: dict) -> list[str]:
-    """Valida `instance` contra `schema` (subset documentado no módulo).
+    """Validate `instance` against `schema` (subset documented in the module).
 
-    Retorna lista de erros (vazia = válido). Nunca lança -- quem chama decide
-    o que fazer (levantar SchemaValidationError, contar, etc.).
+    Returns a list of errors (empty = valid). Never raises -- the caller
+    decides what to do (raise SchemaValidationError, count, etc.).
     """
     errors: list[str] = []
     _validate_object("$", instance, schema, errors)
@@ -147,10 +149,10 @@ def assert_valid(instance: Any, schema: dict, label: str) -> None:
 
 
 def assert_invalid(instance: Any, schema: dict, label: str) -> None:
-    """Controle negativo: a instância DEVE falhar. Se passar, é o schema
-    (ou o validador) que perdeu poder de enforcement -- levanta erro."""
+    """Negative control: the instance MUST fail. If it passes, it is the
+    schema (or the validator) that lost enforcement power -- raises an error."""
     errors = validate_instance(instance, schema)
     if not errors:
         raise SchemaValidationError(
-            [f"{label}: instância INVÁLIDA passou na validação -- schema/allOf/if/then sem efeito real"]
+            [f"{label}: INVALID instance passed validation -- schema/allOf/if/then with no real effect"]
         )

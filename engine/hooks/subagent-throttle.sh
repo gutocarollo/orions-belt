@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# subagent-throttle — PreToolUse (Task|Agent). Cap CONFIGURÁVEL de subagents
-# simultâneos.
+# subagent-throttle — PreToolUse (Task|Agent). CONFIGURABLE cap on concurrent
+# subagents.
 #
-# Versão PARAMETRIZADA do hook original do learnhouse
+# PARAMETERIZED version of the original learnhouse hook
 # (/home/augusto/code/learnhouse/.claude/hooks/subagent-throttle.sh —
-# CAP=6 hardcoded na Linha 11; regra do Augusto 2026-06-22: "meus tokens
-# expiraram quando vc lançou 17 ao mesmo tempo. por favor lance 6 no
-# maximo"). Aqui o cap e o TTL de stale-slot vêm de
-# HARNESS_SUBAGENT_MAX_CONCURRENT / HARNESS_SUBAGENT_SLOT_STALE_MINUTES em
-# .harness/harness.conf, lidos via engine/_tooling_conf.py — o parser ÚNICO
-# do framework (docs/planning/research/01-guto-wiki.md §b: o guto-wiki
-# reimplementou o mesmo load_config() 3x sem extrair; este hook não repete
-# o erro chamando um parser bash paralelo).
+# CAP=6 hardcoded at Line 11; Augusto's rule 2026-06-22: "my tokens
+# expired when you launched 17 at once. please launch 6 at
+# most"). Here the cap and the stale-slot TTL come from
+# HARNESS_SUBAGENT_MAX_CONCURRENT / HARNESS_SUBAGENT_SLOT_STALE_MINUTES in
+# .harness/harness.conf, read via engine/_tooling_conf.py — the framework's
+# SINGLE parser (docs/planning/research/01-guto-wiki.md §b: the guto-wiki
+# reimplemented the same load_config() 3x without extracting it; this hook
+# does not repeat the mistake by calling a parallel bash parser).
 #
-# Fail-open: se python3 ou _tooling_conf.py estiverem indisponíveis, ou o
-# projeto-alvo não tiver .harness/harness.conf, cai nos defaults originais
-# (CAP=6 / STALE=45min) — o comportamento nunca regride para "sem throttle".
+# Fail-open: if python3 or _tooling_conf.py are unavailable, or the
+# target project has no .harness/harness.conf, it falls back to the original
+# defaults (CAP=6 / STALE=45min) — the behavior never regresses to "no throttle".
 #
-# Slots = arquivos em $HARNESS_RUNS_DIR/.slots (default ".harness/runs" —
-# M-ALTA/H4, auditoria adversarial: era hardcoded ".claude/runs" mesmo este
-# hook rodando também no Codex via .codex/hooks.json (H3/A1), o que
-# instruiria um projeto codex-only a criar uma pasta ".claude" que não faz
-# sentido nele. Passou a ler HARNESS_RUNS_DIR como CAP/STALE_MIN já liam.
+# Slots = files in $HARNESS_RUNS_DIR/.slots (default ".harness/runs" —
+# M-ALTA/H4, adversarial audit: it was hardcoded ".claude/runs" even though this
+# hook also runs on Codex via .codex/hooks.json (H3/A1), which
+# would instruct a codex-only project to create a ".claude" folder that makes
+# no sense for it. It now reads HARNESS_RUNS_DIR just as CAP/STALE_MIN already did.
 set -uo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -n "$ROOT" ] || exit 0
@@ -63,7 +63,7 @@ find "$SLOTS" -type f -name '*.slot' -mmin "+$STALE_MIN" -delete 2>/dev/null
 COUNT=$(find "$SLOTS" -type f -name '*.slot' | wc -l)
 if [ "$COUNT" -ge "$CAP" ]; then
   cat >&2 <<EOF
-THROTTLE: $COUNT/$CAP subagents já em voo — não lance mais agora (cap configurado via HARNESS_SUBAGENT_MAX_CONCURRENT em .harness/harness.conf; origem da regra: Augusto 2026-06-22, 17 paralelos estouraram o limite de tokens da conta).
+THROTTLE: $COUNT/$CAP subagents already in flight — do not launch more now (cap configured via HARNESS_SUBAGENT_MAX_CONCURRENT in .harness/harness.conf; rule origin: 2026-06-22, 17 in parallel blew the account's token limit).
 Aguarde os ativos terminarem (as conclusões chegam como notificação) e relance em lotes de até $CAP. Se um subagent morreu sem liberar slot, ele expira sozinho em ${STALE_MIN}min.
 EOF
   exit 2

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# test_check_platform.sh — regressão do M3 (auditoria adversarial H4):
-# "portátil" era um adjetivo não-declarado em lugar nenhum -- os hooks
-# dependem de Bash>=4, GNU coreutils (stat -c, date +%s%N), flock e python3;
-# em macOS/containers mínimos parte dos gates falha ou vira no-op silencioso.
+# test_check_platform.sh — regression for M3 (H4 adversarial audit):
+# "portable" was an adjective declared nowhere -- the hooks
+# depend on Bash>=4, GNU coreutils (stat -c, date +%s%N), flock and python3;
+# on macOS/minimal containers part of the gates fail or become a silent no-op.
 #
-# Prova aqui: (a) `.harness/lib/check-platform.sh` existe no render (dir
-# neutro, incondicional -- mesmo grupo de scan_project.py/merge_docs.py);
-# (b) rodando com o PATH real (todas as deps presentes neste CI/dev-box),
-# sai 0; (c) rodando com uma dependência REALMENTE ausente simulada (PATH
-# minimalista sem `flock`), detecta e reporta "FALTA flock" e sai != 0 --
-# não é um relatório cosmético, o preflight de fato PEGA a ausência.
+# Proves here: (a) `.harness/lib/check-platform.sh` exists in the render (neutral,
+# unconditional dir -- same group as scan_project.py/merge_docs.py);
+# (b) running with the real PATH (all deps present on this CI/dev-box),
+# exits 0; (c) running with a REALLY missing dependency simulated (minimal
+# PATH without `flock`), detects and reports "FALTA flock" and exits != 0 --
+# it is not a cosmetic report, the preflight actually CATCHES the absence.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,38 +21,38 @@ assert() {
 }
 
 SCRIPT="$REPO_ROOT/templates/.harness/lib/check-platform.sh"
-assert "check-platform.sh existe na árvore de templates (dir neutro)" '[ -f "$SCRIPT" ]'
-assert "check-platform.sh é executável ou pelo menos legível por bash" '[ -r "$SCRIPT" ]'
+assert "check-platform.sh exists in the templates tree (neutral dir)" '[ -f "$SCRIPT" ]'
+assert "check-platform.sh is executable or at least readable by bash" '[ -r "$SCRIPT" ]'
 
-# --- (b) ambiente real (todas as deps presentes) -> exit 0 ---
+# --- (b) real environment (all deps present) -> exit 0 ---
 REAL_OUT="$(bash "$SCRIPT" 2>&1)"
 REAL_EXIT=$?
-assert "com PATH real (todas as deps), check-platform.sh sai 0" '[ "$REAL_EXIT" -eq 0 ]'
-assert "com PATH real, reporta OK para flock" 'echo "$REAL_OUT" | grep -q "OK.*flock"'
+assert "with the real PATH (all deps), check-platform.sh exits 0" '[ "$REAL_EXIT" -eq 0 ]'
+assert "with the real PATH, reports OK for flock" 'echo "$REAL_OUT" | grep -q "OK.*flock"'
 
-# --- (c) simula dependência REALMENTE ausente: PATH minimalista sem flock ---
+# --- (c) simulate a REALLY missing dependency: minimal PATH without flock ---
 FAKEBIN="$(mktemp -d /tmp/check-platform-fakebin.XXXXXX)"
 trap 'rm -rf "$FAKEBIN"' EXIT
 for b in bash cat sed awk mkdir rm mktemp uname date stat python3 grep; do
   real="$(command -v "$b" 2>/dev/null || true)"
   [ -n "$real" ] && ln -sf "$real" "$FAKEBIN/$b"
 done
-# flock e timeout DELIBERADAMENTE ausentes deste PATH minimalista
+# flock and timeout DELIBERATELY absent from this minimal PATH
 
 FAKE_OUT="$(PATH="$FAKEBIN" bash "$SCRIPT" 2>&1)"
 FAKE_EXIT=$?
-assert "com flock ausente do PATH, check-platform.sh detecta e reporta 'FALTA flock'" \
+assert "with flock absent from PATH, check-platform.sh detects and reports 'FALTA flock'" \
   'echo "$FAKE_OUT" | grep -q "FALTA.*flock"'
-assert "com dependência obrigatória ausente, exit code != 0 (não passa por verde)" \
+assert "with a required dependency absent, exit code != 0 (does not pass as green)" \
   '[ "$FAKE_EXIT" -ne 0 ]'
-assert "aviso de timeout ausente também aparece (dependência soft)" \
+assert "the missing-timeout warning also appears (soft dependency)" \
   'echo "$FAKE_OUT" | grep -q "AVISO.*timeout"'
 
 echo
-echo "=== resumo ==="
+echo "=== summary ==="
 if [ "$FAIL" -eq 0 ]; then
-  echo "M3 (preflight de plataforma) PROVADO — detecta dependência real ausente, não é cosmético."
+  echo "M3 (platform preflight) PROVEN — detects a real missing dependency, not cosmetic."
 else
-  echo "AINDA HÁ GAP ABERTO — ver FAILs acima."
+  echo "THERE IS STILL AN OPEN GAP — see FAILs above."
 fi
 exit $FAIL

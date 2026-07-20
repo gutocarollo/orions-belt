@@ -1,28 +1,29 @@
-"""Regressão de contrato do engine/contract/ (agent-harness).
+"""Contract regression for engine/contract/ (agent-harness).
 
-Porte de `agent-swarm/codex/tests/test_agent_contract.py` (16 testes — ver
-docs/planning/research/02-agent-swarm.md). Adaptação por instrução
-explícita do plano F1 ("adaptando os asserts que hoje checam arquivos
-específicos do agent-swarm... para os paths do NOVO layout... os arquivos
-que você acabou de criar"):
+Port of `agent-swarm/codex/tests/test_agent_contract.py` (16 tests — see
+docs/planning/research/02-agent-swarm.md). Adapted per the explicit
+instruction of plan F1 ("adapting the asserts that today check
+agent-swarm-specific files... to the paths of the NEW layout... the files
+you just created"):
 
-- 9 testes KEPT/ADAPTADOS: validam conteúdo que REALMENTE existe após F1
-  (schemas, scripts parametrizados, witness reduzido, ledger, render_prompt,
-  a fixture sintética de skills/.codex). Nenhum aponta para conteúdo
-  fabricado.
-- 7 testes SKIPPED (não deletados, não fabricados): o original os usava
-  para proteger conteúdo do COUNCIL (pipeline em README.md, sentinels
-  REPLAN-REQUEST/FIX-REQUEST em .agents/skills/learnhouse-delivery-council/
-  SKILL.md e .codex/agents/learnhouse-adversarial-reviewer.toml, gate
-  final) — arquivos que só existiam depois da fusão das 2 linhagens do
-  council. F1.5 (docs/planning/00-plano-consolidado.md §6) já fez essa
-  fusão: 5 dos 7 testes foram REATIVADOS com paths adaptados em
-  `templates/tests/test_council_merge.py` (perto do conteúdo
-  mesclado, não aqui — engine/contract/ continua portátil/self-contained,
-  ver seu README.md). Os 2 restantes continuam skipped aqui porque
-  dependem de conteúdo que segue fora de escopo mesmo pós-F1.5 (README com
-  diagrama mermaid do pipeline = F7/case-study; docs/PLANO-SWARM.md
-  histórico = específico do agent-swarm original, sem equivalente aqui).
+- 9 tests KEPT/ADAPTED: validate content that REALLY exists after F1
+  (schemas, parameterized scripts, reduced witness, ledger, render_prompt,
+  the synthetic skills/.codex fixture). None point to fabricated
+  content.
+- 7 tests SKIPPED (not deleted, not fabricated): the original used them
+  to protect COUNCIL content (pipeline in README.md, REPLAN-REQUEST/
+  FIX-REQUEST sentinels in .agents/skills/learnhouse-delivery-council/
+  SKILL.md and .codex/agents/learnhouse-adversarial-reviewer.toml, final
+  gate) — files that only existed after the merge of the 2 council
+  lineages. F1.5 (docs/planning/00-plano-consolidado.md §6) already did
+  that merge: 5 of the 7 tests were REACTIVATED with adapted paths in
+  `templates/tests/test_council_merge.py` (near the merged content, not
+  here — engine/contract/ stays portable/self-contained, see its
+  README.md). The remaining 2 stay skipped here because they depend on
+  content that remains out of scope even post-F1.5 (README with the
+  pipeline mermaid diagram = F7/case-study; docs/PLANO-SWARM.md
+  historical = specific to the original agent-swarm, with no equivalent
+  here).
 """
 
 import os
@@ -38,20 +39,20 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 F15_REASON = (
-    "F1.5 concluido: reativado com paths adaptados em "
-    "templates/tests/test_council_merge.py (perto do conteudo "
-    "mesclado real, nao aqui — engine/contract/ fica portatil/"
-    "self-contained). Este skip permanece aqui so para nao duplicar a "
-    "asserção com paths relativos a ROOT=engine/contract/, que nao fazem "
-    "sentido para arquivos que vivem em templates/shared|codex/."
+    "F1.5 done: reactivated with adapted paths in "
+    "templates/tests/test_council_merge.py (near the real merged "
+    "content, not here — engine/contract/ stays portable/"
+    "self-contained). This skip stays here only to avoid duplicating the "
+    "assertion with paths relative to ROOT=engine/contract/, which make "
+    "no sense for files that live in templates/shared|codex/."
 )
 F15_OUT_OF_SCOPE_REASON = (
-    "Fora de escopo mesmo pos-F1.5: depende de conteudo que nao pertence "
-    "ao merge do SKILL.md do council. README com diagrama mermaid do "
-    "pipeline PLAN->PLAN_REVIEW->EXECUTION->EXECUTION_REVIEW e escopo do "
-    "README do framework/case-study (F7); docs/PLANO-SWARM.md e um doc "
-    "historico especifico do agent-swarm original, sem equivalente no "
-    "agent-harness. Ver docs/planning/00-plano-consolidado.md secao 6."
+    "Out of scope even post-F1.5: depends on content that does not belong "
+    "to the council SKILL.md merge. README with the pipeline mermaid "
+    "diagram PLAN->PLAN_REVIEW->EXECUTION->EXECUTION_REVIEW is scope of the "
+    "framework/case-study README (F7); docs/PLANO-SWARM.md is a historical "
+    "doc specific to the original agent-swarm, with no equivalent in the "
+    "agent-harness. See docs/planning/00-plano-consolidado.md section 6."
 )
 
 
@@ -207,9 +208,9 @@ class AgentContractRegressionTest(unittest.TestCase):
         self.assertRegex(council, re.compile(r"ADVERSARIAL-LOOP: <rodadas>/3"))
 
     def test_payload_assertion_is_scoped_to_marker_block(self):
-        """Portado sem alteração — teste unitário puro do helper `assert_payload_block`,
-        sem dependência de nenhum arquivo do council. É também o alvo do witness
-        TEST-PAYLOAD-SCOPE-001 (marker="assert_payload_block")."""
+        """Ported unchanged — pure unit test of the `assert_payload_block` helper,
+        with no dependency on any council file. It is also the target of the
+        TEST-PAYLOAD-SCOPE-001 witness (marker="assert_payload_block")."""
         text = """
 gap: elsewhere
 evidencia: elsewhere
@@ -227,13 +228,14 @@ REPLAN-REQUEST:
             )
 
     def test_config_and_metadata_parse(self):
-        """Adaptado (F1): o original validava `.codex/config.toml`+`.codex/agents/*.toml`
-        do PRÓPRIO agent-swarm (self-hosted). Aqui `engine/contract/` não tem `.codex/`
-        próprio — Codex é convenção do PROJETO-ALVO instalado, não do motor. Valida a
-        mesma forma via `tests/fixtures/sample-project/` (fixture sintética, nomes
-        genéricos) e, adicionalmente, prova que `validate_skills.py` PARAMETRIZADO
+        """Adapted (F1): the original validated `.codex/config.toml`+`.codex/agents/*.toml`
+        of agent-swarm ITSELF (self-hosted). Here `engine/contract/` has no `.codex/`
+        of its own — Codex is a convention of the installed TARGET PROJECT, not of the
+        engine. Validates the same shape via `tests/fixtures/sample-project/` (synthetic
+        fixture, generic names) and, additionally, proves that the PARAMETERIZED
+        `validate_skills.py`
         (HARNESS_CODEX_AGENTS_DIR/HARNESS_CODEX_CONFIG_PATH/HARNESS_COUNCIL_SKILL_NAME)
-        aceita essa fixture fim-a-fim."""
+        accepts that fixture end-to-end."""
         tomllib.loads((FIXTURE / ".codex" / "config.toml").read_text(encoding="utf-8"))
         for path in sorted((FIXTURE / ".codex" / "agents").glob("*.toml")):
             tomllib.loads(path.read_text(encoding="utf-8"))
@@ -341,10 +343,10 @@ REPLAN-REQUEST:
         self.assertIn("marker missing", result.stdout)
 
     def test_contract_validation_is_local_not_github_actions(self):
-        """Adaptado (F1): a perna de AGENTS.md do original foi removida — AGENTS.md é
-        convenção de raiz do PROJETO-ALVO (Codex), não existe dentro de
-        engine/contract/ nesta fase (chega com F1.5/F4). README aqui é
-        engine/contract/README.md (este pacote), não o README do agent-swarm."""
+        """Adapted (F1): the AGENTS.md leg of the original was removed — AGENTS.md is
+        a root convention of the TARGET PROJECT (Codex); it does not exist inside
+        engine/contract/ at this phase (it arrives with F1.5/F4). README here is
+        engine/contract/README.md (this package), not the agent-swarm README."""
         workflows = ROOT / ".github" / "workflows"
         workflow_files = []
         if workflows.exists():
@@ -388,12 +390,12 @@ REPLAN-REQUEST:
         self.assertIn("EXECUTION_REVIEW_MAX=3", result.stdout)
 
     def test_ledger_records_loop_events_as_jsonl(self):
-        """Adaptado (F1): passa HARNESS_PROJECT_ROOT=str(ROOT) explicitamente para o
-        subprocess — RUNS_DIR agora resolve via `_tooling_conf.project_root()`
-        (parametrizado), que sem override climaria a partir da cwd real até achar
-        `.git` (poderia resolver para a raiz do agent-harness em vez de
-        engine/contract/, dependendo de onde os testes rodam). O override torna o
-        teste determinístico e autocontido, sem tocar a raiz real do repo."""
+        """Adapted (F1): passes HARNESS_PROJECT_ROOT=str(ROOT) explicitly to the
+        subprocess — RUNS_DIR now resolves via `_tooling_conf.project_root()`
+        (parameterized), which without the override would climb from the real cwd
+        until it finds `.git` (could resolve to the agent-harness root instead of
+        engine/contract/, depending on where the tests run). The override makes the
+        test deterministic and self-contained, without touching the real repo root."""
         run_id = "unittest-ledger"
         run_dir = ROOT / ".agent-swarm" / "runs" / run_id
         shutil.rmtree(run_dir, ignore_errors=True)

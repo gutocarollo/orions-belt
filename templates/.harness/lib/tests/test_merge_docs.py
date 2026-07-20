@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""test_merge_docs.py — prova de merge NÃO-destrutivo (F5).
+"""test_merge_docs.py — proof of NON-destructive merge (F5).
 
-Gate real (00-plano-consolidado.md §6-F5): "merge NÃO-destrutivo de um
-CLAUDE.md preexistente" — escreve um CLAUDE.md com 2-3 linhas reais, roda o
-merge, confirma que o original não foi sobrescrito (diff mostra append, não
-replace) e que rodar de novo não duplica o bloco (idempotência).
+Real gate (00-plano-consolidado.md §6-F5): "NON-destructive merge of a
+preexisting CLAUDE.md" — writes a CLAUDE.md with 2-3 real lines, runs the
+merge, confirms the original was not overwritten (diff shows append, not
+replace) and that running again does not duplicate the block (idempotency).
 """
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ class MergeMarkdownTest(unittest.TestCase):
         self.assertIn("Novo conteúdo do harness", target.read_text(encoding="utf-8"))
 
     def test_appends_without_destroying_preexisting_content(self) -> None:
-        """O caso exato do gate: CLAUDE.md com 2-3 linhas REAIS pré-existentes."""
+        """The exact gate case: a CLAUDE.md with 2-3 REAL preexisting lines."""
         target = self.tmpdir / "CLAUDE.md"
         original = (
             "# Regras do meu projeto\n\n"
@@ -58,11 +58,11 @@ class MergeMarkdownTest(unittest.TestCase):
         self.assertEqual(result["action"], "appended")
 
         final = target.read_text(encoding="utf-8")
-        # O CONTEÚDO ORIGINAL sobrevive INTEIRO, verbatim, sem alteração.
+        # The ORIGINAL CONTENT survives WHOLE, verbatim, unchanged.
         self.assertIn(original.strip(), final)
-        # O novo conteúdo foi ANEXADO, não substituiu.
+        # The new content was APPENDED, it did not replace.
         self.assertIn("Conteúdo autorado pelo orions-belt", final)
-        # A ordem prova que foi append (original vem ANTES do bloco novo).
+        # The order proves it was an append (original comes BEFORE the new block).
         self.assertLess(final.index("Nunca commitar direto na main"), final.index("orions-belt:begin"))
 
     def test_second_run_updates_block_idempotently_without_duplicating(self) -> None:
@@ -79,18 +79,18 @@ class MergeMarkdownTest(unittest.TestCase):
         self.assertEqual(result2["action"], "updated-block")
 
         final = target.read_text(encoding="utf-8")
-        self.assertIn("Regra original", final)  # conteúdo do usuário continua intocado
-        self.assertIn("versão 2", final)  # bloco atualizado
-        self.assertNotIn("versão 1", final)  # bloco antigo foi SUBSTITUÍDO, não empilhado
-        self.assertEqual(final.count("orions-belt:begin"), 1, "não pode duplicar o marcador em updates sucessivos")
+        self.assertIn("Regra original", final)  # user content stays untouched
+        self.assertIn("versão 2", final)  # updated block
+        self.assertNotIn("versão 1", final)  # old block was REPLACED, not stacked
+        self.assertEqual(final.count("orions-belt:begin"), 1, "must not duplicate the marker on successive updates")
 
 
 class MergeSettingsJsonTest(unittest.TestCase):
-    """A4 (revisão adversarial pós-v1.0.0, gap real): reconciliação por
-    OWNERSHIP, não por igualdade de string de `command`. Todo hook do harness
-    aponta pra `.harness/hooks/<script>` (mesmo path usado no
-    settings.json.jinja real) — esse é o sinal de "owned"; qualquer outro
-    command é tratado como hook EXTERNO do usuário e é sempre preservado."""
+    """A4 (post-v1.0.0 adversarial review, real gap): reconciliation by
+    OWNERSHIP, not by `command` string equality. Every harness hook
+    points to `.harness/hooks/<script>` (the same path used in the real
+    settings.json.jinja) — that is the "owned" signal; any other
+    command is treated as an EXTERNAL user hook and is always preserved."""
 
     def setUp(self) -> None:
         self.tmpdir = Path(tempfile.mkdtemp(prefix="merge-settings-test-"))
@@ -109,7 +109,7 @@ class MergeSettingsJsonTest(unittest.TestCase):
         target = self.tmpdir / "settings.json"
         target.write_text(json.dumps({
             "permissions": {"allow": ["Bash(npm test)"]},
-            # hook EXTERNO do usuário (não aponta pra .harness/hooks/) — nunca tocado.
+            # EXTERNAL user hook (does not point to .harness/hooks/) — never touched.
             "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "bash meu-hook-existente.sh"}]}]},
         }), encoding="utf-8")
 
@@ -128,14 +128,14 @@ class MergeSettingsJsonTest(unittest.TestCase):
         self.assertEqual(result["hooks_removed_stale_owned"], 0)
 
         merged = json.loads(target.read_text(encoding="utf-8"))
-        # chave fora de "hooks" preservada verbatim
+        # key outside "hooks" preserved verbatim
         self.assertEqual(merged["permissions"]["allow"], ["Bash(npm test)"])
-        # hook EXTERNO do usuário sobrevive
+        # EXTERNAL user hook survives
         stop_commands = [h["command"] for group in merged["hooks"]["Stop"] for h in group["hooks"]]
         self.assertIn("bash meu-hook-existente.sh", stop_commands)
-        # hook OWNED novo do harness foi adicionado
+        # new OWNED harness hook was added
         self.assertTrue(any("completion-gate.py" in c for c in stop_commands))
-        # evento novo (SessionStart) que não existia foi criado
+        # new event (SessionStart) that did not exist was created
         self.assertIn("SessionStart", merged["hooks"])
 
     def test_merge_is_idempotent_no_duplicate_owned_hooks(self) -> None:
@@ -148,19 +148,19 @@ class MergeSettingsJsonTest(unittest.TestCase):
 
         _run(["settings-json", "--existing", str(target), "--new", str(new)])
         result2 = _run(["settings-json", "--existing", str(target), "--new", str(new)])
-        # rodada 2: o owned da rodada 1 é descartado (removed_stale_owned=1) e
-        # o mesmo conjunto é reinserido (added=1) -> nunca duplica.
+        # round 2: round 1's owned is discarded (removed_stale_owned=1) and
+        # the same set is reinserted (added=1) -> never duplicates.
         self.assertEqual(result2["hooks_added"], 1)
         self.assertEqual(result2["hooks_removed_stale_owned"], 1)
 
         merged = json.loads(target.read_text(encoding="utf-8"))
         stop_commands = [h["command"] for group in merged["hooks"]["Stop"] for h in group["hooks"]]
-        self.assertEqual(len(stop_commands), 1, "2ª rodada não pode duplicar o hook owned")
+        self.assertEqual(len(stop_commands), 1, "2nd round must not duplicate the owned hook")
 
     def test_upstream_matcher_or_timeout_change_reaches_target(self) -> None:
-        """A4 achado 1: dedup por command sozinho travava mudança de matcher/
-        timeout no MESMO script. Aqui o command é idêntico mas timeout/matcher
-        mudam upstream -> a versão NOVA precisa vencer, não a antiga."""
+        """A4 finding 1: dedup by command alone blocked matcher/
+        timeout changes on the SAME script. Here the command is identical but
+        timeout/matcher change upstream -> the NEW version must win, not the old one."""
         target = self.tmpdir / "settings.json"
         target.write_text(json.dumps({
             "hooks": {"PreToolUse": [{
@@ -188,14 +188,14 @@ class MergeSettingsJsonTest(unittest.TestCase):
         _run(["settings-json", "--existing", str(target), "--new", str(new)])
         merged = json.loads(target.read_text(encoding="utf-8"))
         entries = [h for group in merged["hooks"]["PreToolUse"] for h in group["hooks"]]
-        self.assertEqual(len(entries), 1, "não pode duplicar — mesmo script, versão nova substitui a antiga")
-        self.assertEqual(entries[0]["timeout"], 30, "timeout upstream novo precisa chegar ao projeto-alvo")
+        self.assertEqual(len(entries), 1, "must not duplicate — same script, new version replaces the old")
+        self.assertEqual(entries[0]["timeout"], 30, "new upstream timeout must reach the target project")
         self.assertEqual(entries[0].get("statusMessage"), "throttle: cap novo")
 
     def test_hook_removed_upstream_does_not_persist(self) -> None:
-        """A4 achado 2: hook owned que upstream REMOVEU do template (ex.: um
-        gate descontinuado) precisa sumir do projeto-alvo no próximo merge,
-        não persistir para sempre."""
+        """A4 finding 2: an owned hook that upstream REMOVED from the template (e.g. a
+        discontinued gate) must disappear from the target project on the next merge,
+        not persist forever."""
         target = self.tmpdir / "settings.json"
         target.write_text(json.dumps({
             "hooks": {"Stop": [{
@@ -203,7 +203,7 @@ class MergeSettingsJsonTest(unittest.TestCase):
             }]},
         }), encoding="utf-8")
 
-        # template novo não menciona mais gate-descontinuado.sh (upstream removeu).
+        # new template no longer mentions gate-descontinuado.sh (upstream removed it).
         new = self.tmpdir / "new.json"
         new.write_text(json.dumps({"hooks": {"Stop": [{
             "hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate.py\""}],
@@ -214,12 +214,12 @@ class MergeSettingsJsonTest(unittest.TestCase):
 
         merged = json.loads(target.read_text(encoding="utf-8"))
         stop_commands = [h["command"] for group in merged["hooks"]["Stop"] for h in group["hooks"]]
-        self.assertFalse(any("gate-descontinuado.sh" in c for c in stop_commands), "hook removido upstream não pode persistir")
+        self.assertFalse(any("gate-descontinuado.sh" in c for c in stop_commands), "hook removed upstream must not persist")
         self.assertTrue(any("completion-gate.py" in c for c in stop_commands))
 
     def test_renamed_hook_does_not_double_fire(self) -> None:
-        """A4 achado 3: rename de script upstream (foo.sh -> foo-v2.sh) não
-        pode deixar as DUAS entradas registradas (double-fire)."""
+        """A4 finding 3: an upstream script rename (foo.sh -> foo-v2.sh) must
+        not leave BOTH entries registered (double-fire)."""
         target = self.tmpdir / "settings.json"
         target.write_text(json.dumps({
             "hooks": {"SessionStart": [{
@@ -237,14 +237,14 @@ class MergeSettingsJsonTest(unittest.TestCase):
         _run(["settings-json", "--existing", str(target), "--new", str(new)])
         merged = json.loads(target.read_text(encoding="utf-8"))
         commands = [h["command"] for group in merged["hooks"]["SessionStart"] for h in group["hooks"]]
-        self.assertEqual(len(commands), 1, "rename não pode deixar as duas entradas (double-fire)")
+        self.assertEqual(len(commands), 1, "rename must not leave both entries (double-fire)")
         self.assertTrue(any("dev-doctor-v2.sh" in c for c in commands))
         self.assertFalse(any("dev-doctor.sh" in c and "v2" not in c for c in commands))
 
     def test_external_user_hook_on_same_event_as_owned_survives_update(self) -> None:
-        """Caso combinado: mesmo evento com 1 hook owned (que vai ser
-        atualizado) e 1 hook externo do usuário lado a lado — só o owned
-        reconcilia, o externo nunca é tocado."""
+        """Combined case: same event with 1 owned hook (which will be
+        updated) and 1 external user hook side by side — only the owned one
+        reconciles, the external one is never touched."""
         target = self.tmpdir / "settings.json"
         target.write_text(json.dumps({
             "hooks": {"Stop": [
@@ -270,8 +270,8 @@ class MergeSettingsJsonTest(unittest.TestCase):
 
 
 class MergeGitignoreTest(unittest.TestCase):
-    """B3, 4º arquivo sensível: .gitignore usa bloco marcado com comentário
-    `#` (não `<!-- -->`, que numa linha de .gitignore vira padrão literal)."""
+    """B3, 4th sensitive file: .gitignore uses a block marked with a `#`
+    comment (not `<!-- -->`, which on a .gitignore line becomes a literal pattern)."""
 
     def setUp(self) -> None:
         self.tmpdir = Path(tempfile.mkdtemp(prefix="merge-gitignore-test-"))

@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 """Verify load-bearing agent-harness contract markers.
 
-Porte de `agent-swarm/codex/scripts/verify_witness.py` — a lógica central
-(`verify()`) não mudou. `ROOT = Path(__file__).resolve().parents[1]` (=
-`engine/contract/`) continua o default self-referential, usado pelo
-`--witness` default (`verification/witness-fixes.json`, protege o PRÓPRIO
-`engine/contract/`) — ao contrário de `validate_skills.py`/
-`agent_swarm_ledger.py`, que resolvem a raiz do PROJETO-ALVO via
+Port of `agent-swarm/codex/scripts/verify_witness.py` — the core logic
+(`verify()`) did not change. `ROOT = Path(__file__).resolve().parents[1]` (=
+`engine/contract/`) remains the self-referential default, used by the
+default `--witness` (`verification/witness-fixes.json`, protects
+`engine/contract/` ITSELF) — unlike `validate_skills.py`/
+`agent_swarm_ledger.py`, which resolve the TARGET PROJECT root via
 `_tooling_conf.project_root()`.
 
-Adição (F1.5): flag `--root <path>` — pequena generalização para verificar
-witness de conteúdo FORA de `engine/contract/`, sem quebrar o default
-self-referential (quem não passa `--root` continua exatamente como antes).
-Uso real: `templates/verification/council-witness.json` protege o
-merge do council em `templates/`, resolvido com `--root
-templates`.
+Addition (F1.5): flag `--root <path>` — a small generalization to verify
+the witness of content OUTSIDE `engine/contract/`, without breaking the
+self-referential default (callers who do not pass `--root` behave exactly
+as before). Real use: `templates/verification/council-witness.json` protects
+the council merge in `templates/`, resolved with `--root templates`.
 """
 
 from __future__ import annotations
@@ -88,11 +87,11 @@ def main() -> int:
         type=pathlib.Path,
         default=ROOT,
         help=(
-            "Diretório-base contra o qual os `file:` do witness resolvem "
-            "(default: engine/contract/, self-referential — protege o "
-            "próprio pacote). Override usado por conteúdo fora do pacote, "
-            "ex.: templates/verification/council-witness.json "
-            "protegendo o merge do council em templates/."
+            "Base directory against which the witness `file:` entries resolve "
+            "(default: engine/contract/, self-referential — protects the "
+            "package itself). Override used for content outside the package, "
+            "e.g. templates/verification/council-witness.json "
+            "protecting the council merge in templates/."
         ),
     )
     parser.add_argument("--json", action="store_true")

@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""test_scan_project.py — prova de ponta-a-ponta do scanner determinístico do F5.
+"""test_scan_project.py — end-to-end proof of the F5 deterministic scanner.
 
-Gate real (docs/planning/00-plano-consolidado.md §6-F5): "o relatório de
-aplicabilidade classifica corretamente os hooks stack-específicos numa
-fixture Python-pura e numa Next.js". Cria as 2 fixtures REAIS em tempdir
-(não fixtures fake em memória), roda `git init` de verdade, chama
-scan_project.py como subprocess (a mesma forma que a skill harness-init o
-invoca), e valida a saída JSON.
+Real gate (docs/planning/00-plano-consolidado.md §6-F5): "the applicability
+report correctly classifies the stack-specific hooks on a pure-Python fixture
+and on a Next.js one". Creates the 2 REAL fixtures in a tempdir (not fake
+in-memory fixtures), runs a real `git init`, calls scan_project.py as a
+subprocess (the same way the harness-init skill invokes it), and validates the
+JSON output.
 
-Uso: python3 -m unittest test_scan_project -v  (de dentro de templates/.harness/lib/tests/)
+Usage: python3 -m unittest test_scan_project -v  (from within templates/.harness/lib/tests/)
 """
 from __future__ import annotations
 
@@ -41,11 +41,11 @@ def _status_of(components: list[dict], name: str) -> str:
     for c in components:
         if c["component"] == name:
             return c["status"]
-    raise AssertionError(f"componente {name} não encontrado no relatório")
+    raise AssertionError(f"component {name} not found in the report")
 
 
 class ScanProjectFixtureTest(unittest.TestCase):
-    """Fixture (a) do gate: repo Python puro limpo (só pyproject.toml + git init)."""
+    """Gate fixture (a): clean pure-Python repo (only pyproject.toml + git init)."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -73,7 +73,7 @@ class ScanProjectFixtureTest(unittest.TestCase):
         self.assertTrue(facts["is_git_repo"])
         self.assertEqual(facts["primary_language"], "python")
         self.assertEqual(facts["package_manager"], "uv")
-        self.assertFalse(facts["has_frontend_ui"], "fastapi é backend, não deve contar como UI frontend")
+        self.assertFalse(facts["has_frontend_ui"], "fastapi is backend, must not count as frontend UI")
         self.assertIn("pytest", facts["test_frameworks"])
 
     def test_classify_marks_ui_evidence_and_ds_gate_not_applicable(self) -> None:
@@ -94,23 +94,23 @@ class ScanProjectFixtureTest(unittest.TestCase):
             self.assertEqual(_status_of(report["components"], name), "APLICAVEL", name)
 
     def test_classify_never_returns_condicional_silently_active(self) -> None:
-        """D5: nada ativado silenciosamente. Nenhum componente stack-específico
-        (understand-apps, prod guards) pode aparecer como APLICAVEL sem sinal real."""
+        """D5: nothing silently enabled. No stack-specific component
+        (understand-apps, prod guards) may appear as APLICAVEL without a real signal."""
         report = _run_scan("classify", self.tmpdir)
         self.assertEqual(_status_of(report["components"], "skill.understand-apps-incremental"), "NAO_APLICAVEL")
 
     def test_answers_suggests_safe_fields_only(self) -> None:
         answers = _run_scan("answers", self.tmpdir)
         self.assertIn("project_name", answers)
-        self.assertNotIn("has_prod_stack", answers, "has_prod_stack é CONDICIONAL — nunca sugerido automaticamente")
+        self.assertNotIn("has_prod_stack", answers, "has_prod_stack is CONDICIONAL — never auto-suggested")
         self.assertNotIn("harness_understand_apps_root", answers)
 
     def test_answers_materializes_nao_aplicavel_ui_flags_as_false(self) -> None:
-        """A3 (gap real da revisão adversarial pós-v1.0.0): backend Python puro
-        sem frontend -> use_ui_evidence/use_ds_gate/use_ui_skills/use_icon_guard
-        precisam vir `false` em `answers`, não ficar de fora (default do
-        copier.yml é `true` — sem materializar aqui, o render instala módulo
-        de UI que o próprio scanner classificou como NAO_APLICAVEL)."""
+        """A3 (real gap from the post-v1.0.0 adversarial review): a pure Python
+        backend without a frontend -> use_ui_evidence/use_ds_gate/use_ui_skills/
+        use_icon_guard must come out `false` in `answers`, not be left out (the
+        copier.yml default is `true` — without materializing it here, the render
+        installs a UI module that the scanner itself classified as NAO_APLICAVEL)."""
         answers = _run_scan("answers", self.tmpdir)
         self.assertEqual(answers.get("use_ui_evidence"), False)
         self.assertEqual(answers.get("use_ds_gate"), False)
@@ -119,7 +119,7 @@ class ScanProjectFixtureTest(unittest.TestCase):
 
 
 class ScanProjectNextjsFixtureTest(unittest.TestCase):
-    """Fixture (b) do gate: monorepo Next.js com Playwright + docker-compose + apps/{web,api}."""
+    """Gate fixture (b): Next.js monorepo with Playwright + docker-compose + apps/{web,api}."""
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -156,7 +156,7 @@ class ScanProjectNextjsFixtureTest(unittest.TestCase):
         self.assertTrue(facts["has_frontend_ui"])
         self.assertIn("playwright", facts["test_frameworks"])
         self.assertTrue(facts["docker"]["has_compose"])
-        self.assertFalse(facts["docker"]["has_swarm_signal"], "compose sem bloco deploy: não é Swarm")
+        self.assertFalse(facts["docker"]["has_swarm_signal"], "compose without a deploy: block is not Swarm")
         self.assertEqual(facts["understand_apps_root_offset_candidate"], "apps")
         self.assertIn(3000, facts["ports_detected"])
         self.assertIn(8000, facts["ports_detected"])
@@ -173,8 +173,8 @@ class ScanProjectNextjsFixtureTest(unittest.TestCase):
         self.assertIn("apps", row["reason"])
 
     def test_classify_marks_prod_guards_condicional_not_silently_active(self) -> None:
-        """docker-compose presente mas sem assinatura Swarm -> CONDICIONAL, nunca
-        APLICAVEL direto (D5: has_prod_stack sempre exige confirmação humana)."""
+        """docker-compose present but without a Swarm signature -> CONDICIONAL, never
+        APLICAVEL directly (D5: has_prod_stack always requires human confirmation)."""
         report = _run_scan("classify", self.tmpdir)
         self.assertEqual(_status_of(report["components"], "hookify.prod-destroy"), "CONDICIONAL")
         self.assertEqual(_status_of(report["components"], "skill.deploy-prod-stack"), "CONDICIONAL")
@@ -185,11 +185,11 @@ class ScanProjectNextjsFixtureTest(unittest.TestCase):
         self.assertEqual(_status_of(report["components"], "hookify.no-scaley-dropdown"), "CONDICIONAL")
 
     def test_answers_does_not_disable_ui_flags_when_frontend_detected(self) -> None:
-        """Contraprova de A3: com frontend real (Next.js), nada em `answers`
-        pode forçar use_ui_evidence/use_ds_gate/use_ui_skills para false —
-        ui-evidence é APLICAVEL (Playwright presente) e ds-gate/ui-skills não
-        têm sinal de rejeição, então a chave nem deve aparecer (fica no
-        default `true` do copier.yml, sem override)."""
+        """Counter-proof of A3: with a real frontend (Next.js), nothing in `answers`
+        may force use_ui_evidence/use_ds_gate/use_ui_skills to false —
+        ui-evidence is APLICAVEL (Playwright present) and ds-gate/ui-skills have
+        no rejection signal, so the key must not even appear (it stays at the
+        copier.yml `true` default, without override)."""
         answers = _run_scan("answers", self.tmpdir)
         self.assertNotIn("use_ui_evidence", answers)
         self.assertNotIn("use_ds_gate", answers)
@@ -204,9 +204,9 @@ class ScanProjectNextjsFixtureTest(unittest.TestCase):
 
 
 class ScanProjectNoGitTest(unittest.TestCase):
-    """Passo 0 do plano (§5): projeto que nem é repo git (achado 5 do relatório 08,
-    caso real central-ordens-bi). scan() ainda deve rodar fail-open (não travar);
-    a decisão de recusar/git-init é da SKILL, não do script."""
+    """Plan step 0 (§5): a project that is not even a git repo (finding 5 of report 08,
+    real case central-ordens-bi). scan() must still run fail-open (not hang);
+    the decision to refuse/git-init belongs to the SKILL, not the script."""
 
     @classmethod
     def setUpClass(cls) -> None:

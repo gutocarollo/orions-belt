@@ -1,41 +1,41 @@
 #!/usr/bin/env python3
-"""Lint da wiki Karpathy do REPOSITÓRIO-ALVO inteiro (docs/), não só uma categoria especializada.
+"""Lint for the whole TARGET REPOSITORY's Karpathy wiki (docs/), not just one specialized category.
 
-Porte da versão FORTE do `guto-wiki`
-(padronizacao-documentacao/artefatos/scripts/docs-wiki-lint.py, 312 linhas —
-ver docs/planning/research/01-guto-wiki.md §b) para o `engine/` do
-agent-harness. Duas mudanças estruturais em relação à fonte, nenhuma
-mudança de REGRA:
+Port of the STRONG version of `guto-wiki`
+(padronizacao-documentacao/artefatos/scripts/docs-wiki-lint.py, 312 lines —
+see docs/planning/research/01-guto-wiki.md §b) into the agent-harness
+`engine/`. Two structural changes relative to the source, no change to any
+RULE:
 
-1. `load_config()`/`config_csv()` locais foram REMOVIDOS — este script
-   importa `get_config`/`get_config_csv`/`project_root` de
-   `engine/_tooling_conf.py` (o parser ÚNICO do framework, ver seu
-   docstring). O guto-wiki implementou o mesmo parser 3x sem extrair
-   (docs/planning/research/01-guto-wiki.md §b, "Observações estruturais"
-   item 1) — este porte não repete o erro.
-2. `ROOT` deixou de ser `Path(__file__).resolve().parents[1]` (que na
-   guto-wiki assumia o script morando em `<repo>/scripts/`, ou seja
-   `parents[1]` = raiz do próprio repo que está sendo lintado). Neste
-   layout o script mora em `engine/lint/`, fixo dentro do agent-harness —
-   `parents[1]` apontaria para `engine/`, o que é ERRADO quando o motor é
-   instalado num projeto-alvo qualquer. `ROOT` agora vem de
+1. The local `load_config()`/`config_csv()` were REMOVED — this script
+   imports `get_config`/`get_config_csv`/`project_root` from
+   `engine/_tooling_conf.py` (the framework's SINGLE parser, see its
+   docstring). guto-wiki implemented the same parser 3x without extracting
+   it (docs/planning/research/01-guto-wiki.md §b, "Structural observations"
+   item 1) — this port does not repeat the mistake.
+2. `ROOT` is no longer `Path(__file__).resolve().parents[1]` (which in
+   guto-wiki assumed the script lived in `<repo>/scripts/`, i.e.
+   `parents[1]` = root of the repo being linted). In this layout the
+   script lives in `engine/lint/`, fixed inside the agent-harness —
+   `parents[1]` would point at `engine/`, which is WRONG when the engine is
+   installed into an arbitrary target project. `ROOT` now comes from
    `_tooling_conf.project_root()` (HARNESS_PROJECT_ROOT ->
    CLAUDE_PROJECT_DIR -> `git rev-parse --show-toplevel` -> cwd).
 
-Regras (docs/SCHEMA.md do projeto-alvo):
-- FAIL: todo .md não-estrutural precisa estar citado individualmente ou coberto por uma coleção
-  explicitamente indexada em algum index.md/log.md/README.md sob docs/.
-- FAIL: arquivo não-markdown (json/png/pdf/...) precisa estar citado pelo nome ou coberto por uma coleção
-  explicitamente indexada (containers genéricos sources/assets/img/reports não contam).
-- WARN: naming de Markdown fora do padrão §2 (kebab-case; event=YYYY-MM-DD-slug; sequenced=NNNN-slug).
-  Não bloqueia por default — a migração de nomes é incremental via loop. Use --strict-naming para tornar FAIL.
+Rules (docs/SCHEMA.md of the target project):
+- FAIL: every non-structural .md must be cited individually or covered by a collection
+  explicitly indexed in some index.md/log.md/README.md under docs/.
+- FAIL: a non-markdown file (json/png/pdf/...) must be cited by name or covered by a collection
+  explicitly indexed (generic containers sources/assets/img/reports do not count).
+- WARN: Markdown naming outside the §2 standard (kebab-case; event=YYYY-MM-DD-slug; sequenced=NNNN-slug).
+  Does not block by default — name migration is incremental via the loop. Use --strict-naming to make it FAIL.
 
-Uso:
-  python3 engine/lint/docs_wiki_lint.py                 # repo-alvo inteiro (docs/)
-  python3 engine/lint/docs_wiki_lint.py --scope <categoria>     # só uma categoria (usado por gates)
-  python3 engine/lint/docs_wiki_lint.py --strict-naming # naming também bloqueia
-  python3 engine/lint/docs_wiki_lint.py --worktree      # diff local vs HEAD
-  python3 engine/lint/docs_wiki_lint.py --staged        # diff staged/pre-commit
+Usage:
+  python3 engine/lint/docs_wiki_lint.py                 # whole target repo (docs/)
+  python3 engine/lint/docs_wiki_lint.py --scope <category>     # only one category (used by gates)
+  python3 engine/lint/docs_wiki_lint.py --strict-naming # naming also blocks
+  python3 engine/lint/docs_wiki_lint.py --worktree      # local diff vs HEAD
+  python3 engine/lint/docs_wiki_lint.py --staged        # staged/pre-commit diff
   python3 engine/lint/docs_wiki_lint.py --diff-base <ref>  # CI/PR/push
 """
 from __future__ import annotations
@@ -56,9 +56,9 @@ STRUCTURAL = {"index.md", "log.md", "SCHEMA.md", "README.md"}
 CAPS_OK = {"README.md", "SCHEMA.md", "CLAUDE.md", "AGENTS.md", "LICENSE", "LICENSE.md", "PROVENANCE.md"}
 GENERIC_DIRS = {"sources", "assets", "img", "images", "reports", "docs", "_arquivo"}
 IGNORED_DIRS = set(get_config_csv("IGNORED_TOOL_DIRS", [".understand-anything", ".anythingllm"]))
-# kebab minúsculo, com prefixo opcional de data (event) ou número (sequenced); ponto só p/ versão tipo v2.2
+# lowercase kebab, with an optional date (event) or number (sequenced) prefix; dot only for a version like v2.2
 NAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}-|\d+-)?[a-z0-9]+([a-z0-9.\-]*[a-z0-9])?\.[a-z0-9]+$")
-# data (YYYY-MM-DD) presente mas NÃO como prefixo → event doc com data em sufixo (§2: deve ser prefixo)
+# date (YYYY-MM-DD) present but NOT as a prefix → event doc with date as a suffix (§2: must be a prefix)
 DATE_ANY = re.compile(r"\d{4}-\d{2}-\d{2}")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 LOG_HEADING_RE = re.compile(r"^## \[(\d{4}-\d{2}-\d{2}|sem-data)\] [^·]+ · .+")
@@ -66,7 +66,7 @@ STRAY_TOOL_RE = re.compile(r"^\s*</(content|invoke|antml:invoke|antml:parameter)
 
 
 def collect_index_corpus(scope_dir: Path) -> str:
-    """Concatena índices sob docs/ (o topo sempre conta), para checar menção."""
+    """Concatenate indexes under docs/ (the top always counts), to check for a mention."""
     parts: list[str] = []
     for name in ("index.md", "log.md", "README.md"):
         top = DOCS / name
@@ -86,7 +86,7 @@ def mentioned(rel: Path, corpus: str) -> bool:
 
 
 def collection_mentioned(rel: Path, corpus: str) -> bool:
-    """Aceita cobertura por coleção explícita, sem deixar top-level genérico cobrir tudo."""
+    """Accept coverage by an explicit collection, without letting a generic top-level cover everything."""
     parts = rel.parts[:-1]
     for i in range(len(parts), 1, -1):
         leaf = parts[i - 1]
@@ -107,11 +107,11 @@ FOREIGN_LIVE_FORBIDDEN = ("_arquivo/",)
 
 
 def check_no_foreign_live_links(base: Path) -> list[str]:
-    """Índice vivo (`index.md`) que linka `_arquivo/`.
+    """Live index (`index.md`) that links to `_arquivo/`.
 
-    Em alguns repos isso pode ser FAIL; neste template fica WARN porque índices podem usar links a
-    `_arquivo/` como wayfinding rotulado ("históricos", "superados", "prova em"). WARN surfacia para
-    o olho humano na curadoria sem quebrar o verde. `log.md` é isento por ser registro temporal."""
+    In some repos this could be FAIL; in this template it is WARN because indexes may use links to
+    `_arquivo/` as labeled wayfinding ("historical", "superseded", "evidence in"). WARN surfaces it
+    to the human eye during curation without breaking the green. `log.md` is exempt as a temporal record."""
     errs: list[str] = []
     for idx in sorted(base.rglob("index.md")):
         if any(part in IGNORED_DIRS for part in idx.relative_to(DOCS).parts):
@@ -120,7 +120,7 @@ def check_no_foreign_live_links(base: Path) -> list[str]:
         for m in re.finditer(r"\]\(([^)]+)\)", idx.read_text(encoding="utf-8")):
             tgt = m.group(1).split("#")[0].strip().lstrip("./")
             if any(tok in tgt for tok in FOREIGN_LIVE_FORBIDDEN):
-                errs.append(f"índice vivo linka fonte arquivada: {rel} -> {m.group(1)}")
+                errs.append(f"live index links to an archived source: {rel} -> {m.group(1)}")
     return errs
 
 
@@ -132,15 +132,15 @@ def check_log_format(base: Path) -> list[str]:
         previous: str | None = None
         headings = [line for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("## ")]
         if not headings:
-            errs.append(f"{log.relative_to(DOCS)}: sem entradas ## [YYYY-MM-DD]")
+            errs.append(f"{log.relative_to(DOCS)}: no ## [YYYY-MM-DD] entries")
         for line in headings:
             if not LOG_HEADING_RE.match(line):
-                errs.append(f"{log.relative_to(DOCS)}: heading fora do formato temporal: {line}")
+                errs.append(f"{log.relative_to(DOCS)}: heading outside the temporal format: {line}")
                 continue
             date = line.split("]", 1)[0].removeprefix("## [")
             if date != "sem-data":
                 if previous and previous != "sem-data" and date > previous:
-                    errs.append(f"{log.relative_to(DOCS)}: log fora de ordem temporal decrescente: {line}")
+                    errs.append(f"{log.relative_to(DOCS)}: log out of descending temporal order: {line}")
                 previous = date
             else:
                 previous = "sem-data"
@@ -157,12 +157,12 @@ def check_frontmatter_updated(base: Path) -> list[str]:
             continue
         end = text.find("\n---\n", 4)
         if end == -1:
-            errs.append(f"{path.relative_to(DOCS)}: frontmatter nao fechado")
+            errs.append(f"{path.relative_to(DOCS)}: frontmatter not closed")
             continue
         frontmatter = text[4:end]
         updated = re.search(r"^updated:\s*[\"']?([^\"'\n]+)[\"']?\s*$", frontmatter, flags=re.M)
         if updated and not DATE_RE.match(updated.group(1)):
-            errs.append(f"{path.relative_to(DOCS)}: updated fora de YYYY-MM-DD: {updated.group(1)!r}")
+            errs.append(f"{path.relative_to(DOCS)}: updated outside YYYY-MM-DD: {updated.group(1)!r}")
     return errs
 
 
@@ -173,7 +173,7 @@ def check_stray_tool_tags(base: Path) -> list[str]:
             continue
         for i, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
             if STRAY_TOOL_RE.match(line):
-                errs.append(f"{path.relative_to(DOCS)}:{i}: tag de ferramenta solta -> {line.strip()!r}")
+                errs.append(f"{path.relative_to(DOCS)}:{i}: stray tool tag -> {line.strip()!r}")
     return errs
 
 
@@ -189,7 +189,7 @@ def git_diff_name_status(diff_base: str | None, staged: bool, worktree: bool, fa
         cmd.append(f"{diff_base}...HEAD")
     proc = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True)
     if proc.returncode != 0:
-        failures.append(f"git diff falhou: {proc.stderr.strip() or proc.stdout.strip()}")
+        failures.append(f"git diff failed: {proc.stderr.strip() or proc.stdout.strip()}")
         return []
     entries: list[tuple[str, list[str]]] = []
     for raw in proc.stdout.splitlines():
@@ -221,9 +221,9 @@ def check_diff_policy(diff_base: str | None, staged: bool, worktree: bool, failu
         new_path = paths[-1]
         if any(path.endswith(".md") for path in {old_path, new_path}) and status[0] in {"A", "D", "R"}:
             if not log_changed:
-                failures.append(f"{new_path}: markdown novo/removido/renomeado exige atualizar docs/log.md no mesmo diff")
+                failures.append(f"{new_path}: new/removed/renamed markdown requires updating docs/log.md in the same diff")
             if status.startswith(("A", "R")) and not index_changed:
-                failures.append(f"{new_path}: markdown novo/renomeado exige atualizar index/README da categoria no mesmo diff")
+                failures.append(f"{new_path}: new/renamed markdown requires updating the category's index/README in the same diff")
 
 
 def naming_ok(rel: Path) -> bool:
@@ -232,7 +232,7 @@ def naming_ok(rel: Path) -> bool:
         return True
     if not NAME_RE.match(name):
         return False
-    # §2: event doc datado deve ter a data em PREFIXO (ordena no ls). Data em sufixo é violação.
+    # §2: a dated event doc must have the date as a PREFIX (sorts in ls). A date as a suffix is a violation.
     if DATE_ANY.search(name) and not re.match(r"^\d{4}-\d{2}-\d{2}-", name):
         return False
     return True
@@ -263,13 +263,13 @@ def main() -> int:
             continue
         if rel.name in STRUCTURAL and f.suffix == ".md":
             continue
-        # cobertura: menção individual ou coleção explicitamente indexada.
+        # coverage: individual mention or explicitly indexed collection.
         covered = mentioned(rel, corpus) or collection_mentioned(rel, corpus)
         if not covered:
-            failures.append(f"órfão (sem menção em index/log): {rel}")
+            failures.append(f"orphan (no mention in index/log): {rel}")
         # naming (§2)
         if f.suffix == ".md" and not naming_ok(rel):
-            naming_warns.append(f"naming fora do padrão §2: {rel}")
+            naming_warns.append(f"naming outside the §2 standard: {rel}")
 
     foreign_warns = check_no_foreign_live_links(base)
     failures.extend(check_log_format(base))
@@ -282,14 +282,14 @@ def main() -> int:
         naming_warns = []
 
     if naming_warns:
-        print(f"docs-wiki-lint: {len(naming_warns)} aviso(s) de naming (WARN, migração incremental):")
+        print(f"docs-wiki-lint: {len(naming_warns)} naming warning(s) (WARN, incremental migration):")
         for w in naming_warns[:60]:
             print(f"  ~ {w}")
         if len(naming_warns) > 60:
-            print(f"  ... +{len(naming_warns) - 60} outros")
+            print(f"  ... +{len(naming_warns) - 60} more")
 
     if foreign_warns:
-        print(f"docs-wiki-lint: {len(foreign_warns)} índice(s) vivo(s) linkando _arquivo/ (WARN — confira se é wayfinding rotulado):")
+        print(f"docs-wiki-lint: {len(foreign_warns)} live index(es) linking to _arquivo/ (WARN — check whether it is labeled wayfinding):")
         for w in foreign_warns:
             print(f"  ~ {w}")
 

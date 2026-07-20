@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# test_ds_gate_hardening.sh — regressão de A6.2 e A6.3 (auditoria adversarial
-# pós-v1.0.0, H2 hardening):
-#   A6.2 — `.ds-baseline.txt` nunca era gerada em nenhum passo de instalação,
-#     então o ratchet ds-gate.sh ficava permanentemente em modo --report
-#     (nunca falha, mesmo com hardcode óbvio). Fix: `harness-install.sh`
-#     gera a baseline automaticamente na 1ª instalação quando use_ds_gate
-#     estava ativo.
-#   A6.3 — `.ds-allowlist` prometia globs mas casava por substring literal
-#     (`grep -vF`) — um padrão como `legacy/**` nunca casava nenhum path
-#     real. Fix: `.harness/lib/ds_allowlist_filter.py` (fnmatch real).
+# test_ds_gate_hardening.sh — regression for A6.2 and A6.3 (post-v1.0.0
+# adversarial audit, H2 hardening):
+#   A6.2 — `.ds-baseline.txt` was never generated in any install step,
+#     so the ds-gate.sh ratchet stayed permanently in --report mode
+#     (never fails, even with an obvious hardcode). Fix: `harness-install.sh`
+#     generates the baseline automatically on the 1st install when use_ds_gate
+#     was active.
+#   A6.3 — `.ds-allowlist` promised globs but matched by literal substring
+#     (`grep -vF`) — a pattern like `legacy/**` never matched any real
+#     path. Fix: `.harness/lib/ds_allowlist_filter.py` (real fnmatch).
 #
-# Requer `uvx`. Roda fora do orions-belt (fixture em $TMPDIR).
+# Requires `uvx`. Runs outside orions-belt (fixture in $TMPDIR).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,12 +31,12 @@ assert() {
 }
 
 if ! command -v uvx >/dev/null 2>&1; then
-  echo "SKIP: uvx indisponível — não é possível provar o fluxo real do copier"
-  exit 77  # convencao SKIP (README.md #H4): nao e PASS
+  echo "SKIP: uvx unavailable — cannot prove the real copier flow"
+  exit 77  # SKIP convention (README.md #H4): not a PASS
 fi
 
 # =============================================================================
-# A6.2 — harness-install.sh gera .ds-baseline.txt automaticamente
+# A6.2 — harness-install.sh generates .ds-baseline.txt automatically
 # =============================================================================
 TARGET="$WORK/target-project"
 mkdir -p "$TARGET/components"
@@ -44,9 +44,9 @@ cd "$TARGET"
 git init -q
 git config user.email "test@example.com"
 git config user.name "Test"
-# 1 violação REAL já presente ANTES da instalação -- a baseline deve capturar
-# essa contagem (não zero), provando que ela reflete o estado ATUAL do
-# projeto-alvo, não um valor chutado.
+# 1 REAL violation already present BEFORE the install -- the baseline must capture
+# that count (not zero), proving it reflects the CURRENT state of the
+# target project, not a guessed value.
 cat > components/legacy.tsx <<'EOF'
 export const Legacy = () => <div className="text-gray-600" />
 EOF
@@ -57,22 +57,22 @@ if ! "$INSTALLER" "$TARGET" --vcs-ref HEAD \
     --data project_name=dsgate-fixture --data owner_name=Tester \
     --data use_ds_gate=true --data harness_web_app_dir=. \
     --defaults > "$INSTALL_LOG" 2>&1; then
-  echo "FAIL: harness-install.sh falhou -- $(tail -20 "$INSTALL_LOG")"
+  echo "FAIL: harness-install.sh failed -- $(tail -20 "$INSTALL_LOG")"
   cat "$INSTALL_LOG"
   exit 1
 fi
 
-assert "harness-install.sh materializou .harness/lib/ds-gate.sh" '[ -f "$TARGET/.harness/lib/ds-gate.sh" ]'
-assert "harness-install.sh materializou o hook ds-gate-posttool.sh (use_ds_gate=true)" \
+assert "harness-install.sh materialized .harness/lib/ds-gate.sh" '[ -f "$TARGET/.harness/lib/ds-gate.sh" ]'
+assert "harness-install.sh materialized the hook ds-gate-posttool.sh (use_ds_gate=true)" \
   '[ -f "$TARGET/.harness/hooks/ds-gate-posttool.sh" ]'
-assert "A6.2: .ds-baseline.txt foi GERADA automaticamente pela 1ª instalação" \
+assert "A6.2: .ds-baseline.txt was GENERATED automatically by the 1st install" \
   '[ -f "$TARGET/.ds-baseline.txt" ]'
-assert "A6.2: baseline reflete a violação REAL pré-existente (color-gray=1), não zero chutado" \
+assert "A6.2: baseline reflects the REAL preexisting violation (color-gray=1), not a guessed zero" \
   'grep -q "^color-gray=1$" "$TARGET/.ds-baseline.txt"'
 
-# prova que o ratchet agora ENFORCE de verdade: nova violação DEPOIS da
-# baseline deve fazer o gate FALHAR (antes desta correção, sem baseline,
-# `check` nunca falhava -- sempre report-only).
+# proves that the ratchet now truly ENFORCES: a new violation AFTER the
+# baseline must make the gate FAIL (before this fix, without a baseline,
+# `check` never failed -- always report-only).
 cat > "$TARGET/components/new-hardcode.tsx" <<'EOF'
 export const New = () => <div className="text-gray-700 bg-red-500" />
 EOF
@@ -82,13 +82,13 @@ if HARNESS_PROJECT_ROOT="$TARGET" bash "$TARGET/.harness/lib/ds-gate.sh" --dir .
 else
   DS_GATE_EXIT=$?
 fi
-assert "A6.2: com baseline existente, novo hardcode FAZ o ratchet falhar (exit != 0)" \
+assert "A6.2: with an existing baseline, a new hardcode MAKES the ratchet fail (exit != 0)" \
   '[ "$DS_GATE_EXIT" -ne 0 ]'
-assert "A6.2: mensagem reporta SUBIU para a dimensão violada" \
+assert "A6.2: message reports SUBIU for the violated dimension" \
   'grep -q "SUBIU" "$WORK/ds-gate-check.out"'
 
 # =============================================================================
-# A6.3 — .ds-allowlist casa por GLOB real (fnmatch), não substring literal
+# A6.3 — .ds-allowlist matches by real GLOB (fnmatch), not literal substring
 # =============================================================================
 GLOB_DIR="$WORK/glob-fixture"
 mkdir -p "$GLOB_DIR/legacy" "$GLOB_DIR/fresh"
@@ -102,19 +102,19 @@ cat > "$GLOB_DIR/.ds-allowlist" <<'EOF'
 legacy/**
 EOF
 OUT_GLOB=$(HARNESS_PROJECT_ROOT="$GLOB_DIR" bash "$TARGET/.harness/lib/ds-gate.sh" --dir . --report 2>&1)
-assert "A6.3: com allowlist 'legacy/**', só fresh/new.tsx conta (color-gray=1, não 2)" \
+assert "A6.3: with allowlist 'legacy/**', only fresh/new.tsx counts (color-gray=1, not 2)" \
   'echo "$OUT_GLOB" | grep -qE "^color-gray +1 "'
 
 rm "$GLOB_DIR/.ds-allowlist"
 OUT_NOGLOB=$(HARNESS_PROJECT_ROOT="$GLOB_DIR" bash "$TARGET/.harness/lib/ds-gate.sh" --dir . --report 2>&1)
-assert "A6.3 (controle): sem allowlist, os dois arquivos contam (color-gray=2)" \
+assert "A6.3 (control): without allowlist, both files count (color-gray=2)" \
   'echo "$OUT_NOGLOB" | grep -qE "^color-gray +2 "'
 
 echo
-echo "=== resumo ==="
+echo "=== summary ==="
 if [ "$FAIL" -eq 0 ]; then
-  echo "A6.2 (baseline auto-gerada) e A6.3 (glob real) FECHADOS."
+  echo "A6.2 (auto-generated baseline) and A6.3 (real glob) CLOSED."
 else
-  echo "AINDA HÁ GAP — ver FAILs acima."
+  echo "THERE IS STILL A GAP — see FAILs above."
 fi
 exit $FAIL

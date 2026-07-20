@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Render a Delivery Council prompt with validated ARGS.
 
-Porte quase 1:1 de `agent-swarm/codex/scripts/render_prompt.py` (nenhum
-path de arquivo hardcoded no original — só validação de argumentos de CLI).
-Uma única generalização real: a linha 1 da saída citava literalmente
-`$learnhouse-delivery-council` — mesma classe de hardcode de nome de skill
-que `validate_skills.py`/`03-hardcodes.md §2.2` já cobrem. Lê
-`HARNESS_COUNCIL_SKILL_NAME` de `.harness/harness.conf` (mesma chave usada
-pela checagem opcional de `agents/openai.yaml` em `validate_skills.py`),
-com fallback fail-open para `delivery-council` se a config não existir.
+Near 1:1 port of `agent-swarm/codex/scripts/render_prompt.py` (no file
+path hardcoded in the original — only CLI argument validation). A single
+real generalization: line 1 of the output quoted `$learnhouse-delivery-council`
+literally — the same class of skill-name hardcode that
+`validate_skills.py`/`03-hardcodes.md §2.2` already cover. Reads
+`HARNESS_COUNCIL_SKILL_NAME` from `.harness/harness.conf` (the same key used
+by the optional `agents/openai.yaml` check in `validate_skills.py`),
+with a fail-open fallback to `delivery-council` if the config does not exist.
 """
 
 from __future__ import annotations

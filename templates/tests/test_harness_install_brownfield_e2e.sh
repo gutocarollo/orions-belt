@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# test_harness_install_brownfield_e2e.sh — prova de ponta-a-ponta do bootstrap
-# BROWNFIELD-SAFE (B3, gap BLOQUEANTE da revisão adversarial pós-v1.0.0).
+# test_harness_install_brownfield_e2e.sh — end-to-end proof of the
+# BROWNFIELD-SAFE bootstrap (B3, BLOCKING gap from the post-v1.0.0 adversarial review).
 #
-# Diferente de test_harness_init_e2e.sh (que copia pra um SCRATCH VAZIO e só
-# chama merge_docs.py isolado — não reproduz o problema real): este teste
-# roda `./harness-install.sh` DE VERDADE contra um projeto-alvo BROWNFIELD —
-# repo git já existente com AGENTS.md, .claude/CLAUDE.md, .claude/
-# settings.json (com 1 hook do usuário) e `.husky/` com core.hooksPath já
-# apontando pra lá. É exatamente o cenário que fazia `copier copy` direto
-# falhar (sem --overwrite) ou destruir (com --overwrite) — ver o comentário
-# no topo de harness-install.sh.
+# Unlike test_harness_init_e2e.sh (which copies into an EMPTY SCRATCH and only
+# calls merge_docs.py in isolation — it does not reproduce the real problem): this test
+# runs `./harness-install.sh` FOR REAL against a BROWNFIELD target project —
+# an already-existing git repo with AGENTS.md, .claude/CLAUDE.md, .claude/
+# settings.json (with 1 user hook) and `.husky/` with core.hooksPath already
+# pointing there. It is exactly the scenario that made a direct `copier copy`
+# fail (without --overwrite) or destroy (with --overwrite) — see the comment
+# at the top of harness-install.sh.
 #
-# Cobre os 3 gates do H1 (auditoria):
-#   (a) AGENTS.md / .claude/CLAUDE.md / .claude/settings.json preservados —
-#       conteúdo original intacto, bloco do harness ANEXADO (não substituído).
-#   (b) core.hooksPath continua `.husky` (nunca sobrescrito).
-#   (c) hook do usuário em settings.json sobrevive E os hooks do harness são
-#       adicionados.
+# Covers the 3 gates of H1 (audit):
+#   (a) AGENTS.md / .claude/CLAUDE.md / .claude/settings.json preserved —
+#       original content intact, harness block APPENDED (not replaced).
+#   (b) core.hooksPath stays `.husky` (never overwritten).
+#   (c) the user hook in settings.json survives AND the harness hooks are
+#       added.
 #
-# Requer `uvx` (baixa/cacheia copier na 1ª vez). Roda fora do orions-belt
-# (fixture em $TMPDIR), nunca escreve dentro do próprio repo.
+# Requires `uvx` (downloads/caches copier on the 1st run). Runs outside orions-belt
+# (fixture in $TMPDIR), never writes inside the repo itself.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,7 +31,7 @@ WORK="$(mktemp -d /tmp/harness-install-brownfield-e2e.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 
 assert() {
-  # $1 = descrição, $2 = expressão shell (0=pass)
+  # $1 = label, $2 = shell expression (0=pass)
   if eval "$2"; then
     echo "PASS: $1"
   else
@@ -41,11 +41,11 @@ assert() {
 }
 
 if ! command -v uvx >/dev/null 2>&1; then
-  echo "SKIP: uvx indisponível neste ambiente — não é possível provar o fluxo real do harness-install.sh"
-  exit 77  # convencao SKIP (README.md #H4): nao e PASS
+  echo "SKIP: uvx unavailable in this environment — cannot prove the real harness-install.sh flow"
+  exit 77  # SKIP convention (README.md #H4): not a PASS
 fi
 
-# --- 1. Fixture brownfield: repo git com os 4 arquivos sensíveis PRÉ-EXISTENTES + Husky ---
+# --- 1. Brownfield fixture: git repo with the 4 sensitive files PREEXISTING + Husky ---
 TARGET="$WORK/target-project"
 mkdir -p "$TARGET/.claude" "$TARGET/.husky"
 cd "$TARGET"
@@ -92,40 +92,40 @@ git config core.hooksPath .husky
 
 HUSKY_MD5_BEFORE=$(md5sum .husky/pre-commit | cut -d' ' -f1)
 
-# --- 2. Roda o bootstrap real contra o fixture (HEAD do próprio repo) ---
+# --- 2. Run the real bootstrap against the fixture (HEAD of the repo itself) ---
 INSTALL_LOG="$WORK/install.log"
 if ! "$INSTALLER" "$TARGET" --vcs-ref HEAD \
     --data project_name=brownfield-e2e-fixture --data owner_name=Tester \
     --defaults > "$INSTALL_LOG" 2>&1; then
-  echo "FAIL: harness-install.sh falhou -- $(tail -15 "$INSTALL_LOG")"
+  echo "FAIL: harness-install.sh failed -- $(tail -15 "$INSTALL_LOG")"
   exit 1
 fi
 
-# --- 3. Gate (a): conteúdo original preservado + append, não replace ---
-assert "AGENTS.md: linha original sobrevive verbatim" \
+# --- 3. Gate (a): original content preserved + append, not replace ---
+assert "AGENTS.md: original line survives verbatim" \
   'grep -q "Regra do usuario: nunca commitar segredo em claro." "$TARGET/AGENTS.md"'
-assert "AGENTS.md: conteúdo do harness foi ANEXADO (marcador presente)" \
+assert "AGENTS.md: harness content was APPENDED (marker present)" \
   'grep -q "orions-belt:begin" "$TARGET/AGENTS.md"'
-assert "AGENTS.md: original aparece ANTES do bloco do harness (append, não prepend/replace)" \
+assert "AGENTS.md: original appears BEFORE the harness block (append, not prepend/replace)" \
   '[ "$(grep -n "Regra do usuario: nunca commitar" "$TARGET/AGENTS.md" | cut -d: -f1)" -lt "$(grep -n "orions-belt:begin" "$TARGET/AGENTS.md" | cut -d: -f1)" ]'
 
-assert ".claude/CLAUDE.md: linha original sobrevive verbatim" \
+assert ".claude/CLAUDE.md: original line survives verbatim" \
   'grep -q "Regra do usuario: rodar \`make test\` antes de qualquer PR." "$TARGET/.claude/CLAUDE.md"'
-assert ".claude/CLAUDE.md: conteúdo do harness foi ANEXADO" \
+assert ".claude/CLAUDE.md: harness content was APPENDED" \
   'grep -q "orions-belt:begin" "$TARGET/.claude/CLAUDE.md"'
 
-assert ".gitignore: padrão original sobrevive verbatim" \
+assert ".gitignore: original pattern survives verbatim" \
   'grep -q "node_modules/" "$TARGET/.gitignore" && grep -q "\.env" "$TARGET/.gitignore"'
-assert ".gitignore: conteúdo do harness foi ANEXADO" \
+assert ".gitignore: harness content was APPENDED" \
   'grep -q "orions-belt:begin" "$TARGET/.gitignore"'
 
-# --- 4. Gate (b): core.hooksPath NÃO trocado de .husky ---
-assert "core.hooksPath continua .husky (nunca sobrescrito)" \
+# --- 4. Gate (b): core.hooksPath NOT switched away from .husky ---
+assert "core.hooksPath stays .husky (never overwritten)" \
   '[ "$(git -C "$TARGET" config --get core.hooksPath)" = ".husky" ]'
-assert ".husky/pre-commit não foi tocado (md5 idêntico)" \
+assert ".husky/pre-commit was not touched (md5 identical)" \
   '[ "$(md5sum "$TARGET/.husky/pre-commit" | cut -d\  -f1)" = "$HUSKY_MD5_BEFORE" ]'
 
-# --- 5. Gate (c): hook do usuário sobrevive + hooks do harness entram ---
+# --- 5. Gate (c): user hook survives + harness hooks come in ---
 python3 - "$TARGET/.claude/settings.json" > "$WORK/settings-check.json" <<'PYEOF'
 import json, sys
 d = json.load(open(sys.argv[1]))
@@ -138,32 +138,32 @@ out = {
 }
 json.dump(out, sys.stdout)
 PYEOF
-assert "settings.json: hook do usuário sobrevive" \
+assert "settings.json: user hook survives" \
   'python3 -c "import json;d=json.load(open(\"$WORK/settings-check.json\"));exit(0 if d[\"user_hook_present\"] else 1)"'
-assert "settings.json: hooks do harness foram adicionados" \
+assert "settings.json: harness hooks were added" \
   'python3 -c "import json;d=json.load(open(\"$WORK/settings-check.json\"));exit(0 if d[\"harness_hook_present\"] else 1)"'
-assert "settings.json: chave permissions preservada verbatim" \
+assert "settings.json: permissions key preserved verbatim" \
   'python3 -c "import json;d=json.load(open(\"$WORK/settings-check.json\"));exit(0 if d[\"permissions_preserved\"] else 1)"'
 
-# --- 6. .harness/answers.yml gravado (pré-requisito de copier update futuro) ---
-assert ".harness/answers.yml gravado no projeto-alvo" '[ -f "$TARGET/.harness/answers.yml" ]'
+# --- 6. .harness/answers.yml written (prerequisite for a future copier update) ---
+assert ".harness/answers.yml written in the target project" '[ -f "$TARGET/.harness/answers.yml" ]'
 
-# --- 7. Idempotência: rodar de novo não duplica blocos nem hooks ---
+# --- 7. Idempotency: running again does not duplicate blocks or hooks ---
 if ! "$INSTALLER" "$TARGET" --vcs-ref HEAD \
     --data project_name=brownfield-e2e-fixture --data owner_name=Tester \
     --defaults >> "$INSTALL_LOG" 2>&1; then
-  echo "FAIL: 2ª rodada de harness-install.sh falhou"
+  echo "FAIL: 2nd run of harness-install.sh failed"
   FAIL=1
 fi
-assert "2ª rodada: AGENTS.md não duplica o marcador" \
+assert "2nd run: AGENTS.md does not duplicate the marker" \
   '[ "$(grep -c "orions-belt:begin" "$TARGET/AGENTS.md")" -eq 1 ]'
-assert "2ª rodada: core.hooksPath ainda .husky" \
+assert "2nd run: core.hooksPath still .husky" \
   '[ "$(git -C "$TARGET" config --get core.hooksPath)" = ".husky" ]'
 
 echo
 if [ "$FAIL" -eq 0 ]; then
-  echo "RESULTADO: TODOS OS GATES BROWNFIELD PASSARAM (harness-install.sh e2e)"
+  echo "RESULT: ALL BROWNFIELD GATES PASSED (harness-install.sh e2e)"
 else
-  echo "RESULTADO: FALHAS DETECTADAS"
+  echo "RESULT: FAILURES DETECTED"
 fi
 exit "$FAIL"

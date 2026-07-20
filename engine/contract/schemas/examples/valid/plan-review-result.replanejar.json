@@ -5,7 +5,7 @@
   "proxima_acao": "replanejar",
   "replan_request": [
     {
-      "gap": "plano não cobre rollback",
+      "gap": "plan does not cover rollback",
       "evidencia": "docs/architecture/06-visao-deployment.md linha 40",
       "alteracao_obrigatoria": "adicionar passo de rollback ao plano"
     }

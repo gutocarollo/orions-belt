@@ -1,41 +1,42 @@
 #!/usr/bin/env python3
-"""ref_integrity.py — integridade referencial git-aware (renames/deletes).
+"""ref_integrity.py — git-aware referential integrity (renames/deletes).
 
-Porte do `guto-wiki` (padronizacao-documentacao/artefatos/scripts/
-ref-integrity.py — ver docs/planning/research/01-guto-wiki.md §b) para o
-`engine/` do agent-harness. Mesma troca estrutural do `docs_wiki_lint.py`
-irmão: `load_config()`/`config_csv()` locais REMOVIDOS, substituídos pelo
-import de `engine/_tooling_conf.py` (parser único — não repete a
-triplicação DRY que o próprio guto-wiki não corrigiu). `ROOT` passa a vir
-de `_tooling_conf.project_root()` em vez de `git rev-parse --show-toplevel`
-inline (a MESMA chamada existia aqui — agora está centralizada no módulo
-compartilhado, junto com o fallback HARNESS_PROJECT_ROOT/CLAUDE_PROJECT_DIR
-que o `docs_wiki_lint.py` também usa).
+Port of `guto-wiki` (padronizacao-documentacao/artefatos/scripts/
+ref-integrity.py — see docs/planning/research/01-guto-wiki.md §b) into the
+agent-harness `engine/`. Same structural swap as the sibling
+`docs_wiki_lint.py`: the local `load_config()`/`config_csv()` were REMOVED,
+replaced by importing `engine/_tooling_conf.py` (single parser — does not
+repeat the DRY triplication that guto-wiki itself never fixed). `ROOT` now
+comes from `_tooling_conf.project_root()` instead of an inline
+`git rev-parse --show-toplevel` (the SAME call used to live here — it is now
+centralized in the shared module, together with the
+HARNESS_PROJECT_ROOT/CLAUDE_PROJECT_DIR fallback that `docs_wiki_lint.py`
+also uses).
 
-FONTE ÚNICA (SOLID/DRY) consumida por 3 adaptadores finos:
-  - pre-commit git hook  → --staged   (resolve/grep no INDEX; bloqueia o commit)
-  - skill invocável      → --range A..B
-  - loop scheduled       → --since <ref>
+SINGLE SOURCE (SOLID/DRY) consumed by 3 thin adapters:
+  - pre-commit git hook  → --staged   (resolve/grep in the INDEX; blocks the commit)
+  - invokable skill      → --range A..B
+  - scheduled loop       → --since <ref>
 
-Duas checagens determinísticas:
-  (A) broken-md-links   — links markdown `](path)` que não resolvem.
-  (B) stale-citations   — citações vivas ao PATH/nome ANTIGO de arquivos renomeados/deletados
-                          no git diff do seletor. Reconcilia falso-positivo vs falso-negativo:
-                          basename que SUMIU do repo → busca por basename (pega citação sem path);
-                          basename que AINDA existe (renomeado) → busca só por PATH completo antigo
-                          (não flag `multi-tenancy.md` que resolve para o novo local).
+Two deterministic checks:
+  (A) broken-md-links   — markdown links `](path)` that do not resolve.
+  (B) stale-citations   — live citations to the OLD PATH/name of files renamed/deleted
+                          in the selector's git diff. Reconciles false-positive vs false-negative:
+                          basename that VANISHED from the repo → search by basename (catches a citation without a path);
+                          basename that STILL exists (renamed) → search only by the old full PATH
+                          (do not flag `multi-tenancy.md` that resolves to the new location).
 
-Eixo "onde-buscar" rege AMBAS as checagens: --staged usa o INDEX (git show :path /
-git cat-file -e :path / git grep --cached); --range/--since usam o working tree em HEAD.
+The "where-to-search" axis governs BOTH checks: --staged uses the INDEX (git show :path /
+git cat-file -e :path / git grep --cached); --range/--since use the working tree at HEAD.
 
-Dois níveis de isenção:
-  - is_archive (check A e B): docs/_arquivo/, .understand-anything/ (+.trash) — arqueologia pura.
-  - is_historical (só check B / stale-citation): + docs/adr/, docs/auditorias/, docs/qa-evidence/, **/log.md
-    — CITAÇÃO em prosa a nome antigo é snapshot legítimo, mas LINK markdown clicável quebrado ali NÃO é
-    isento (check A enforça: o índice não pode ter link morto).
-Exceções conhecidas (auto-output de geradores, backup manual): `.ref-integrity-allowlist`.
+Two exemption levels:
+  - is_archive (check A and B): docs/_arquivo/, .understand-anything/ (+.trash) — pure archaeology.
+  - is_historical (only check B / stale-citation): + docs/adr/, docs/auditorias/, docs/qa-evidence/, **/log.md
+    — a prose CITATION to an old name is a legitimate snapshot, but a broken clickable markdown LINK there is NOT
+    exempt (check A enforces: the index cannot have a dead link).
+Known exceptions (generator auto-output, manual backup): `.ref-integrity-allowlist`.
 
-Exit 1 se houver referência quebrada real; 0 caso contrário. `--json` para saída máquina.
+Exit 1 if there is a real broken reference; 0 otherwise. `--json` for machine output.
 """
 from __future__ import annotations
 
@@ -59,23 +60,23 @@ LINK_RE = re.compile(r"\]\(\s*([^)\s]+)")
 
 
 def _fence_flags(text: str) -> list[bool]:
-    """1:1 com `text.splitlines()`: True se a linha está dentro de (ou é o marcador de) um code fence.
-    Fonte única da lógica de fence — não passa por join/splitlines (evita perder linha em branco final)."""
+    """1:1 with `text.splitlines()`: True if the line is inside (or is the marker of) a code fence.
+    Single source of the fence logic — does not round-trip through join/splitlines (avoids losing a trailing blank line)."""
     flags: list[bool] = []
     in_fence = False
     for line in text.splitlines():
         s = line.lstrip()
         if s.startswith("```") or s.startswith("~~~"):
             in_fence = not in_fence
-            flags.append(True)  # o próprio marcador de fence também é zerado
+            flags.append(True)  # the fence marker itself is also blanked
         else:
             flags.append(in_fence)
     return flags
 
 
 def blank_code_fences(text: str) -> str:
-    """Zera o conteúdo de blocos ``` / ~~~ (1:1 por linha). Link/citação DENTRO de fence é EXEMPLO
-    de código, não referência navegável — não deve flagar."""
+    """Blank the content of ``` / ~~~ blocks (1:1 per line). A link/citation INSIDE a fence is a code
+    EXAMPLE, not a navigable reference — it must not be flagged."""
     lines = text.splitlines()
     return "\n".join("" if fl else ln for ln, fl in zip(lines, _fence_flags(text)))
 
@@ -84,17 +85,17 @@ ROOT = str(project_root())
 
 
 def sh(args: list[str]) -> str:
-    # cwd=ROOT é uma correção introduzida por este porte, não um detalhe
-    # cosmético: na fonte (guto-wiki), `ROOT = sh(["git","rev-parse",
-    # "--show-toplevel"]).strip()` era DERIVADO da cwd ambiente do processo
-    # — ROOT e "repo git da cwd" nunca podiam divergir. Aqui `ROOT` vem de
-    # `project_root()`, que pode ser OVERRIDDEN via HARNESS_PROJECT_ROOT/
-    # CLAUDE_PROJECT_DIR para um path diferente da cwd real do processo.
-    # Sem `cwd=ROOT` em toda chamada git, os comandos git operariam sobre o
-    # repo da cwd ambiente enquanto os paths de arquivo seriam resolvidos
-    # contra `ROOT` — um mismatch silencioso. Mesma correção aplicada em
-    # `exists_in_index()` e `git_grep()` abaixo (chamadas de subprocess.run
-    # que não passam por `sh()`).
+    # cwd=ROOT is a fix introduced by this port, not a cosmetic detail: in
+    # the source (guto-wiki), `ROOT = sh(["git","rev-parse",
+    # "--show-toplevel"]).strip()` was DERIVED from the process's ambient
+    # cwd — ROOT and "the cwd's git repo" could never diverge. Here `ROOT`
+    # comes from `project_root()`, which can be OVERRIDDEN via
+    # HARNESS_PROJECT_ROOT/CLAUDE_PROJECT_DIR to a path different from the
+    # process's real cwd. Without `cwd=ROOT` on every git call, the git
+    # commands would operate on the ambient cwd's repo while file paths were
+    # resolved against `ROOT` — a silent mismatch. Same fix applied in
+    # `exists_in_index()` and `git_grep()` below (subprocess.run calls that
+    # do not go through `sh()`).
     return subprocess.run(args, cwd=ROOT, capture_output=True, text=True).stdout
 
 ARCHIVE_PREFIXES = set(get_config_csv("REF_INTEGRITY_ARCHIVE_PREFIXES", ["docs/_arquivo/"]))
@@ -102,7 +103,7 @@ ARCHIVE_CONTAINS = set(get_config_csv("IGNORED_TOOL_DIRS", [".understand-anythin
 
 
 def load_allowlist() -> set[str]:
-    """Termos a ignorar globalmente (auto-output de geradores, backups). 1 por linha; '#' = comentário."""
+    """Terms to ignore globally (generator auto-output, backups). 1 per line; '#' = comment."""
     p = os.path.join(ROOT, ".ref-integrity-allowlist")
     terms: set[str] = set()
     if os.path.exists(p):
@@ -114,18 +115,18 @@ def load_allowlist() -> set[str]:
 
 
 def is_archive(path: str) -> bool:
-    """Arqueologia pura — nem link clicável precisa resolver (docs mortos/scratch)."""
+    """Pure archaeology — not even a clickable link needs to resolve (dead/scratch docs)."""
     p = path.replace("\\", "/")
     return any(p.startswith(prefix) for prefix in ARCHIVE_PREFIXES) or any(token in p for token in ARCHIVE_CONTAINS)
 
 
 def is_historical(path: str) -> bool:
-    """Registro histórico/snapshot: CITAÇÃO em prosa a nome antigo é legítima (check B exempta).
-    Mas LINK markdown clicável quebrado NÃO é exempto aqui (check A usa is_archive, mais estreito)."""
+    """Historical record/snapshot: a prose CITATION to an old name is legitimate (check B exempts it).
+    But a broken clickable markdown LINK is NOT exempt here (check A uses is_archive, which is narrower)."""
     p = path.replace("\\", "/")
     if is_archive(p):
         return True
-    # ADR imutável (Nygard), auditorias e qa-evidence = snapshots datados; log.md = append-only
+    # immutable ADR (Nygard), audits and qa-evidence = dated snapshots; log.md = append-only
     if p.startswith(("docs/adr/", "docs/auditorias/", "docs/qa-evidence/")):
         return True
     if os.path.basename(p) == "log.md":
@@ -135,7 +136,7 @@ def is_historical(path: str) -> bool:
 
 def has_allowed_ext(path: str) -> bool:
     base = os.path.basename(path)
-    if base.endswith(".snyk") or base == ".snyk":  # dotfile: splitext dá ext vazia
+    if base.endswith(".snyk") or base == ".snyk":  # dotfile: splitext yields an empty ext
         return True
     return os.path.splitext(path)[1] in ALLOW_EXT
 
@@ -148,8 +149,8 @@ def exists_in_index(relpath: str) -> bool:
     if subprocess.run(["git", "cat-file", "-e", f":{relpath}"],
                       cwd=ROOT, capture_output=True).returncode == 0:
         return True
-    # diretório não é blob endereçável por `:path`; existe no index se há arquivo tracked sob ele
-    # (senão link a dir — ex.: `sources/some-subdir/` — vira falso-positivo só no modo --staged).
+    # a directory is not a blob addressable by `:path`; it exists in the index if there is a tracked file under it
+    # (otherwise a link to a dir — e.g. `sources/some-subdir/` — becomes a false-positive only in --staged mode).
     return bool(sh(["git", "ls-files", "--", f"{relpath}/"]).strip())
 
 
@@ -179,7 +180,7 @@ def rd_pairs(diff_args: list[str]) -> list[tuple[str, str | None]]:
 
 
 def git_grep(term: str, cached: bool) -> list[tuple[str, int, str]]:
-    # term é o PATTERN (-e); busca no index (--cached) ou no working tree tracked.
+    # term is the PATTERN (-e); search the index (--cached) or the tracked working tree.
     cmd = ["git", "grep", "-n", "-F"] + (["--cached"] if cached else []) + ["-e", term]
     res = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     hits: list[tuple[str, int, str]] = []
@@ -194,8 +195,8 @@ _blank_cache: dict = {}
 
 
 def _in_fence(f: str, ln: int, cached: bool) -> bool:
-    """True se a linha `ln` de `f` está dentro de um code fence (só se aplica a .md). Usa flags 1:1
-    (não o texto blanked round-tripped) — a última linha do arquivo é indexada corretamente."""
+    """True if line `ln` of `f` is inside a code fence (only applies to .md). Uses the 1:1 flags
+    (not the round-tripped blanked text) — the file's last line is indexed correctly."""
     key = (f, cached)
     if key not in _blank_cache:
         try:
@@ -221,12 +222,12 @@ def check_stale_citations(diff_args, cached, tracked_bases, allow) -> list[dict]
                 continue
             if f.endswith(".md") and _in_fence(f, ln, cached):
                 continue
-            # token isolado (não sufixo/prefixo de nome maior, ex. e01-leaderboard.png)
+            # isolated token (not a suffix/prefix of a longer name, e.g. e01-leaderboard.png)
             m2 = re.search(r"(?<![\w-])(" + PATH_TOKEN + re.escape(term) + PATH_TOKEN + r")(?![\w-])", content)
             if not m2:
                 continue
-            # se o path ao redor do match RESOLVE (foi corrigido p/ novo local, ou é outro arquivo
-            # que só contém o nome como substring), não é stale.
+            # if the path around the match RESOLVES (was fixed to the new location, or is another file
+            # that merely contains the name as a substring), it is not stale.
             tok = m2.group(1).lstrip("./")
             cands = [os.path.join(os.path.dirname(f), tok), tok]
             if any(path_exists(c, cached) for c in cands):
@@ -250,8 +251,8 @@ def _md_targets(text: str):
 
 
 def _resolve_link(f: str, tgt: str, staged: bool) -> bool:
-    tgt = urllib.parse.unquote(tgt)  # link com espaço/acento (%20) resolve para o nome real no disco
-    # tenta dir-relativo E repo-relativo (docs citam paths repo-relativos sem '/' inicial)
+    tgt = urllib.parse.unquote(tgt)  # a link with a space/accent (%20) resolves to the real name on disk
+    # try dir-relative AND repo-relative (docs cite repo-relative paths without a leading '/')
     if tgt.startswith("/"):
         cands = [tgt.lstrip("/")]
     else:
@@ -262,16 +263,16 @@ def _resolve_link(f: str, tgt: str, staged: bool) -> bool:
 
 def _scan_md_text(f: str, text: str, staged: bool, allow: set[str]) -> list[dict]:
     findings: list[dict] = []
-    for ln, tgt, line in _md_targets(blank_code_fences(text)):  # link em fence é exemplo, não navega
+    for ln, tgt, line in _md_targets(blank_code_fences(text)):  # a link in a fence is an example, not navigable
         if tgt in allow:
             continue
         if tgt.startswith("{"):
-            # Placeholder de runtime (`{baseDir}/...`, `{skillDir}/...`) — convenção de autoria de
-            # Claude Skills onde o loader da skill resolve o token na hora, não um path literal do
-            # repo. Achado real ao portar 4 skills de terceiros (agentic-actions-auditor, fp-check,
-            # sarif-parsing, semgrep-rule-creator) p/ templates/: 42 dos 46 findings iniciais eram
-            # este padrão. Pattern-based (não allowlist por item) porque a convenção se repete em
-            # qualquer skill nova que adote `{baseDir}` — 1 regra cobre todas, não uma linha por link.
+            # Runtime placeholder (`{baseDir}/...`, `{skillDir}/...`) — a Claude Skills authoring
+            # convention where the skill loader resolves the token at load time, not a literal repo
+            # path. Real finding while porting 4 third-party skills (agentic-actions-auditor, fp-check,
+            # sarif-parsing, semgrep-rule-creator) into templates/: 42 of the 46 initial findings were
+            # this pattern. Pattern-based (not per-item allowlist) because the convention recurs in
+            # any new skill that adopts `{baseDir}` — 1 rule covers them all, not one line per link.
             continue
         if not _resolve_link(f, tgt, staged):
             findings.append({"check": "broken-md-link", "file": f, "line": ln,
@@ -287,7 +288,7 @@ def check_md_links(staged: bool, allow: set[str]) -> list[dict]:
     else:
         files = [f for f in tracked_files() if f.endswith(".md")]
     for f in files:
-        if is_archive(f):  # link clicável quebrado é ruído mesmo em log/auditoria/adr; só _arquivo é isento
+        if is_archive(f):  # a broken clickable link is noise even in log/audit/adr; only _arquivo is exempt
             continue
         try:
             text = sh(["git", "show", f":{f}"]) if staged else open(os.path.join(ROOT, f), encoding="utf-8").read()
@@ -298,9 +299,9 @@ def check_md_links(staged: bool, allow: set[str]) -> list[dict]:
 
 
 def selftest() -> int:
-    """Teste negativo institucionalizado (lição: guard só conta depois de VER o FAIL). Cria 2 .md
-    temporários em docs/: um com link morto real (DEVE flagar) e um com o mesmo link morto SÓ dentro
-    de code fence (NÃO deve flagar — valida blank_code_fences). Restaura o estado ao fim."""
+    """Institutionalized negative test (lesson: a guard only counts after you SEE the FAIL). Creates 2
+    temporary .md files in docs/: one with a real dead link (MUST flag) and one with the same dead link
+    ONLY inside a code fence (must NOT flag — validates blank_code_fences). Restores the state at the end."""
     d = os.path.join(ROOT, "docs")
     os.makedirs(d, exist_ok=True)
     dead = os.path.join(d, ".selftest-ref-dead.md")
@@ -311,13 +312,13 @@ def selftest() -> int:
     try:
         rel_dead, rel_fenced = os.path.relpath(dead, ROOT), os.path.relpath(fenced, ROOT)
         if not _scan_md_text(rel_dead, open(dead, encoding="utf-8").read(), False, set()):
-            print("SELFTEST FAIL: link morto não detectado"); ok = False
+            print("SELFTEST FAIL: dead link not detected"); ok = False
         else:
-            print("selftest: link morto detectado — OK")
+            print("selftest: dead link detected — OK")
         if _scan_md_text(rel_fenced, open(fenced, encoding="utf-8").read(), False, set()):
-            print("SELFTEST FAIL: link em code fence flagado (blank_code_fences quebrado)"); ok = False
+            print("SELFTEST FAIL: link in code fence flagged (blank_code_fences broken)"); ok = False
         else:
-            print("selftest: link em code fence ignorado — OK")
+            print("selftest: link in code fence ignored — OK")
     finally:
         os.remove(dead)
         os.remove(fenced)
@@ -326,12 +327,12 @@ def selftest() -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Integridade referencial git-aware (renames/deletes).")
+    ap = argparse.ArgumentParser(description="git-aware referential integrity (renames/deletes).")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--staged", action="store_true", help="pre-commit: staged + index")
-    g.add_argument("--range", metavar="A..B", help="skill: range de commits")
+    g.add_argument("--range", metavar="A..B", help="skill: commit range")
     g.add_argument("--since", metavar="REF", help="loop: REF..HEAD")
-    g.add_argument("--selftest", action="store_true", help="teste negativo do próprio detector")
+    g.add_argument("--selftest", action="store_true", help="negative test of the detector itself")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
 
@@ -350,7 +351,7 @@ def main() -> int:
         findings += check_stale_citations([rng], False, tracked_bases, allow)
         findings += check_md_links(staged=False, allow=allow)
 
-    # dedup global (A e B podem reportar o mesmo link p/ arquivo deletado)
+    # global dedup (A and B may report the same link for a deleted file)
     uniq, keys = [], set()
     for x in findings:
         k = (x["file"], x["line"], x.get("target") or x.get("term"))
@@ -362,14 +363,14 @@ def main() -> int:
     if a.json:
         print(json.dumps(findings, indent=2, ensure_ascii=False))
     elif not findings:
-        print("ref-integrity: OK — nenhuma referência quebrada")
+        print("ref-integrity: OK — no broken references")
     else:
-        print(f"ref-integrity: FAIL — {len(findings)} referência(s) quebrada(s):")
+        print(f"ref-integrity: FAIL — {len(findings)} broken reference(s):")
         for x in findings:
             if x["check"] == "broken-md-link":
-                print(f"  [link]  {x['file']}:{x['line']} → {x['target']} (não resolve)")
+                print(f"  [link]  {x['file']}:{x['line']} → {x['target']} (does not resolve)")
             else:
-                print(f"  [stale] {x['file']}:{x['line']} → cita '{x['term']}' (removido; novo: {x['new'] or '—'})")
+                print(f"  [stale] {x['file']}:{x['line']} → cites '{x['term']}' (removed; new: {x['new'] or '—'})")
     return 1 if findings else 0
 
 
