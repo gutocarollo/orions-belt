@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# harness-install.sh — BROWNFIELD-SAFE bootstrap for installing/updating
-# orions-belt into a target project (B3, BLOCKING gap from the post-v1.0.0
-# adversarial review).
+# harness-install.sh — fail-closed bootstrap/reconciler for installing or
+# updating orions-belt in an existing target project.
 #
 # THE PROBLEM THIS SOLVES: `copier copy <orions-belt> <target-project>
 # --trust` run DIRECTLY against a repo that already exists (the common case —
@@ -15,30 +14,19 @@
 #   - with `--skip`: none of the harness lands in those 4 files — a lame
 #     install (settings.json without the harness hooks, for example).
 # `copier update` does NOT solve this: it assumes the target project was BORN
-# from a previous `copier copy` of the SAME template (it needs an existing
-# `.harness/answers.yml` and a coherent history) — it is not meant to "adopt"
-# a repo that already had a life of its own before the harness. That is why
-# this bootstrap exists as a 3rd path, specific to the FIRST brownfield
-# adoption (subsequent updates use `copier update` normally — see
-# docs/manual/14-instalacao-e-update.md).
+# from a previous `copier copy` of the SAME template and cannot see local-only
+# brownfield content. This installer is therefore the supported path for both
+# first adoption and subsequent brownfield updates.
 #
 # THE FLOW (never writes to the target project via a direct `copier copy`):
 #   1. Renders the ENTIRE framework into a temporary SCRATCH directory via
 #      `copier copy` (this repo's root — never the target project).
-#   2. Applies it to the target project, file by file:
-#        - does not exist in the target      -> copy directly.
-#        - is one of the 4 SENSITIVE files (AGENTS.md, .claude/CLAUDE.md,
-#          .claude/settings.json, .gitignore) AND already exists in the target
-#          -> ADDITIVE merge via `.harness/lib/merge_docs.py` (the binary
-#          RENDERED in scratch — the correct version of the tag/HEAD being
-#          installed, not the one from this script's local checkout).
-#        - any other framework-owned file that already exists (reinstall
-#          /manual update) -> direct overwrite (it is harness-owned, not
-#          user-owned; see Known gap in the harness-init skill).
-#   3. `.harness/answers.yml` reaches the target project via step 2 (it is
-#      just one more "file that does not exist" on the 1st install) — a
-#      prerequisite for `copier update --answers-file .harness/answers.yml`
-#      in the future.
+#   2. Plans every target path before writing. Unknown collisions, symlinks,
+#      escapes and locally-modified managed files are fatal. The four shared
+#      surfaces use additive/semantic merge; whole-file paths require an
+#      ownership hash in `.harness/install-manifest.json`.
+#   3. Applies with per-file atomic replace and a rollback journal. This is a
+#      recoverable multi-file apply, not a filesystem-wide atomicity claim.
 #   4. Activates `core.hooksPath` (A2) by calling `.harness/lib/set_hooks_path.sh`
 #      EXPLICITLY against the TARGET. The equivalent `_task` in copier.yml
 #      runs inside the SCRATCH in this flow (cwd = scratch during the `copier
@@ -49,7 +37,7 @@
 #      comment in set_hooks_path.sh.
 #
 # Usage:
-#   ./harness-install.sh <target-dir> [-- ] [copier copy args...]
+#   ./harness-install.sh <target-dir> [installer options] [--] [copier args...]
 #
 # Examples:
 #   ./harness-install.sh ../my-project \
@@ -65,12 +53,17 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-usage: harness-install.sh <target-dir> [copier copy args...]
+usage: harness-install.sh <target-dir> [installer options] [--] [copier copy args...]
 
-Installs/adopts orions-belt into a target project (greenfield OR brownfield)
-without overwriting pre-existing AGENTS.md / .claude/CLAUDE.md /
-.claude/settings.json / .gitignore and without clobbering an already-customized
-core.hooksPath. See the comment at the top of this file for the full flow (B3).
+Installs/adopts orions-belt into a target project using a fail-closed plan,
+ownership hashes, semantic merges and a rollback journal.
+
+installer options:
+  --dry-run          render and print/write the plan without changing target
+  --plan-json PATH   persist the machine-readable plan at PATH
+  --preserve PATH    explicitly preserve one existing unowned/modified path
+                     (repeatable; exact project-relative path, no glob)
+  --chain-hooks      explicitly chain .githooks/pre-commit into Husky
 
 examples:
   ./harness-install.sh ../my-project \
@@ -78,8 +71,8 @@ examples:
   ./harness-install.sh ../my-project --vcs-ref v1.0.0 \
     --data project_name=my-project --data owner_name=Someone --defaults
 
-'--trust' is added automatically. Other args are forwarded verbatim to
-'copier copy' (--data, --vcs-ref, --defaults, etc.).
+'--trust' is added automatically. Arguments after '--' and unrecognized
+options are forwarded to 'copier copy' (--data, --vcs-ref, --defaults, etc.).
 EOF
 }
 
@@ -89,9 +82,61 @@ if [ $# -lt 1 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
 fi
 
 TARGET_ARG="$1"; shift
-COPIER_ARGS=("$@")
+COPIER_ARGS=()
+INSTALL_DRY_RUN=0
+INSTALL_PLAN_JSON=""
+CHAIN_HOOKS=0
+HAS_DATA_FILE=0
+PRESERVE_PATHS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run)
+      INSTALL_DRY_RUN=1
+      shift
+      ;;
+    --plan-json)
+      [ "$#" -ge 2 ] || { echo "harness-install.sh: --plan-json requires a path" >&2; exit 64; }
+      INSTALL_PLAN_JSON="$2"
+      shift 2
+      ;;
+    --chain-hooks)
+      CHAIN_HOOKS=1
+      shift
+      ;;
+    --preserve)
+      [ "$#" -ge 2 ] || { echo "harness-install.sh: --preserve requires a project-relative path" >&2; exit 64; }
+      PRESERVE_PATHS+=("$2")
+      shift 2
+      ;;
+    --data-file)
+      [ "$#" -ge 2 ] || { echo "harness-install.sh: --data-file requires a path" >&2; exit 64; }
+      HAS_DATA_FILE=1
+      COPIER_ARGS+=("$1" "$2")
+      shift 2
+      ;;
+    --data-file=*)
+      HAS_DATA_FILE=1
+      COPIER_ARGS+=("$1")
+      shift
+      ;;
+    --)
+      shift
+      COPIER_ARGS+=("$@")
+      break
+      ;;
+    *)
+      COPIER_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_SOURCE="${BASH_SOURCE[0]:-}"
+if [ -z "$SCRIPT_SOURCE" ] || [ ! -f "$SCRIPT_SOURCE" ]; then
+  echo "harness-install.sh: this script must run from a checked-out, version-pinned orions-belt release; piping it to 'bash -s' cannot locate copier.yml." >&2
+  exit 64
+fi
+HERE="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 REPO_ROOT="$HERE"
 
 if ! command -v uvx >/dev/null 2>&1; then
@@ -116,113 +161,148 @@ if [ -f "$REPO_ROOT/templates/.harness/lib/check-platform.sh" ]; then
   echo >&2
 fi
 
-mkdir -p "$TARGET_ARG"
-TARGET="$(cd "$TARGET_ARG" && pwd)"
+if [ -L "$TARGET_ARG" ]; then
+  echo "harness-install.sh: target root is a symlink; refusing to install: $TARGET_ARG" >&2
+  exit 2
+fi
+mkdir -p -- "$TARGET_ARG"
+TARGET="$(cd "$TARGET_ARG" && pwd -P)"
+TARGET_REAL="$TARGET"
+
+# On a managed reinstall, existing answers are the baseline and explicit
+# --data flags are overrides (Copier's documented precedence).  Without this,
+# omitting any prior non-default answer silently resets that capability to the
+# template default.  Only trust an answers file whose bytes still match this
+# installer's ownership manifest; unknown/tampered brownfield files are not
+# consumed before the fail-closed planner gets to reject them.
+MANAGED_ANSWERS="$TARGET_REAL/.harness/answers.yml"
+MANAGED_MANIFEST="$TARGET_REAL/.harness/install-manifest.json"
+if [ "$HAS_DATA_FILE" -eq 0 ] && [ -f "$MANAGED_ANSWERS" ] && [ -f "$MANAGED_MANIFEST" ]; then
+  if python3 - "$TARGET_REAL" "$MANAGED_ANSWERS" "$MANAGED_MANIFEST" <<'PY'
+import hashlib, json, os, pathlib, sys
+root = pathlib.Path(sys.argv[1]).resolve()
+answers = pathlib.Path(sys.argv[2])
+manifest = pathlib.Path(sys.argv[3])
+try:
+    if answers.is_symlink() or manifest.is_symlink():
+        raise ValueError
+    answers_real = answers.resolve(strict=True)
+    manifest_real = manifest.resolve(strict=True)
+    if os.path.commonpath((str(root), str(answers_real))) != str(root):
+        raise ValueError
+    if os.path.commonpath((str(root), str(manifest_real))) != str(root):
+        raise ValueError
+    state = json.loads(manifest.read_text(encoding="utf-8"))
+    entry = state.get("files", {}).get(".harness/answers.yml", {})
+    digest = hashlib.sha256(answers.read_bytes()).hexdigest()
+    if entry.get("strategy") != "owned" or entry.get("last_applied_sha256") != digest:
+        raise ValueError
+except (OSError, ValueError, json.JSONDecodeError):
+    raise SystemExit(1)
+PY
+  then
+    COPIER_ARGS+=(--data-file "$MANAGED_ANSWERS")
+    echo "harness-install.sh: reusing managed answers; explicit --data values take precedence" >&2
+  else
+    echo "harness-install.sh: existing answers are not proven by the ownership manifest; not loading them before conflict validation" >&2
+  fi
+fi
+
+# Copier synthesizes a different pseudo-commit for every render from a dirty
+# local checkout.  Keeping that volatile value in answers.yml makes an
+# otherwise identical reinstall rewrite the file forever.  The reconciler has
+# its own provenance contract, so normalize both Copier metadata fields to the
+# stable release identity used by the install manifest.
+TEMPLATE_REF="$(git -C "$REPO_ROOT" describe --tags --always --dirty 2>/dev/null || echo unversioned)"
+TEMPLATE_SOURCE="$(git -C "$REPO_ROOT" config --get remote.origin.url 2>/dev/null || basename "$REPO_ROOT")"
 
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/harness-install.XXXXXX")"
 cleanup() { rm -rf "$SCRATCH"; }
 trap cleanup EXIT
 
 echo "harness-install.sh: rendering $REPO_ROOT -> scratch $SCRATCH ..." >&2
-uvx copier copy "$REPO_ROOT" "$SCRATCH" "${COPIER_ARGS[@]}" --trust -q
+uvx copier copy "$REPO_ROOT" "$SCRATCH" "${COPIER_ARGS[@]}" \
+  --data "project_root=$TARGET_REAL" --trust -q
 
 LIB="$SCRATCH/.harness/lib"
-if [ ! -f "$LIB/merge_docs.py" ]; then
-  echo "harness-install.sh: render did not produce .harness/lib/merge_docs.py -- broken template or incomplete --data (see stderr above)." >&2
+if [ ! -f "$LIB/merge_docs.py" ] || [ ! -f "$LIB/install_apply.py" ]; then
+  echo "harness-install.sh: render did not produce the merge/apply engine -- broken template or incomplete --data (see stderr above)." >&2
   exit 1
 fi
 
-# The 4 SENSITIVE files (B3): may have user content, NEVER a direct overwrite
-# if they already exist in the target.
-SENSITIVE_PATHS=(
-  "AGENTS.md"
-  ".claude/CLAUDE.md"
-  ".claude/settings.json"
-  ".gitignore"
+python3 - "$SCRATCH/.harness/answers.yml" "$TEMPLATE_SOURCE" "$TEMPLATE_REF" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+source, ref = sys.argv[2:]
+
+def yaml_scalar(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+seen = set()
+for index, line in enumerate(lines):
+    for key, value in (("_src_path", source), ("_commit", ref)):
+        if line.startswith(key + ":"):
+            newline = "\n" if line.endswith("\n") else ""
+            lines[index] = f"{key}: {yaml_scalar(value)}{newline}"
+            seen.add(key)
+if seen != {"_src_path", "_commit"}:
+    missing = sorted({"_src_path", "_commit"} - seen)
+    raise SystemExit(f"answers metadata missing required fields: {', '.join(missing)}")
+path.write_text("".join(lines), encoding="utf-8")
+PY
+
+# The rendered engine owns planning, containment, semantic merge and rollback.
+# It is loaded FROM SCRATCH so a pinned release always applies its matching
+# schema/merge behavior.  The target Git index is deliberately irrelevant.
+METADATA_JSON="$(python3 - "$TEMPLATE_SOURCE" "$TEMPLATE_REF" <<'PY'
+import json, sys
+print(json.dumps({"source": sys.argv[1], "ref": sys.argv[2]}))
+PY
+)"
+PLAN_OUT="${INSTALL_PLAN_JSON:-$SCRATCH/install-plan.json}"
+APPLY_ARGS=(
+  --scratch "$SCRATCH"
+  --target "$TARGET_REAL"
+  --plan-json "$PLAN_OUT"
+  --metadata-json "$METADATA_JSON"
 )
+[ "$INSTALL_DRY_RUN" -eq 1 ] && APPLY_ARGS+=(--dry-run)
+for preserved in "${PRESERVE_PATHS[@]}"; do
+  APPLY_ARGS+=(--preserve "$preserved")
+done
 
-is_sensitive() {
-  local rel="$1" s
-  for s in "${SENSITIVE_PATHS[@]}"; do
-    [ "$rel" = "$s" ] && return 0
-  done
-  return 1
-}
+echo "harness-install.sh: planning ownership/containment for $TARGET_REAL ..." >&2
+python3 "$LIB/install_apply.py" "${APPLY_ARGS[@]}" > "$SCRATCH/install-plan.stdout.json"
 
-N_CREATED=0
-N_OVERWRITTEN=0
-N_MERGED=0
-N_SKIPPED_ESCAPE=0
+python3 - "$PLAN_OUT" <<'PY'
+import json, sys
+plan = json.load(open(sys.argv[1], encoding="utf-8"))
+counts = plan.get("counts", {})
+print("harness-install.sh: plan " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+PY
 
-# Containment root: the canonical absolute path of TARGET. Every write must land
-# strictly inside it.
-TARGET_REAL="$(cd "$TARGET" 2>/dev/null && pwd -P)" || { echo "harness-install.sh: cannot resolve TARGET '$TARGET'." >&2; exit 1; }
-
-while IFS= read -r -d '' f; do
-  rel="${f#"$SCRATCH"/}"
-  dest="$TARGET/$rel"
-
-  # Symlink/containment guard (adversarial-audit gap #3): never write THROUGH a
-  # symlink or OUTSIDE TARGET. A symlinked dest (or a symlinked parent dir, e.g.
-  # a `.codex/` pointing elsewhere) would make `cp`/merge write to an external
-  # file. Resolve the real parent; if it escapes TARGET_REAL, skip and warn.
-  parent="$(dirname "$dest")"
-  mkdir -p "$parent" 2>/dev/null || true
-  real_parent="$(cd "$parent" 2>/dev/null && pwd -P)" || real_parent=""
-  case "${real_parent:-/nonexistent}/" in
-    "$TARGET_REAL"/*|"$TARGET_REAL"/) : ;;  # inside target — ok
-    *)
-      echo "SKIP (path escapes target via symlink): $rel -> ${real_parent:-unresolved}" >&2
-      N_SKIPPED_ESCAPE=$((N_SKIPPED_ESCAPE + 1))
-      continue
-      ;;
-  esac
-  # If dest itself is a symlink, drop it so we write a real file inside TARGET
-  # (never overwrite whatever it points at). For the 4 sensitive files this also
-  # means a symlinked instruction file is replaced, not written through.
-  if [ -L "$dest" ]; then
-    echo "note: replacing symlink with a real file: $rel" >&2
-    rm -f "$dest"
-  fi
-
-  if is_sensitive "$rel"; then
-    if [ -f "$dest" ]; then
-      case "$rel" in
-        AGENTS.md|.claude/CLAUDE.md)
-          RESULT="$(python3 "$LIB/merge_docs.py" markdown --existing "$dest" --new "$f" --label harness-install)"
-          ;;
-        .claude/settings.json)
-          RESULT="$(python3 "$LIB/merge_docs.py" settings-json --existing "$dest" --new "$f")"
-          ;;
-        .gitignore)
-          RESULT="$(python3 "$LIB/merge_docs.py" gitignore --existing "$dest" --new "$f" --label harness-install)"
-          ;;
-      esac
-      N_MERGED=$((N_MERGED + 1))
-      echo "merge  $rel"
-      echo "$RESULT" | sed 's/^/         /'
-    else
-      mkdir -p "$(dirname "$dest")"
-      cp "$f" "$dest"
-      N_CREATED=$((N_CREATED + 1))
-      echo "create $rel"
-    fi
-  else
-    if [ -f "$dest" ]; then
-      N_OVERWRITTEN=$((N_OVERWRITTEN + 1))
-    else
-      N_CREATED=$((N_CREATED + 1))
-    fi
-    mkdir -p "$(dirname "$dest")"
-    cp "$f" "$dest"
-  fi
-done < <(find "$SCRATCH" -type f -print0)
+if [ "$INSTALL_DRY_RUN" -eq 1 ]; then
+  echo "harness-install.sh: dry-run complete; target was not changed."
+  echo "  plan: $PLAN_OUT"
+  exit 0
+fi
 
 # A2: activates core.hooksPath without clobbering, explicitly against the
 # TARGET (see the note in the header — the _task in copier.yml does not reach
 # the target project in this flow because it ran inside the SCRATCH in step 1).
 if [ -f "$LIB/set_hooks_path.sh" ]; then
-  bash "$LIB/set_hooks_path.sh" "$TARGET"
+  if [ "$CHAIN_HOOKS" -eq 1 ]; then
+    if ! bash "$LIB/set_hooks_path.sh" "$TARGET" --chain-existing; then
+      echo "harness-install.sh: WARNING -- files were installed, but explicit Husky chaining failed; inspect .husky/pre-commit and retry manually." >&2
+    fi
+  else
+    if ! bash "$LIB/set_hooks_path.sh" "$TARGET"; then
+      echo "harness-install.sh: WARNING -- files were installed, but core.hooksPath activation failed; run bash .harness/lib/set_hooks_path.sh manually." >&2
+    fi
+  fi
 fi
 
 # H2/A6.2 (post-v1.0.0 adversarial review): ds-gate.sh is a RATCHET —
@@ -262,12 +342,6 @@ fi
 
 echo
 echo "harness-install.sh: done."
-echo "  new files created:                   $N_CREATED"
-echo "  framework-owned overwritten:         $N_OVERWRITTEN"
-echo "  sensitive files merged (additive):   $N_MERGED"
-echo "  skipped (path escaped target):       $N_SKIPPED_ESCAPE"
-if [ "$N_OVERWRITTEN" -gt 0 ]; then
-  echo "  NOTE: 'overwritten' are paths this render ships; if a same-named file was your own"
-  echo "        (not a prior harness install), it was replaced. No ownership manifest yet — review with 'git diff'."
-fi
-echo "  .harness/answers.yml written to:     $TARGET/.harness/answers.yml (needed for a future 'copier update')"
+echo "  ownership state: $TARGET/.harness/install-manifest.json"
+echo "  rendered answers: $TARGET/.harness/answers.yml"
+echo "  update policy: rerun the installer from a pinned newer release; do not use raw Copier update for brownfield/local-only surfaces"

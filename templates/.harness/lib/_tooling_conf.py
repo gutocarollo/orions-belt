@@ -27,22 +27,23 @@ Format of `.harness/harness.conf` (docs/planning/research/03-hardcodes.md §3):
     KEY=value
     # whole-line or trailing comment (preceded by a space)
     CSV_KEY=item1,item2,item3          # get_config_csv() does the split
-    DERIVED_KEY=${OTHER_KEY}-suffix    # sequential top-to-bottom expansion,
-                                        # same semantics as `source` in bash
+    DERIVED_KEY=${OTHER_KEY}-suffix    # sequential top-to-bottom expansion
+    LITERAL='${OTHER_KEY}'             # single quotes suppress expansion
 
 Zero external dependencies (pure stdlib) — same design decision as guto-wiki
 (docs/planning/research/01-guto-wiki.md §"Structural observations" item 2):
 `configparser` would require `[x]` sections which the format does not use;
-`tomllib` is stdlib only from 3.11 onward. `KEY=value` + `split("#", 1)` is
-enough and runs on any Python 3.
+`tomllib` is stdlib only from 3.11 onward. The small parser below supports
+quoted values and treats `#` as a comment delimiter only at the start of a
+value or after whitespace. This keeps ordinary values such as `C# Academy`
+and `p@ss#word` intact without adding a dependency.
 
 Bash consumers (most real harness hooks are `.sh`, not `.py` — see
 `engine/hooks/subagent-throttle.sh`) do not import this module directly; they
 call the CLI mode (`python3 _tooling_conf.py get KEY default`). This avoids the
 obvious-but-wrong alternative of reimplementing the parser in pure bash
-(`source`-ing the `.conf` directly would work for the happy path, but would
-silently diverge from the Python parser in 2 spots: a comment glued on with no
-space before the `#`, and the multi-name file fallback) — exactly the kind of
+(`source`-ing the `.conf` directly would execute shell substitutions and would
+silently diverge from the quote-aware parser and multi-name file fallback) — exactly the kind of
 DRY-violating duplication this module exists to avoid.
 
 Fail-open (docs/planning/research/07-autoconfig-patterns.md §Synthesis-3):
@@ -81,6 +82,7 @@ _ENV_CONF_PATH = "HARNESS_CONF_PATH"
 _ENV_ROOT_HINTS: tuple[str, ...] = ("HARNESS_PROJECT_ROOT", "CLAUDE_PROJECT_DIR")
 
 _VAR_REF_RE = re.compile(r"\$\{(\w+)\}")
+_LITERAL_DOLLAR = "\x00HARNESS_LITERAL_DOLLAR\x00"
 
 _MAX_CLIMB = 64  # safety ceiling — never climbs more than this
 
@@ -171,7 +173,49 @@ def _expand_refs(value: str, values_so_far: dict[str, str]) -> str:
         key = match.group(1)
         return values_so_far.get(key, os.environ.get(key, match.group(0)))
 
-    return _VAR_REF_RE.sub(_sub, value)
+    return _VAR_REF_RE.sub(_sub, value).replace(_LITERAL_DOLLAR, "$")
+
+
+def _parse_value(raw: str) -> tuple[str, bool]:
+    """Parse one dotenv-like value without executing shell syntax.
+
+    Quotes protect whitespace and ``#``. Outside quotes, ``#`` begins a
+    trailing comment only when it is the first character or follows
+    whitespace; embedded hashes therefore remain data. Backslash escapes the
+    next character inside quotes. Matching outer quotes are removed;
+    apostrophes and backslashes in unquoted data remain literal.
+    """
+    value = raw.strip()
+    if not value:
+        return "", True
+
+    out: list[str] = []
+    quote: str | None = None
+    outer_quote = value[0] if value[0] in {"'", '"'} else None
+    escaped = False
+    for index, char in enumerate(value):
+        if escaped:
+            out.append(_LITERAL_DOLLAR if char == "$" else char)
+            escaped = False
+            continue
+        if quote and char == "\\":
+            escaped = True
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            else:
+                out.append(char)
+            continue
+        if not out and index == 0 and char in {"'", '"'}:
+            quote = char
+            continue
+        if char == "#" and (index == 0 or value[index - 1].isspace()):
+            break
+        out.append(char)
+    if escaped:
+        out.append("\\")
+    return "".join(out).rstrip(), outer_quote != "'"
 
 
 def load_config(start: Path | None = None) -> dict[str, str]:
@@ -187,13 +231,15 @@ def load_config(start: Path | None = None) -> dict[str, str]:
     except OSError:
         return values
     for raw_line in text.splitlines():
-        line = raw_line.split("#", 1)[0].strip()
-        if not line or "=" not in line:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
         key = key.strip()
-        value = _expand_refs(value.strip(), values)
-        values[key] = value
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            continue
+        parsed, allow_expansion = _parse_value(value)
+        values[key] = _expand_refs(parsed, values) if allow_expansion else parsed
     return values
 
 

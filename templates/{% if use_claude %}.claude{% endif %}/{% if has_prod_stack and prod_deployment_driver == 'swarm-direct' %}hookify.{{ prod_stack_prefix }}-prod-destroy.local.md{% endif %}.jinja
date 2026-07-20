@@ -4,7 +4,7 @@
 {%- set _protected = ([prod_stack_prefix] + ((prod_protected_services | default("")).split() if prod_protected_services else [])) | unique | select | list -%}
 ---
 name: {{ prod_stack_prefix }}-prod-destroy
-enabled: true
+enabled: true # generated only for deployment_driver=swarm-direct
 event: bash
 action: block
 pattern: docker\s+(service\s+rm|stack\s+rm)[\s\S]*({{ _protected | join("|") }})|docker\s+service\s+scale[\s\S]*{{ prod_stack_prefix }}_[a-z]+=0

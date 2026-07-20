@@ -1,7 +1,16 @@
 {
   "$schema_note": "Machine-readable provenance inventory for orions-belt. Produced during H5/B2 hardening (D2=A: license the whole framework as CC BY-SA 4.0). Every third-party or cross-repo-derived component is listed; components with no entry here are original work authored directly in this repo by Augusto Carollo, licensed under the repo-root LICENSE (CC BY-SA 4.0).",
   "generated_on": "2026-07-18",
-  "verification_method": "git clone https://github.com/trailofbits/skills.git && git -C skills checkout cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af; then byte-for-byte `cmp` of every file under templates/{% if use_claude %}.claude{% endif %}/skills/<name>/ against plugins/<plugin>/skills/<name>/ in the upstream clone.",
+  "verification_method": "git clone https://github.com/trailofbits/skills.git && git -C skills checkout cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af; compare both file sets after subtracting the 20 declared exclusions, require exactly 69 distributed files, then byte-for-byte `cmp` every distributed file against its upstream counterpart.",
+  "trailofbits_snapshot": {
+    "skills_count": 10,
+    "distributed_files_count": 69,
+    "excluded_upstream_files": {
+      "trail-of-bits-mark.svg": 10,
+      "agents/openai.yaml": 10
+    },
+    "exclusion_reason": "Logos are omitted to avoid trademark/endorsement ambiguity; per-skill OpenAI metadata is not part of the runtime-neutral skill content port."
+  },
   "components": [
     {
       "component": "semgrep",
@@ -12,7 +21,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 6,
-      "modifications_summary": "verbatim skill text under CC BY-SA 4.0; trail-of-bits-mark.svg logo removed (trademark, not covered by copyright license)."
+      "modifications_summary": "6 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "codeql",
@@ -23,7 +32,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 16,
-      "modifications_summary": "verbatim skill text under CC BY-SA 4.0; trail-of-bits-mark.svg logo removed (trademark, not covered by copyright license)."
+      "modifications_summary": "16 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "sarif-parsing",
@@ -34,7 +43,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 3,
-      "modifications_summary": "verbatim skill text under CC BY-SA 4.0; trail-of-bits-mark.svg logo removed (trademark, not covered by copyright license)."
+      "modifications_summary": "3 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "semgrep-rule-creator",
@@ -45,7 +54,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 3,
-      "modifications_summary": "none — verbatim copy."
+      "modifications_summary": "3 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "variant-analysis",
@@ -56,7 +65,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 13,
-      "modifications_summary": "verbatim skill text under CC BY-SA 4.0; trail-of-bits-mark.svg logo removed (trademark, not covered by copyright license)."
+      "modifications_summary": "13 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "insecure-defaults",
@@ -67,7 +76,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 2,
-      "modifications_summary": "verbatim skill text under CC BY-SA 4.0; trail-of-bits-mark.svg logo removed (trademark, not covered by copyright license)."
+      "modifications_summary": "2 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "supply-chain-risk-auditor",
@@ -78,7 +87,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 2,
-      "modifications_summary": "verbatim skill text under CC BY-SA 4.0; trail-of-bits-mark.svg logo removed (trademark, not covered by copyright license)."
+      "modifications_summary": "2 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "agentic-actions-auditor",
@@ -89,7 +98,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 13,
-      "modifications_summary": "verbatim skill text under CC BY-SA 4.0; trail-of-bits-mark.svg logo removed (trademark, not covered by copyright license)."
+      "modifications_summary": "13 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "audit-context-building",
@@ -100,7 +109,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 4,
-      "modifications_summary": "verbatim skill text under CC BY-SA 4.0; trail-of-bits-mark.svg logo removed (trademark, not covered by copyright license)."
+      "modifications_summary": "4 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "fp-check",
@@ -111,7 +120,7 @@
       "license": "CC-BY-SA-4.0",
       "status": "byte_identical",
       "files_count": 7,
-      "modifications_summary": "verbatim skill text under CC BY-SA 4.0; trail-of-bits-mark.svg logo removed (trademark, not covered by copyright license)."
+      "modifications_summary": "7 distributed content files are verbatim under CC BY-SA 4.0; the upstream trail-of-bits-mark.svg and agents/openai.yaml are intentionally omitted."
     },
     {
       "component": "diataxis",
@@ -200,9 +209,9 @@
     "flags": [
       {
         "severity": "low-non-blocking",
-        "component": "trail-of-bits-mark.svg (shipped inside 8 of the 10 trailofbits/skills directories: semgrep, codeql, sarif-parsing, variant-analysis, insecure-defaults, supply-chain-risk-auditor, agentic-actions-auditor, audit-context-building)",
-        "issue": "This is Trail of Bits' company logo/wordmark, not just prose content. CC BY-SA 4.0 covers the copyright in the file, but a company logo is also typically protected as a TRADEMARK — redistributing it inside a generic, differently-branded framework risks being read as implying Trail of Bits endorsement of orions-belt, which the license does not grant (CC BY-SA Section 2(a)(6): 'No endorsement'). This is a trademark/passing-off consideration, not a copyright/license blocker, so it is flagged here rather than silently resolved.",
-        "recommendation": "Non-blocking for this rodada (B2 scope is license+provenance, not asset removal). Coordinator/owner should decide: (a) keep as-is now that NOTICE explicitly disclaims endorsement, or (b) strip the 8 trail-of-bits-mark.svg files from the templates in a follow-up (they are decorative brand assets referenced by the SKILL.md 'assets' folder convention, not functional to the skill's logic)."
+        "component": "trail-of-bits-mark.svg (one upstream logo in each of the 10 imported skill directories)",
+        "issue": "Trail of Bits' company logo/wordmark is excluded from distribution because the CC BY-SA copyright grant does not grant trademark endorsement rights. All 10 upstream copies are absent from this framework.",
+        "recommendation": "Keep the 10 logos excluded and enforce the declared exclusion set in the provenance regression test."
       }
     ]
   }

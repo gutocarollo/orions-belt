@@ -6,7 +6,7 @@
 #
 # Formato: KEY=value · comentário com '#' (precedido de espaço se for trailing)
 # · CSV inline (`item1,item2`) · `${OUTRA_KEY}` expande sequencialmente
-# (top-to-bottom), mesma semântica de `source` em bash.
+# (top-to-bottom); aspas simples e `\$` preservam referências literais.
 # Parser único: engine/_tooling_conf.py (get_config/get_config_csv/
 # get_config_int/get_config_bool) — nenhum script duplica esta lógica.
 #
@@ -67,6 +67,7 @@ HARNESS_MCP_PROXY_IMAGE={{ harness_mcp_proxy_image }}
 # =========================================================================
 # --- prod (bloco só existe se has_prod_stack=true; ausente = sem guardas de prod) ---
 # =========================================================================
+PROD_DEPLOYMENT_DRIVER={{ prod_deployment_driver }}
 PROD_STACK_PREFIX={{ prod_stack_prefix }}
 PROD_PROTECTED_SERVICES="{{ prod_protected_services }}"
 PROD_REGISTRY_URL={{ prod_registry_url }}
@@ -88,6 +89,9 @@ HARNESS_LESSONS_INJECT_MAX_LINES={{ harness_lessons_inject_max_lines }}
 HARNESS_UI_EVIDENCE_SKIP_TTL_SECONDS={{ harness_ui_evidence_skip_ttl_seconds }}
 HARNESS_UI_EVIDENCE_THEMES={{ harness_ui_evidence_themes }}
 HARNESS_REAP_CHROMIUM_MAX_AGE_SECONDS={{ harness_reap_chromium_max_age_seconds }}
+# One `<pid> <proc-start-ticks> <reap-after-epoch>` file per process explicitly
+# owned by this project. The reaper refuses global discovery and active leases.
+HARNESS_PID_REGISTRY_DIR=.harness/pids
 HARNESS_RUNAWAY_CPU_PCT={{ harness_runaway_cpu_pct }}
 HARNESS_RUNAWAY_MIN_AGE_SECONDS={{ harness_runaway_min_age_seconds }}
 HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS={{ harness_marathon_max_blocks_without_progress }}
@@ -150,5 +154,7 @@ HARNESS_LEDGER_DIR=${HARNESS_RUNS_DIR}/agent-swarm
 # --- e2e ---
 # =========================================================================
 E2E_ADMIN_EMAIL={{ e2e_admin_email }}
-E2E_ADMIN_PASSWORD={{ e2e_admin_password }}
+# Secret value is runtime-only. Export this variable in the test runner/CI;
+# never store the password in this versionable config.
+E2E_ADMIN_PASSWORD_ENV_VAR={{ e2e_admin_password_env_var }}
 {%- endif %}

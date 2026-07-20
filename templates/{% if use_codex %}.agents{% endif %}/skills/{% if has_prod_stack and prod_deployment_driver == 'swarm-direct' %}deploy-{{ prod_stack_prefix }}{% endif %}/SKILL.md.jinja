@@ -1,0 +1,1 @@
+{%- include "templates/{% if use_claude %}.claude{% endif %}/skills/{% if has_prod_stack and prod_deployment_driver == 'swarm-direct' %}deploy-{{ prod_stack_prefix }}{% endif %}/SKILL.md.jinja" -%}

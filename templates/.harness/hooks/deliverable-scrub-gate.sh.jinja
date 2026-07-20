@@ -13,8 +13,14 @@
 # generalized to both runtimes; a known limitation, not a crash.
 set -uo pipefail
 IN=$(cat)
-command -v jq >/dev/null 2>&1 || exit 0
-FP=$(jq -r '.tool_input.file_path // .tool_response.filePath // empty' <<<"$IN")
+command -v python3 >/dev/null 2>&1 || {
+  echo "deliverable-scrub-gate: WARN python3 unavailable; gate inactive" >&2
+  exit 0
+}
+FP="$(python3 -c 'import json,sys
+try:
+ d=json.load(sys.stdin); print(d.get("tool_input", {}).get("file_path") or d.get("tool_response", {}).get("filePath") or "")
+except Exception: pass' <<<"$IN")"
 [ -n "$FP" ] || exit 0
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 BAN="$ROOT/.claude/deliverable-banlist.txt"

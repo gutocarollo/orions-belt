@@ -84,8 +84,8 @@ else
 fi
 assert "A6.2: with an existing baseline, a new hardcode MAKES the ratchet fail (exit != 0)" \
   '[ "$DS_GATE_EXIT" -ne 0 ]'
-assert "A6.2: message reports SUBIU for the violated dimension" \
-  'grep -q "SUBIU" "$WORK/ds-gate-check.out"'
+assert "A6.2: violated dimension has the stable INCREASED status" \
+  'grep -qE "^color-gray[[:space:]].*INCREASED" "$WORK/ds-gate-check.out"'
 
 # =============================================================================
 # A6.3 — .ds-allowlist matches by real GLOB (fnmatch), not literal substring

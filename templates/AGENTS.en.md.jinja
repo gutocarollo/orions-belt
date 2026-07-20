@@ -357,7 +357,7 @@ No plan-level completion claim ("100%", "plan executed", "everything fixed", "re
 Fixed rules:
 - **Denominator of the %** = only items executable by the team; third-party infra OUT. A PARTIAL item counts as 0.
 - **Evidence is from THIS session**: a command run now (exit code, test count, grep with path+Line), never memory from a previous session.
-{% if has_prod_stack %}
+{% if has_prod_stack and prod_deployment_driver == 'swarm-direct' %}
 - A claim about **prod** requires evidence on the prod target (state-check of the deploy skill), never localhost.
 {% endif %}
 - A **visual** claim requires evidence from the `ui-evidence` skill (PNG + manifest).

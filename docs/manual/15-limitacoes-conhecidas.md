@@ -14,7 +14,7 @@ Registro honesto do que o framework hoje NÃO cobre, cobre parcialmente, ou cobr
 
 ## Assimetrias de runtime (Claude Code × Codex)
 
-1. **`harness-init` só tem invocação nativa no Claude Code.** A skill vive em `.claude/skills/` — um projeto `use_codex=true`/`use_claude=false` não tem como invocá-la por nome; o workaround é chamar os motores diretamente (`python3 .harness/lib/scan_project.py all` + `merge_docs.py`), que são runtime-neutros. Candidata a mover para o diretório de skills dual-runtime (`HARNESS_SKILLS_DIR`).
+1. ~~`harness-init` só tinha invocação nativa no Claude Code.~~ **Corrigido:** a mesma fonte renderiza byte-idêntica em `.claude/skills/harness-init` e `.agents/skills/harness-init`; `run-<projeto>` e o adapter `deploy-*` Swarm também são gerados nas duas superfícies quando suas capabilities estão configuradas.
 2. **`deliverable-scrub-gate` depende de path Claude-namespaced.** A banlist vive em `.claude/deliverable-banlist.txt`; num projeto Codex-only o arquivo não é gerado e o hook fica permanentemente fail-open (no-op). O mecanismo não foi generalizado para os dois runtimes.
 3. **Eventos sem equivalente no Codex:** `PostToolUseFailure` (coberto por `SubagentStop`, que assume disparo também em falha — suposição documentada no próprio [hooks.json.jinja](<../../templates/{% if use_codex %}.codex{% endif %}/hooks.json.jinja>), não confirmada em doc oficial), `SessionEnd` e `Notification` não existem lá.
 4. **Trust de hooks por hash no Codex:** cada edição de um script de `.harness/hooks/` invalida o hash confiado — o usuário reconfirma o trust a cada mudança. Sem workaround; custo operacional documentado.
@@ -22,7 +22,7 @@ Registro honesto do que o framework hoje NÃO cobre, cobre parcialmente, ou cobr
 
 ## Contratos que o projeto precisa preencher
 
-6. **`dev-doctor` genérico não sobe a stack.** O framework instala um dev-doctor mínimo ([dev-doctor.sh](../../templates/.harness/hooks/dev-doctor.sh), modos `status`/`reap`, parametrizado pela config central) — mas o modo `up` (SUBIR a stack dev) não existe nele: subir exige conhecer os comandos do projeto (compose, dev servers). Esse conteúdo entra por cima, tipicamente preenchendo a skill `run-<projeto>` (instalada como esqueleto).
+6. **`dev-doctor` genérico não sobe a stack.** O framework instala um dev-doctor mínimo ([dev-doctor.sh](../../templates/.harness/hooks/dev-doctor.sh), modos `status`/`reap`). A skill `run-<projeto>` só é gerada quando `harness_run_command` recebe um comando canônico real; vazio mantém a capability desabilitada, sem esqueleto executável baseado em `apps/web`/`apps/api` presumidos.
 7. ~~Loop de manutenção não é materializado.~~ **Resolvido em R5** (plano de resgate §2) — `.claude/loop.md` é gerado sempre que `use_claude=true` (capítulo 08). O que continua não coberto: o *agendamento* (o loop roda via `/loop` do Claude Code sob demanda, não em cron nativo) e a ausência de equivalente no Codex, que não tem comando de loop recorrente — nesse caso o workaround é um cron externo chamando o agente em modo não-interativo com o mesmo checklist.
 8. **Motor hookify é dependência externa.** O framework instala as REGRAS `.claude/hookify.*.local.md`; o motor é o plugin hookify do Claude Code. Sem o plugin (ou no Codex, que não o tem), as regras são texto inerte — os hooks de `.harness/hooks/` continuam funcionando (não dependem do hookify).
 
@@ -35,25 +35,32 @@ Registro honesto do que o framework hoje NÃO cobre, cobre parcialmente, ou cobr
 
 11. **Mapeamento de campo do hookify é hardcoded por ferramenta conhecida** (`command`, `new_text`, `file_path`...): tool nova ou runtime com schema diferente exige estender o motor do plugin, não é configurável (capítulo 07).
 12. **Distribuição como plugin é adiada.** O MVP é repo-native (Copier renderiza os registros). Um empacotamento futuro como plugin do runtime SUBSTITUIRÁ o registro em settings.json — nunca somará (dois registros = todo gate dispara em dobro; a regra anti-double-fire do capítulo 14).
-13. **Skills de terceiros portadas como estão.** O pacote de skills de auditoria/segurança (capítulo 09) inclui 10 skills (**69 arquivos** — só o conteúdo; o logo `trail-of-bits-mark.svg` e os `agents/openai.yaml` do upstream NÃO são redistribuídos) copiadas byte-a-byte do [trailofbits/skills](https://github.com/trailofbits/skills) (commit `cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af`, CC BY-SA 4.0). Até H5/B2 desta rodada isso era redistribuído **sem** `LICENSE`/`NOTICE`/inventário de proveniência no repo — a frase antiga deste item ("mantém a proveniência original dos autores") era uma afirmação sem lastro, contradita pela auditoria adversarial que constatou a ausência desses artefatos. Corrigido: a proveniência real (por componente, upstream, commit, licença, byte-idêntico/modificado) está agora em [`PROVENANCE.json`](../../PROVENANCE.json) na raiz do repo, com os créditos exigidos pela CC BY-SA em [`NOTICE`](../../NOTICE). O framework não parametriza nem mantém essas 10 skills — atualizações continuam vindo de re-port manual contra o upstream.
+13. **Skills de terceiros portadas como estão.** O pacote de auditoria/segurança (capítulo 09) inclui 10 skills e **69 arquivos de conteúdo** copiados byte-a-byte do [trailofbits/skills](https://github.com/trailofbits/skills) (commit `cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af`, CC BY-SA 4.0). Foram omitidos **10 `trail-of-bits-mark.svg`** e **10 `agents/openai.yaml`**, um de cada por skill. Até H5/B2 isso era redistribuído sem `LICENSE`/`NOTICE`/inventário; agora [`PROVENANCE.json`](../../PROVENANCE.json) e [`NOTICE`](../../NOTICE) registram upstream, commit, licença, contagens e exclusões. O framework não mantém automaticamente essas skills: atualizações continuam vindo de re-port manual contra o upstream.
 14. **`templates/NOTICE.jinja` não tem regressão automatizada de sincronia.** O NOTICE materializado em todo projeto-alvo (raiz, sempre; seção de skills condicional a `use_claude`) foi testado manualmente nesta rodada (`uvx copier copy . <scratch> --vcs-ref HEAD --data use_claude=true|false`, conferindo o conteúdo renderizado nos dois casos) — mas não existe um `templates/tests/test_*.sh` que falhe automaticamente se a lista de skills de terceiros mudar (skill nova do trailofbits adicionada/removida, `diataxis` alterado) e `templates/NOTICE.jinja` não for atualizado junto. Enquanto isso não existe, quem adicionar/remover uma skill de terceiro nas rodadas futuras precisa lembrar de atualizar `templates/NOTICE.jinja` (e o `NOTICE`/`PROVENANCE.json` da raiz) manualmente — mesmo risco de drift que qualquer doc não tem lint dedicado.
 
 ## Auditoria adversarial 2026-07-20 — gaps de instalação brownfield
 
-Uma auditoria de integração isolada (harness × MakersHub, clones limpos) provou que o instalador **não é "brownfield-safe" em sentido absoluto**: retorna `0` mas pode causar perda silenciosa. Correções desta rodada e gaps ainda abertos:
+Uma auditoria de integração isolada (harness × MakersHub, clones limpos) provou que a **versão anterior** do instalador não era "brownfield-safe" em sentido absoluto: retornava `0` mas podia causar perda silenciosa. Correções desta rodada e gaps ainda abertos:
 
 **Corrigidos (com evidência/regressão):**
 - **TOML de custom agent inválido** — um comentário `{#- -#}` entre duas chaves comia o newline, gerando `model_reasoning_effort = "high"developer_instructions = """` (tomllib falhava → o agent Codex não carregava). Corrigido (marcador não-stripping); regressão em `test_codex_parity.sh` (d.2) valida TODOS os `.codex/agents/*.toml` + `config.toml` renderizados.
-- **Proveniência Trail of Bits** — NOTICE/PROVENANCE afirmavam 79 arquivos e distribuição de logos; a realidade é **69 byte-idênticos, 0 logos, 0 openai.yaml** (contado no repo). Corrigido em `NOTICE`, `PROVENANCE.json` (files_count) e `templates/NOTICE.jinja` (que ainda estava em PT + afirmava incluir o logo).
-- **Escrita fora do alvo via symlink** — `harness-install.sh` seguia symlink em `$dest`/parent e escrevia fora do projeto. Corrigido: guarda de containment (`pwd -P` do parent dentro de `TARGET_REAL`; symlink em `$dest` é removido antes do write; contador `skipped (path escaped target)`; repro do `.codex`→externo confirma arquivo externo INTACTO).
+- **Proveniência Trail of Bits** — NOTICE/PROVENANCE afirmavam 79 arquivos e distribuição de logos; a realidade é **69 arquivos byte-idênticos distribuídos, 10 logos omitidos e 10 `agents/openai.yaml` omitidos**. Corrigido em `NOTICE`, `PROVENANCE.json`, `templates/NOTICE.jinja` e capítulo 09.
 
-**Abertos (arquitetura/decisão — NÃO resolvidos ainda):**
-- **Sem manifest de ownership:** colisão fora dos 4 arquivos sensíveis é sobrescrita sem provar que o arquivo era do harness (pode apagar uma skill homônima do usuário). Mitigação atual: aviso no summary + guia `git diff`. Fix real = manifest de instalação.
-- **`copier update` em brownfield com instruções git-ignored** apaga o conteúdo próprio do usuário (o merge só sobrevive se os arquivos estão no índice Git). **Recomendação: não usar `copier update` em brownfield até haver E2E que prove o contrário** (ver capítulo 14, seção "Atualizar").
-- **Scanner não entende monorepo de subdiretório não-padrão** (ex.: `backend/`+`frontend/` do MakersHub): lê manifestos da raiz → não detecta framework/testes/portas reais. Fix = varredura de subdiretórios.
-- **Superfícies centrais podem ficar git-ignored + conflito com Husky** (`core.hooksPath` vs `.husky/`): sem chaining automático. Instalação não-transacional (falha parcial não faz rollback).
+**Corrigidos nesta arquitetura:**
+- `.harness/install-manifest.json` prova ownership de arquivo inteiro por hash; colisão desconhecida e edição local abortam antes de escrever. As quatro superfícies compartilhadas usam merge semântico.
+- O planner rejeita raiz, destino ou ancestral symlink, path inseguro e arquivo não regular antes da mutação. Journal + backups restauram falha controlada e a próxima execução recupera journal deixado por crash.
+- O scanner faz descoberta limitada de workspaces, diretórios convencionais e raízes explícitas, sem `rglob` irrestrito nem traversal de symlink; expõe evidência e confiança por componente.
+- Husky não é deslocado. `--chain-hooks` faz chaining idempotente e explícito; sem consentimento, o instalador avisa e deixa o manager intacto.
 
-Até fechar os abertos, tratar instalação em repo existente como **review-required** (`git diff`), não "sucesso absoluto".
+**Abertos por política/escopo, não escondidos:**
+- Não há prune automático: paths removidos upstream ficam `orphaned` e preservados.
+- Um path marcado `preserve` não recebe updates do harness; reverter essa decisão ainda exige edição/ação de ownership futura.
+- Atomicidade é por arquivo com recuperação, não uma transação global; hooks/Husky e baseline de DS são pós-tarefas fora do rollback dos arquivos.
+- `copier update` nativo continua proibido após adoção brownfield; repetir `harness-install.sh` é o updater suportado.
+- Deploy só gera skill/guardas mutantes para `prod_deployment_driver=swarm-direct`. EasyPanel fica fail-closed até existir adapter próprio.
+- O UI evidence valida estrutura/CRC/pixels/hash, mas não atesta criptograficamente que o PNG veio do Playwright; quem controla simultaneamente o working tree e o diretório de evidência pode fabricar um par PNG+manifest válido.
+
+Instalação em repo existente continua **review-required**, mas colisões e escapes agora falham fechados em vez de depender somente de `git diff` posterior.
 
 ## Como usar este apêndice
 

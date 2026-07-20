@@ -46,6 +46,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.parse
 from pathlib import Path
 
@@ -304,10 +305,12 @@ def selftest() -> int:
     ONLY inside a code fence (must NOT flag — validates blank_code_fences). Restores the state at the end."""
     d = os.path.join(ROOT, "docs")
     os.makedirs(d, exist_ok=True)
-    dead = os.path.join(d, ".selftest-ref-dead.md")
-    fenced = os.path.join(d, ".selftest-ref-fence.md")
-    open(dead, "w", encoding="utf-8").write("[x](./nao-existe-zzz-selftest.md)\n")
-    open(fenced, "w", encoding="utf-8").write("```\n[x](./nao-existe-zzz-selftest.md)\n```\n")
+    dead_fd, dead = tempfile.mkstemp(prefix=".selftest-ref-dead-", suffix=".md", dir=d, text=True)
+    fenced_fd, fenced = tempfile.mkstemp(prefix=".selftest-ref-fence-", suffix=".md", dir=d, text=True)
+    with os.fdopen(dead_fd, "w", encoding="utf-8") as fh:
+        fh.write("[x](./nao-existe-zzz-selftest.md)\n")
+    with os.fdopen(fenced_fd, "w", encoding="utf-8") as fh:
+        fh.write("```\n[x](./nao-existe-zzz-selftest.md)\n```\n")
     ok = True
     try:
         rel_dead, rel_fenced = os.path.relpath(dead, ROOT), os.path.relpath(fenced, ROOT)
@@ -320,8 +323,11 @@ def selftest() -> int:
         else:
             print("selftest: link in code fence ignored — OK")
     finally:
-        os.remove(dead)
-        os.remove(fenced)
+        for path in (dead, fenced):
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
     print("ref-integrity --selftest: PASS" if ok else "ref-integrity --selftest: FAIL")
     return 0 if ok else 1
 
@@ -339,6 +345,20 @@ def main() -> int:
     if a.selftest:
         return selftest()
 
+    if not a.staged:
+        selector = a.range if a.range else f"{a.since}..HEAD"
+        probe = subprocess.run(
+            ["git", "diff", "--no-ext-diff", "--name-only", selector, "--"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode not in (0, 1):
+            detail = (probe.stderr or probe.stdout).strip().splitlines()
+            reason = detail[-1] if detail else "unknown git revision"
+            print(f"ref-integrity: ERROR — invalid git selector '{selector}': {reason}", file=sys.stderr)
+            return 2
+
     allow = load_allowlist()
     tracked_bases = {os.path.basename(p) for p in tracked_files()}
     findings: list[dict] = []
@@ -347,7 +367,7 @@ def main() -> int:
         findings += check_stale_citations(["--cached"], True, tracked_bases, allow)
         findings += check_md_links(staged=True, allow=allow)
     else:
-        rng = a.range if a.range else f"{a.since}..HEAD"
+        rng = selector
         findings += check_stale_citations([rng], False, tracked_bases, allow)
         findings += check_md_links(staged=False, allow=allow)
 

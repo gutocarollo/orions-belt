@@ -1,6 +1,6 @@
 ---
 name: {{ prod_stack_prefix }}-prod-prune
-enabled: true
+enabled: true # generated only for deployment_driver=swarm-direct
 event: bash
 action: block
 pattern: docker\s+(system|image|volume|container|builder)\s+prune

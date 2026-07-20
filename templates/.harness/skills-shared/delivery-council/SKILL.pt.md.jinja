@@ -29,7 +29,7 @@ description: Use em tarefas complexas do {{ project_name }} que envolvam impleme
 
 Coordene uma entrega dentro de `{{ project_root }}` usando Codex nativo: `AGENTS.md`, repo skills, custom agents, comandos reais e evidencia desta sessao.
 
-{#-
+{#
 PROVENIENCIA (vive SO no repo do framework — comentario Jinja nao renderiza no
 projeto-alvo; requisito F9-fixes: zero conteudo do doador no render): fusao de
 2 linhagens do council do harness-doador de referencia, feita em F1.5 sobre uma
@@ -40,7 +40,7 @@ agent-swarm; review-sempre-em-subagent + REVISORES: + continuacao do mesmo
 subagent + guard Understand-Anything vem da linhagem do doador vivo. Nenhuma
 das duas sozinha e o estado da arte — ver witness em
 templates/verification/council-witness.json.
--#}
+#}
 
 ## Argumentos de Entrada
 
@@ -327,15 +327,16 @@ Sempre comece por:
 
 - `AGENTS.md`
 - plano, issue, diff ou prompt fornecido pelo usuario
-- codigo real sob `apps/api`, `apps/web`, `packages`, migrations, scripts e testes
+- `python3 .harness/lib/scan_project.py all --target .` e os componentes reais reportados em `scan.components[]`
+- codigo real nos componentes detectados, mais migrations, scripts e testes encontrados por busca
 
 {% if harness_understand_apps_root %}Se o tema envolver `/understand`, Understand Anything, `.understand-anything`, `knowledge-graph`, grafo de codigo ou `compute-batches`, use a skill `understand-apps-incremental`. Regra bloqueante: o grafo do produto usa `PROJECT_ROOT={{ harness_understand_apps_root }}`, mas o Git root é a raiz do repo; incremental em `{{ harness_understand_apps_root }}/` deve gerar changed files com `git diff --relative={{ harness_understand_apps_root }} <last>..HEAD --name-only -- {{ harness_understand_apps_root }}` ou `bash .harness/lib/understand-apps-changed-files.sh`. Nunca alimente `compute-batches` com paths `{{ harness_understand_apps_root }}/api/...`; ele espera `api/...`.
 {% endif %}
 
-Leia tambem quando o tema exigir:
+Leia tambem quando o tema exigir e o path existir; ausencia e declarada, nunca substituida por topologia seed:
 
-- Arquitetura: `docs/architecture/README.md` e documentos relevantes em `docs/architecture`
-- UI/design-system: `docs/design-system/index.md`, docs relevantes em `docs/design-system`, `apps/web/styles/globals.css` e `apps/web/components/ui`
+- Arquitetura: indice/README e documentos canonicos realmente presentes
+- UI/design-system: docs existentes e tokens/estilos/componentes sob `{{ harness_web_app_dir }}`
 - Banco/dados: schema, migrations, services e queries no banco dev quando a conclusao depender de cardinalidade, status, NULL, integridade ou distribuicao real
 - Ferramentas, SDKs, frameworks, APIs, CLI ou cloud: documentacao atual conforme `AGENTS.md`
 

@@ -29,7 +29,7 @@ description: Use on complex {{ project_name }} tasks involving implementation, p
 
 Coordinate a delivery inside `{{ project_root }}` using native Codex: `AGENTS.md`, repo skills, custom agents, real commands and evidence from this session.
 
-{#-
+{#
 PROVENANCE (lives ONLY in the framework repo — a Jinja comment does not render in the
 target project; F9-fixes requirement: zero donor content in the render): fusion of
 2 lineages of the reference donor-harness council, done in F1.5 over an extracted
@@ -40,7 +40,7 @@ agent-swarm lineage; review-always-in-subagent + REVISORES: + continuation of th
 subagent + Understand-Anything guard come from the live donor lineage. Neither
 of the two alone is the state of the art — see witness in
 templates/verification/council-witness.json.
--#}
+#}
 
 ## Input Arguments
 
@@ -327,15 +327,16 @@ Always start from:
 
 - `AGENTS.md`
 - the plan, issue, diff or prompt provided by the user
-- real code under `apps/api`, `apps/web`, `packages`, migrations, scripts and tests
+- `python3 .harness/lib/scan_project.py all --target .` and the real components reported in `scan.components[]`
+- real code in detected components, plus migrations, scripts, and tests found by search
 
 {% if harness_understand_apps_root %}If the topic involves `/understand`, Understand Anything, `.understand-anything`, `knowledge-graph`, code graph or `compute-batches`, use the `understand-apps-incremental` skill. Blocking rule: the product graph uses `PROJECT_ROOT={{ harness_understand_apps_root }}`, but the Git root is the repo root; an incremental in `{{ harness_understand_apps_root }}/` must generate changed files with `git diff --relative={{ harness_understand_apps_root }} <last>..HEAD --name-only -- {{ harness_understand_apps_root }}` or `bash .harness/lib/understand-apps-changed-files.sh`. Never feed `compute-batches` with `{{ harness_understand_apps_root }}/api/...` paths; it expects `api/...`.
 {% endif %}
 
-Also read when the topic requires it:
+Also read when the topic requires it and the path exists; declare absence instead of substituting the seed topology:
 
-- Architecture: `docs/architecture/README.md` and relevant documents in `docs/architecture`
-- UI/design-system: `docs/design-system/index.md`, relevant docs in `docs/design-system`, `apps/web/styles/globals.css` and `apps/web/components/ui`
+- Architecture: index/README and canonical documents that are actually present
+- UI/design-system: existing docs and tokens/styles/components under `{{ harness_web_app_dir }}`
 - Database/data: schema, migrations, services and queries on the dev database when the conclusion depends on cardinality, status, NULL, integrity or real distribution
 - Tools, SDKs, frameworks, APIs, CLI or cloud: current documentation per `AGENTS.md`
 

@@ -1,107 +1,59 @@
 ---
 name: run-{{ project_name }}
-description: Starts the {{ project_name }} app in local development (monorepo). Use when the user asks to "run/start/spin up {{ project_name }}", "how do I start the app", "start the app", "bring up the project", "run dev", or whenever you need to bring up infra + backend + frontend to validate a change live. Adjust the sequence of commands/ports/gotchas below to this project's real stack — the skeleton comes from a real protocol (FastAPI+Next.js), but the process commands (uvicorn, next dev, docker compose) are examples, not universal.
+description: Starts {{ project_name }} in local development using the project's configured canonical command. Use when the user asks to run/start the project or when live validation requires the dev stack.
 ---
 
-# Run {{ project_name }} (local dev)
+# Run {{ project_name }} locally
 
-Monorepo with independent apps, if this project is a monorepo (as in the source example:
-`apps/api` + `apps/web` + `apps/collab`). A `docker-compose.dev.yml` brings up **only the infra**;
-backend and frontend run by hand, each in its own terminal — adapt if this project uses a different
-topology.
+This skill is generated only because an explicit project command was provided.
+Do not substitute guessed topology, Compose, database or port commands for the
+contract below.
 
-## Order (example — 3 required steps + 1 optional)
+## Start
 
-### 1. Infra (Docker — background)
+From the repository root:
+
 ```bash
-docker compose -f .{{ project_name }}/docker-compose.dev.yml up -d
-```
-Brings up (example; adjust to this project's real services):
-- **db** — Postgres, published on **`{{ harness_dev_db_port }}:{{ harness_dev_db_internal_port }}`** (host port {{ harness_dev_db_internal_port }} may already be taken by another Postgres). user/pass/db = `{{ project_name }}`.
-- **redis** — `{{ harness_dev_redis_port }}:{{ harness_dev_redis_port }}`.
-- other auxiliary services for this project (job queue, PDF generation, etc.).
-
-Wait for healthchecks to become `healthy`:
-```bash
-docker compose -f .{{ project_name }}/docker-compose.dev.yml ps
+{{ harness_run_command }}
 ```
 
-### 2. Backend (its own terminal)
-```bash
-cd apps/api && uvicorn app:app --reload --port {{ harness_dev_api_port }}
-```
-- Adjust the start command to this project's real framework (uvicorn/gunicorn/other).
-- Health: `curl -s -o /dev/null -w "%{http_code}" http://localhost:{{ harness_dev_api_port }}/api/v1/health` should return **200** (adjust to the real health path).
+Configured development ports:
 
-### 3. Frontend (another terminal)
-```bash
-cd apps/web && npm run dev -- -p {{ harness_dev_web_port }}
-```
-- Runs on **:{{ harness_dev_web_port }}** in this project{% if harness_reserved_ports %} (NOT {{ harness_reserved_ports }} — see port reservation below){% endif %}.
-- Health: open `http://localhost:{{ harness_dev_web_port }}`.
-
-### 4. (Optional) Auxiliary services
-Only needed if this project has a real-time collaboration/websocket service or
-similar (`{{ harness_dev_collab_port }}` reserved for it in the schema, if applicable).
-
-## Ports (summary)
-| Service | Port | Where |
-|---------|-------|------|
-| Postgres | {{ harness_dev_db_port }} → {{ harness_dev_db_internal_port }} | Docker |
-| Redis | {{ harness_dev_redis_port }} | Docker |
-| API | {{ harness_dev_api_port }} | process (by hand) |
-| Web | {{ harness_dev_web_port }} | process (by hand) |
+- web: `{{ harness_dev_web_port }}`
+- API: `{{ harness_dev_api_port }}`
 {%- if harness_dev_collab_port %}
-| Collab | {{ harness_dev_collab_port }} | process (by hand, optional) |
+- auxiliary/collaboration: `{{ harness_dev_collab_port }}`
 {%- endif %}
 
-## Postgres dev{% if has_prod_stack %} vs prod{% endif %} + MCP
+{% if harness_run_health_command -%}
+## Verify readiness
 
-{% if has_prod_stack -%}
-There are **two different Postgres instances** in this environment:
+Run the read-only health contract after startup:
 
-- **Local dev:** `{{ project_name }}-db-dev`, host port **{{ harness_dev_db_port }}**, connection
-  string `postgresql://{{ project_name }}:{{ project_name }}@localhost:{{ harness_dev_db_port }}/{{ project_name }}`.
-  This is the database used by the local API on `:{{ harness_dev_api_port }}`.
-- **Prod:** service `{{ prod_stack_prefix }}_postgres`. Not exposed directly on the host.
-{%- else -%}
-- **Local dev:** `{{ project_name }}-db-dev`, host port **{{ harness_dev_db_port }}**, connection
-  string `postgresql://{{ project_name }}:{{ project_name }}@localhost:{{ harness_dev_db_port }}/{{ project_name }}`.
-  This is the database used by the local API on `:{{ harness_dev_api_port }}`.
-{%- endif %}
-
-{% if harness_mcp_db_dev_port %}
-Canonical MCPs (if this project has a database MCP configured):
-
-- `postgres-{{ project_name }}-dev` — `unrestricted`, for investigation and local fixes, via `http://127.0.0.1:{{ harness_mcp_db_dev_port }}/mcp`.
-{%- if has_prod_stack and harness_mcp_db_prod_port %}
-- `postgres-{{ project_name }}-prod` — `restricted`/read-only, for production diagnostics, via `http://127.0.0.1:{{ harness_mcp_db_prod_port }}/mcp`.
-{%- endif %}
-{%- if harness_mcp_proxy_image %}
-
-The HTTP endpoints are served by persistent containers, image `{{ harness_mcp_proxy_image }}`.
-{%- endif %}
-
-Rule: if the question involves localhost `:{{ harness_dev_api_port }}/:{{ harness_dev_web_port }}` or local tests, use the dev MCP.
-{%- if has_prod_stack %} If it involves production, a deployed image or a real user, use the prod MCP (read-only) or the commands from the `deploy-{{ prod_stack_prefix }}` skill.{% endif %}
-{%- endif %}
-
-## Gotchas (example — check whether something equivalent happens in this project)
-1. **Port conflict**: if another local tool uses the same port as dev web, change the port
-   with the `-p` flag instead of editing `.env.local` — avoids a collision without touching shared config.
-2. **Corrupted bundler cache**: symptom "Can't resolve '<package>' in ...": clearing the bundler
-   cache (`.next`, `.turbo`, `node_modules/.cache`, depending on the tool) usually fixes it.
-3. **DB won't come up / `PANIC` / empty search_path**: check that the connection string points to the
-   correct host port ({{ harness_dev_db_port }}) and that the `{{ project_name }}` role has `search_path` configured.
-4. **Dev process orphan-storm**: some OSes don't kill child processes when the terminal closes.
-   Always stop with `Ctrl+C`; if it hangs the machine, kill processes whose cmdline matches the project path.
-5. **Venv/node_modules contaminated by root**: if some infra container does a bind-mount + install
-   as root, the result on the host ends up owned by root and breaks the local `run`/`uv run`. Common fix:
-   use a SEPARATE venv/deps directory on the host (e.g. `UV_PROJECT_ENVIRONMENT=.venv-host` in the
-   Python/uv case) so it doesn't collide with what the container wrote.
-
-## Shut down
 ```bash
-# Ctrl+C in the process terminals, then:
-docker compose -f .{{ project_name }}/docker-compose.dev.yml down
+{{ harness_run_health_command }}
 ```
+
+Do not report the stack as ready unless this command succeeds.
+{%- else -%}
+No automated health command is configured. Report process/port evidence and
+state explicitly that application readiness was not proven.
+{%- endif %}
+
+{% if harness_run_stop_command -%}
+## Stop
+
+```bash
+{{ harness_run_stop_command }}
+```
+{%- else -%}
+Stop the foreground command with `Ctrl+C`. No additional shutdown command is
+configured; do not invent a destructive cleanup command.
+{%- endif %}
+
+## Safety
+
+- Run from the repository root.
+- Never kill by global process name. Use only PIDs owned by this project.
+- If the configured command is stale, stop and update the harness answers;
+  do not silently replace the operational contract with an example.

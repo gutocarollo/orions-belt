@@ -18,12 +18,12 @@
 -#}
 ---
 name: adversarial-review
-description: "Revisor adversarial fundamentado em evidencia para o {{ project_name }}. Use quando o usuario pedir revisar, auditar, criticar, encontrar gaps, validar plano, PR, diff, implementacao, arquitetura, design-system, testes ou execucao. A auditoria deve confrontar explicitamente: docs de arquitetura em docs/architecture, docs do design-system em docs/design-system, codigo real do app, texto do plano e o que foi executado. Toda acusacao precisa ser confirmada ou refutada com evidencia concreta."
+description: "Revisor adversarial fundamentado em evidencia para o {{ project_name }}. Use quando o usuario pedir revisar, auditar, criticar, encontrar gaps, validar plano, PR, diff, implementacao, arquitetura, design-system, testes ou execucao. A auditoria confronta plano, execucao, topologia detectada, codigo real e documentos canonicos que existirem. Toda acusacao precisa ser confirmada ou refutada com evidencia concreta."
 ---
 
 # Adversarial Review
 
-{#-
+{#
 PROVENIENCIA (vive SO no repo do framework — comentario Jinja nao renderiza no
 projeto-alvo; requisito F9-fixes: zero conteudo do doador no render): fusao de
 2 linhagens do harness-doador de referencia, feita em F1.5 sobre uma copia
@@ -31,9 +31,9 @@ extraida (D11) e parametrizada em F3 — (A) a skill adversarial-review do doado
 (secao "Modo de execucao" + naming kebab-case dos docs) com (B) a linhagem
 agent-swarm (secao 7, "Saida para loops do Delivery Council" — REPLAN-REQUEST/
 FIX-REQUEST). Ver docs/planning/00-plano-consolidado.md secao 3/6 F1.5. Os
-paths de doc citados abaixo (docs/architecture/ etc.) continuam fixos por serem
-convencao de estrutura de repo, nao valor de identidade do schema.
--#}
+paths reais sao descobertos pelo scanner e por busca; layouts do doador nao sao
+tratados como convencao universal.
+#}
 
 Revisor que ataca plano e implementacao para descobrir onde quebram, mas paga o preco de provar cada acusacao. Acusacao sem prova e ruido. Concordancia sem prova tambem e ruido.
 
@@ -43,63 +43,32 @@ Se o artefato auditado foi produzido NESTA conversa pelo proprio agente (plano/d
 
 ## 0. Escopo {{ project_name }}
 
-Esta skill e especifica para `{{ project_root }}`. Ela nao revisa apenas o diff. Ela revisa a aderencia entre cinco fontes obrigatorias:
+Esta skill e especifica para `{{ project_root }}`. Ela nao revisa apenas o diff. Primeiro rode `python3 .harness/lib/scan_project.py all --target .` e use `scan.components[]` como mapa da topologia real. Ela revisa a aderencia entre estas fontes:
 
 1. **Plano** - texto enviado pelo usuario ou arquivo de plano citado. Se o plano nao foi fornecido, reconstruir a intencao a partir de commits, diffs, docs de execucao e pedido do usuario, declarando a limitacao.
 2. **Execucao** - arquivos alterados, diff, logs, comandos rodados, relatorios de execucao, testes e evidencia visual quando existir.
-3. **Arquitetura** - documentos canonicos em `docs/architecture`.
-4. **Design system** - documentos canonicos em `docs/design-system`.
-5. **Codigo real do app** - `apps/api`, `apps/web`, `packages`, migrations, scripts, testes, configs e estilos.
+3. **Arquitetura** - documentos canonicos que realmente existirem no repo; na ausencia deles, manifests, Compose, READMEs e config sao evidencia, nao um contrato inventado.
+4. **Design system** - documentos canonicos que realmente existirem, somente quando o tema envolver UI.
+5. **Codigo real do app** - raiz e componentes reportados por `scan.components[]`, mais migrations, scripts, testes, configs e estilos encontrados por busca.
 
-Auditoria que ignora qualquer uma dessas fontes e incompleta. Docs definem contrato; codigo e execucao provam aderencia ou desvio.
+Auditoria que ignora uma fonte aplicavel e incompleta. Nao exija path seed que o scanner provou inexistente. Docs existentes definem contrato; codigo e execucao provam aderencia ou desvio.
 
 ## 1. Fontes obrigatorias
 
 ### 1.1 Arquitetura
 
-Antes de avaliar decisao arquitetural, seguranca, dados, tenancy, runtime, deploy, performance, integracao ou fluxo de dominio, leia os docs relevantes em `docs/architecture`.
+Antes de avaliar arquitetura, descubra os contratos com `rg --files` e o scanner. Se `docs/architecture/` existir, leia seu indice/README e os documentos relevantes. Se nao existir, declare a ausencia e use os READMEs, manifests, arquivos Compose/deploy e codigo dos componentes detectados; ausencia de um layout arc42 nunca bloqueia a auditoria nem autoriza inventar paths.
 
-Entrada obrigatoria:
-
-- `docs/architecture/README.md` - mapa arc42 e ordem de leitura.
-
-Escolha os documentos conforme o tema auditado:
-
-- `docs/architecture/sad.md` - arquitetura de dominio/produto.
-- `docs/architecture/multi-tenancy.md` - modos de tenancy e isolamento.
-- `docs/architecture/03-estrategia-solucao.md` - decisoes-mae.
-- `docs/architecture/04-building-blocks.md` - containers/componentes.
-- `docs/architecture/05-visao-runtime.md` - fluxos criticos.
-- `docs/architecture/06-visao-deployment.md` - topologia e restricoes de deploy.
-- `docs/architecture/07-conceitos-transversais.md` - seguranca, confiabilidade, performance, observabilidade e dados.
-- `docs/architecture/08-decisoes-arquitetura-adr.md` - ADRs.
-- `docs/architecture/09-requisitos-qualidade.md` - atributos de qualidade e capacidade.
-- `docs/architecture/11-modelo-ameacas-stride.md` - ameacas e controles.
-
-Regra: se o gap citado toca arquitetura, cite pelo menos um doc de `docs/architecture` e um trecho/arquivo de codigo que confirma aderencia ou desvio.
+Regra: gap arquitetural cita um documento existente quando houver e sempre um trecho de codigo/config/teste que confirma aderencia ou desvio.
 
 ### 1.2 Design system
 
-Antes de avaliar UI, tema, tokens, contraste, componentes, motion, dropdowns, dashboards, charts, responsividade, className/Tailwind ou evidencia visual, leia os docs relevantes em `docs/design-system`.
-
-Entrada obrigatoria:
-
-- `docs/design-system/index.md` - catalogo canonico.
-
-Escolha os documentos conforme o tema auditado:
-
-- `docs/design-system/wiki/design-system.md` - verdade atual consolidada.
-- `docs/design-system/wiki/contrato-pares.md` - contrato de pares coloridos.
-- `docs/design-system/wiki/classname-token-workflow.md` - workflow de className/Tailwind.
-- `docs/design-system/w3c-design-tokens.md` - contrato DTCG.
-- `docs/design-system/decision-shadcn-adoption.md` - direcao shadcn.
-- `docs/design-system/migration-tracking.md` - estado da migracao.
-- Auditorias atuais listadas em `docs/design-system/index.md`, quando o tema bater.
+Antes de avaliar UI, confirme que existe componente frontend no scan. Se `docs/design-system/` existir, leia o indice e os documentos relevantes. Se nao existir, declare a ausencia e derive o contrato apenas de instrucoes do repo, tokens/estilos e componentes realmente encontrados sob `{{ harness_web_app_dir }}`.
 
 Codigo obrigatorio para conferir o contrato:
 
-- `{{ harness_web_app_dir }}/styles/globals.css` (ou equivalente) - fonte viva dos tokens.
-- `{{ harness_web_app_dir }}/components/ui/` - componentes shadcn/ui locais.
+- arquivos de tokens/estilos encontrados sob `{{ harness_web_app_dir }}`.
+- componentes de UI encontrados sob `{{ harness_web_app_dir }}`.
 - Componentes e telas alteradas no diff.
 - Guardas/scripts quando aplicavel (shipados pelo harness em `.harness/lib/`, nao pelo projeto): `.harness/lib/ds-pairs-check.py`, `.harness/lib/ds-pair-eval.py`, `.harness/lib/ds-gate.sh`, miner className.
 
@@ -111,7 +80,7 @@ Sempre cruzar:
 
 - O que o plano prometeu.
 - O que foi realmente alterado.
-- O que os docs canonicos exigem.
+- O que os docs canonicos existentes exigem (ou a ausencia declarada deles).
 - O que os testes/evidencias cobrem.
 - O que o codigo faz em runtime.
 
@@ -165,8 +134,8 @@ Use a matriz para gerar hipoteses. Nao pule direto para opiniao.
 Ataque o artefato por:
 
 - Divergencia plano x execucao.
-- Violacao de `docs/architecture`.
-- Violacao de `docs/design-system`.
+- Violacao dos documentos de arquitetura existentes.
+- Violacao dos documentos de design-system existentes, quando aplicaveis.
 - Bug de codigo/logica.
 - Falha de dado real.
 - Performance.
@@ -261,8 +230,8 @@ PROXIMO PASSO: [acao de maior severidade]
 | Anti-padrao | Por que e proibido |
 |---|---|
 | Auditar so o diff | O diff nao mostra o contrato do projeto nem o plano prometido |
-| Ignorar `docs/architecture` | Pode aprovar codigo que viola tenancy, runtime, qualidade ou seguranca |
-| Ignorar `docs/design-system` | Pode aprovar UI que quebra tokens, temas, contraste ou padroes canonicos |
+| Ignorar docs de arquitetura existentes | Pode aprovar codigo que viola tenancy, runtime, qualidade ou seguranca |
+| Ignorar docs de design-system existentes | Pode aprovar UI que quebra tokens, temas, contraste ou padroes canonicos |
 | Comparar execucao sem ler o plano | Nao da para medir aderencia ao que foi pedido |
 | Declarar gap de dado sem query real | Achismo com roupa de rigor |
 | Declarar UI correta sem evidencia visual quando pixels importam | Codigo nao prova render final |

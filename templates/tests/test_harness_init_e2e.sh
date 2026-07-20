@@ -83,8 +83,8 @@ assert "line 'Nunca commitar direto na main' survives verbatim" \
   'grep -q "Nunca commitar direto na main" "$TARGET/.claude/CLAUDE.md"'
 assert "line 'Rodar \`make test\`' survives verbatim" \
   'grep -q "Rodar \`make test\` antes de qualquer PR" "$TARGET/.claude/CLAUDE.md"'
-assert "harness content (LEI ZERO) was APPENDED" \
-  'grep -q "LEI ZERO" "$TARGET/.claude/CLAUDE.md"'
+assert "harness contract content was appended (language-independent sentinel present)" \
+  'grep -q "PROVA-DE-CONCLUSAO" "$TARGET/.claude/CLAUDE.md"'
 assert "original content appears BEFORE the harness block (proof of append, not prepend/replace)" \
   '[ "$(grep -n "Nunca commitar" "$TARGET/.claude/CLAUDE.md" | cut -d: -f1)" -lt "$(grep -n "orions-belt:begin" "$TARGET/.claude/CLAUDE.md" | cut -d: -f1)" ]'
 

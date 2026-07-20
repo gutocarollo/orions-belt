@@ -40,8 +40,9 @@
 #      on disk) satisfied the gate because only the "captures" field was checked.
 #      Fix: `_manifest_has_real_captures()` below opens the manifest with
 #      python3, requires "files" listing exactly N ".png" == "captures" > 0
-#      AND CONFIRMS THAT EACH PNG EXISTS IN THE SAME DIRECTORY. Without python3 (rare),
-#      it falls back to a weaker check (only captures>0), documented as such.
+#      AND CONFIRMS that every path is relative/contained, has a PNG signature,
+#      and matches its recorded SHA-256. Python 3 is a harness prerequisite;
+#      if absent, the hook emits an explicit warning instead of silently trusting.
 #   2. Deletion masked the change: deleting a .tsx made the path disappear
 #      from the mtime loop (`[ -e "$f" ] || continue`), NEWEST stayed 0 and the
 #      gate exited early (line `[ "$NEWEST" -eq 0 ] && exit 0`) — git-diff
@@ -60,8 +61,14 @@
 #      from `-w` + `|| echo 000`, not matching the branch `[ "$code" = "000" ]`).
 set -uo pipefail
 IN=$(cat)
-command -v jq >/dev/null 2>&1 || exit 0
-[ "$(jq -r '.stop_hook_active // false' <<<"$IN")" = "true" ] && exit 0
+command -v python3 >/dev/null 2>&1 || {
+  echo "ui-evidence-gate: WARN python3 unavailable; gate inactive" >&2
+  exit 0
+}
+STOP_ACTIVE="$(python3 -c 'import json,sys
+try: print(str(bool(json.load(sys.stdin).get("stop_hook_active", False))).lower())
+except Exception: print("false")' <<<"$IN")"
+[ "$STOP_ACTIVE" = "true" ] && exit 0
 
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -n "$ROOT" ] && cd "$ROOT" || exit 0
@@ -89,6 +96,27 @@ WEB_APP_DIR="$(_conf_get HARNESS_WEB_APP_DIR .)"
 WEB_APP_DIR="${WEB_APP_DIR%/}"
 [ -z "$WEB_APP_DIR" ] && WEB_APP_DIR="."
 
+# Evidence storage is project-local. Reject absolute/traversal configuration
+# before reading a SKIP or manifest from an unrelated directory.
+EVIDENCE_ROOT="$(python3 - "$ROOT" "$EVIDENCE_DIR" <<'PYEOF'
+import os, pathlib, sys
+root = pathlib.Path(sys.argv[1]).resolve()
+raw = pathlib.Path(sys.argv[2])
+if raw.is_absolute() or ".." in raw.parts:
+    raise SystemExit(1)
+candidate = (root / raw).resolve()
+try:
+    if os.path.commonpath((str(root), str(candidate))) != str(root):
+        raise SystemExit(1)
+except ValueError:
+    raise SystemExit(1)
+print(candidate)
+PYEOF
+)" || {
+  echo "UI-EVIDENCE-GATE: invalid HARNESS_EVIDENCE_DIR '$EVIDENCE_DIR' (must be a project-relative path without '..')." >&2
+  exit 2
+}
+
 if [ "$WEB_APP_DIR" = "." ]; then
   WEB_DIR="$ROOT"
   UI_PATHS=(app components styles)
@@ -105,7 +133,19 @@ fi
 # actually runs is the "ui:evidence" script inside the app's `package.json`.
 ENGINE_WIRED=0
 if [ -f "$WEB_DIR/package.json" ]; then
-  grep -q '"ui:evidence"' "$WEB_DIR/package.json" 2>/dev/null && ENGINE_WIRED=1
+  if python3 - "$WEB_DIR/package.json" <<'PYEOF'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        package = json.load(fh)
+    command = (package.get("scripts") or {}).get("ui:evidence")
+except (OSError, AttributeError, json.JSONDecodeError):
+    raise SystemExit(1)
+raise SystemExit(0 if isinstance(command, str) and command.strip() else 1)
+PYEOF
+  then
+    ENGINE_WIRED=1
+  fi
 fi
 if [ "$ENGINE_WIRED" -eq 0 ]; then
   echo "ui-evidence-gate: command \"npm run ui:evidence\" not wired (missing \"ui:evidence\" script in $WEB_DIR/package.json — Copier does not edit package.json, see skill ui-evidence §0.2) — gate INACTIVE (fail-open)." >&2
@@ -141,7 +181,7 @@ done <<<"$CHANGED"
 [ "$NEWEST" -eq 0 ] && exit 0
 
 # escape hatch SKIP (configurable TTL)
-SKIP="$ROOT/$EVIDENCE_DIR/SKIP"
+SKIP="$EVIDENCE_ROOT/SKIP"
 if [ -f "$SKIP" ]; then
   now=$(date +%s); sm=$(stat -c %Y "$SKIP" 2>/dev/null || echo 0)
   [ $((now - sm)) -lt "$SKIP_TTL" ] && exit 0
@@ -156,35 +196,125 @@ fi
 # EXISTS in the same directory as the manifest — forging the JSON without the real PNGs
 # is no longer enough.)
 _manifest_has_real_captures() {
-  local mf="$1" dir
-  dir="$(dirname "$mf")"
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - "$mf" "$dir" <<'PYEOF'
-import json, os, sys
-mf, d = sys.argv[1], sys.argv[2]
+  local mf="$1"
+  python3 - "$mf" "$EVIDENCE_ROOT" <<'PYEOF'
+import binascii, hashlib, json, os, pathlib, re, struct, sys, zlib
+
+def valid_png(content):
+    """Decode enough PNG structure to prove a complete, real pixel stream."""
+    max_compressed = 32 * 1024 * 1024
+    max_decoded = 128 * 1024 * 1024
+    if len(content) > max_compressed or not content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return False
+    offset = 8
+    ihdr = None
+    idat = bytearray()
+    saw_iend = False
+    while offset < len(content):
+        if offset + 12 > len(content):
+            return False
+        length = struct.unpack(">I", content[offset:offset + 4])[0]
+        chunk_type = content[offset + 4:offset + 8]
+        end = offset + 12 + length
+        if length > 128 * 1024 * 1024 or end > len(content):
+            return False
+        payload = content[offset + 8:offset + 8 + length]
+        expected_crc = struct.unpack(">I", content[offset + 8 + length:end])[0]
+        if binascii.crc32(chunk_type + payload) & 0xFFFFFFFF != expected_crc:
+            return False
+        if ihdr is None and chunk_type != b"IHDR":
+            return False
+        if chunk_type == b"IHDR":
+            if ihdr is not None or length != 13:
+                return False
+            ihdr = struct.unpack(">IIBBBBB", payload)
+        elif chunk_type == b"IDAT":
+            if saw_iend:
+                return False
+            idat.extend(payload)
+        elif chunk_type == b"IEND":
+            if length != 0 or saw_iend:
+                return False
+            saw_iend = True
+            offset = end
+            break
+        offset = end
+    if ihdr is None or not idat or not saw_iend or offset != len(content):
+        return False
+    width, height, depth, color_type, compression, filtering, interlace = ihdr
+    channels = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(color_type)
+    valid_depths = {
+        0: {1, 2, 4, 8, 16}, 2: {8, 16}, 3: {1, 2, 4, 8},
+        4: {8, 16}, 6: {8, 16},
+    }
+    if (
+        channels is None or depth not in valid_depths[color_type]
+        or compression != 0 or filtering != 0 or interlace != 0
+        or width <= 0 or height <= 0 or width > 32768 or height > 32768
+        or width * height > 32_000_000
+    ):
+        return False
+    row_bytes = (width * channels * depth + 7) // 8
+    expected_size = height * (row_bytes + 1)
+    if expected_size > max_decoded:
+        return False
+    try:
+        decoder = zlib.decompressobj()
+        pixels = decoder.decompress(bytes(idat), expected_size + 1)
+    except zlib.error:
+        return False
+    if (
+        len(pixels) != expected_size
+        or not decoder.eof
+        or decoder.unconsumed_tail
+        or decoder.unused_data
+    ):
+        return False
+    return all(pixels[row * (row_bytes + 1)] <= 4 for row in range(height))
+mf = pathlib.Path(sys.argv[1]).resolve()
+evidence_root = pathlib.Path(sys.argv[2]).resolve()
 try:
-    data = json.load(open(mf))
-except Exception:
+    if os.path.commonpath((str(evidence_root), str(mf))) != str(evidence_root):
+        raise ValueError("manifest outside evidence root")
+    d = mf.parent.resolve()
+    if os.path.commonpath((str(evidence_root), str(d))) != str(evidence_root):
+        raise ValueError("capture directory outside evidence root")
+    with mf.open(encoding="utf-8") as fh:
+        data = json.load(fh)
+except (OSError, ValueError, json.JSONDecodeError):
     sys.exit(1)
 captures = data.get("captures")
 files = data.get("files") or {}
-pngs = [f for f in files if isinstance(f, str) and f.endswith(".png")]
+if not isinstance(files, dict):
+    sys.exit(1)
+pngs = [f for f in files if isinstance(f, str) and f.lower().endswith(".png")]
 if not isinstance(captures, int) or captures <= 0:
     sys.exit(1)
 if len(pngs) != captures:
     sys.exit(1)
-for p in pngs:
-    if not os.path.isfile(os.path.join(d, p)):
+for name in pngs:
+    rel = pathlib.Path(name)
+    expected = files.get(name)
+    if rel.is_absolute() or ".." in rel.parts or not re.fullmatch(r"[0-9a-fA-F]{16}|[0-9a-fA-F]{64}", str(expected or "")):
+        sys.exit(1)
+    try:
+        p = (d / rel).resolve(strict=True)
+        if os.path.commonpath((str(d), str(p))) != str(d) or not p.is_file():
+            sys.exit(1)
+        if p.stat().st_size > 32 * 1024 * 1024:
+            sys.exit(1)
+        content = p.read_bytes()
+    except (OSError, ValueError):
+        sys.exit(1)
+    if not valid_png(content):
+        sys.exit(1)
+    digest = hashlib.sha256(content).hexdigest()
+    if digest[:len(expected)].lower() != expected.lower():
         sys.exit(1)
 sys.exit(0)
 PYEOF
-    return $?
-  fi
-  # without python3: weak fallback, documented (only checks the captures field —
-  # does not prove the PNGs exist; install python3 for the strong check).
-  grep -qE '"captures"[[:space:]]*:[[:space:]]*[1-9]' "$mf" 2>/dev/null
 }
-for mf in "$ROOT/$EVIDENCE_DIR"/*/manifest.json; do
+for mf in "$EVIDENCE_ROOT"/*/manifest.json; do
   [ -e "$mf" ] || continue
   mm=$(stat -c %Y "$mf" 2>/dev/null || echo 0)
   [ "$mm" -ge "$NEWEST" ] || continue

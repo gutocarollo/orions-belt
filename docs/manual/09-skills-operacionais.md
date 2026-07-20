@@ -21,7 +21,7 @@ Onde vivem no projeto instalado: `.claude/skills/<nome>/SKILL.md` (Claude Code) 
 | `adversarial-review` | council (capítulo 11) | O contrato do prompt do revisor adversarial. |
 | `harness-init` | — | O configurador do próprio framework (capítulo 14). |
 
-Além do núcleo, o framework porta um pacote de skills de auditoria/segurança de uso geral (análise estática, verificação de falso-positivo, auditoria de supply chain e de workflows de CI, curadoria de contexto longo, framework de documentação) — genéricas por natureza, instaladas como estão. A maior parte desse pacote (10 skills, 79 arquivos) vem, byte-a-byte, do [trailofbits/skills](https://github.com/trailofbits/skills) (CC BY-SA 4.0) — ver [`PROVENANCE.json`](../../PROVENANCE.json) e [`NOTICE`](../../NOTICE) na raiz do repo para a lista exata, componente por componente, e o item 13 do capítulo 15 para o histórico da correção.
+Além do núcleo, o framework porta um pacote de skills de auditoria/segurança de uso geral (análise estática, verificação de falso-positivo, auditoria de supply chain e de workflows de CI, curadoria de contexto longo, framework de documentação) — genéricas por natureza, instaladas como estão. A maior parte desse pacote vem do [trailofbits/skills](https://github.com/trailofbits/skills) (CC BY-SA 4.0): são **10 skills e 69 arquivos de conteúdo**, byte-idênticos ao upstream. Foram deliberadamente omitidos **10 logos `trail-of-bits-mark.svg`** e **10 arquivos `agents/openai.yaml`**, um par por skill. Ver [`PROVENANCE.json`](../../PROVENANCE.json) e [`NOTICE`](../../NOTICE) para o inventário exato e o item 13 do capítulo 15 para o histórico.
 
 ## O mecanismo por trás de cada linha
 
@@ -148,7 +148,7 @@ A frontmatter `description` é o gatilho — ela declara QUANDO usar ("Use SEMPR
 - `HARNESS_SKILLS_DIR` — onde as skills dual-runtime vivem (default `.agents/skills`).
 - `HARNESS_REQUIRED_SKILLS` — CSV de skills que o validador de contrato ([engine/contract/scripts/validate_skills.py](../../engine/contract/scripts/validate_skills.py)) exige existir (cada uma como `<dir>/<nome>/SKILL.md` com frontmatter válida). Vazio por default — cada projeto declara as suas.
 - Skills parametrizadas usam a config na geração: `prova-de-conclusao` cita `OWNER_NAME` nos gatilhos; `ui-evidence` cita os temas; `run-<projeto>` e `deploy-<prefixo>` ganham o nome do projeto/stack no próprio nome da skill.
-- Depois de instaladas, as skills são ARQUIVOS SEUS: edite-as para refletir a stack real (especialmente `run-<projeto>`, que instala como esqueleto). `copier update` preserva as edições via merge de 3 vias.
+- `run-<projeto>` só é gerada quando `harness_run_command` contém o comando canônico real; sem esse contrato a capability permanece ausente. Em adoção brownfield, atualize repetindo `harness-install.sh`: o reconciliador por manifest cobre também superfícies git-ignored e rejeita edição local de arquivo owned, enquanto `copier update` nativo continua reservado a projetos nascidos diretamente do Copier.
 
 ## O que fica de lição
 

@@ -53,6 +53,7 @@ RENDER_LOG="$WORK/copier.log"
 if ! uvx copier copy "$REPO_ROOT" "$BASE" --vcs-ref HEAD \
     --data project_name=codexparity --data owner_name=Tester \
     --data use_codex=true --data use_claude=false \
+    --data use_ui_evidence=true \
     --defaults --trust -q > "$RENDER_LOG" 2>&1; then
   echo "FAIL: copier copy --vcs-ref HEAD (codex-only) failed -- $(tail -20 "$RENDER_LOG")"
   exit 1
@@ -97,6 +98,7 @@ BASE_CLAUDE="$WORK/claude-only"
 if ! uvx copier copy "$REPO_ROOT" "$BASE_CLAUDE" --vcs-ref HEAD \
     --data project_name=codexparity --data owner_name=Tester \
     --data use_codex=false --data use_claude=true \
+    --data use_ui_evidence=true \
     --defaults --trust -q > "$WORK/copier-claude.log" 2>&1; then
   echo "FAIL: copier copy --vcs-ref HEAD (claude-only) failed -- $(tail -20 "$WORK/copier-claude.log")"
   FAIL=1

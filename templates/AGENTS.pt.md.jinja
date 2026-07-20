@@ -358,7 +358,7 @@ Nenhuma declaração de conclusão de nível de plano ("100%", "plano executado"
 Regras fixas:
 - **Denominador do %** = somente itens executáveis pelo time; infra de terceiros FORA. Item PARCIAL conta 0.
 - **Evidência é DESTA sessão**: comando rodado agora (exit code, contagem de testes, grep com path+Linha), nunca memória de sessão anterior.
-{% if has_prod_stack %}
+{% if has_prod_stack and prod_deployment_driver == 'swarm-direct' %}
 - Claim sobre **prod** exige evidência no alvo de prod (state-check da skill de deploy), nunca localhost.
 {% endif %}
 - Claim **visual** exige evidência da skill `ui-evidence` (PNG + manifest).

@@ -25,14 +25,13 @@ below, .gitignore uses the 3rd):
     reconciliation by OWNERSHIP (A4, real gap: dedup by `command` alone
     was not enough — a matcher/timeout change on the SAME hook never landed,
     a hook removed upstream persisted, a rename left both entries
-    registered). Every entry whose `command` points to `.harness/hooks/`
-    is OWNED by the harness: the NEW side (from the template rendered now) is
-    always the source of truth for the OWNED set — update, removal and
-    rename are resolved in a full reconciliation each round. Every
-    entry whose `command` does NOT point to `.harness/hooks/` is EXTERNAL
-    (the user's own hook) and is ALWAYS preserved. Keys outside `hooks`
-    (permissions, env, model, etc.) of the existing file are preserved
-    verbatim.
+    registered). Ownership comes only from the exact command inventory stored
+    by the prior install manifest; a path containing `.harness/hooks/` is not
+    proof of ownership. The NEW side is the source of truth for that inventoried
+    set, so update/removal/rename reconcile each round. On first adoption all
+    preexisting commands are external, except an exact command also present in
+    the new side (safe adoption/deduplication). Keys outside `hooks`
+    (permissions, env, model, etc.) of the existing file are preserved.
 
   - .gitignore: same marked-block mechanism as Markdown, but with a
     `#` comment (not `<!-- -->`, which on a .gitignore line is not a
@@ -43,6 +42,7 @@ CLI:
       -> writes PATH with the merge applied (idempotent); prints JSON
          {"action": "created"|"appended"|"updated-block", "path": ...}
   merge_docs.py settings-json --existing PATH --new PATH
+      [--owned-command EXACT_COMMAND ...]
       -> writes PATH with the merge applied; prints JSON
          {"action": "created"|"merged", "path": ..., "hooks_added": N,
           "hooks_kept": N, "hooks_removed_stale_owned": N}
@@ -101,7 +101,8 @@ def merge_markdown(existing_path: Path, new_path: Path, label: str) -> dict:
     if begin_match and end_idx != -1 and end_idx > begin_match.start():
         before = existing_text[: begin_match.start()]
         after = existing_text[end_idx + len(END_MARK):]
-        merged = before.rstrip() + "\n\n" + _marker_block(new_content, label) + after.lstrip("\n")
+        prefix = before.rstrip()
+        merged = prefix + ("\n\n" if prefix else "") + _marker_block(new_content, label) + after.lstrip("\n")
         existing_path.write_text(merged, encoding="utf-8")
         return {"action": "updated-block", "path": str(existing_path)}
 
@@ -146,7 +147,8 @@ def merge_gitignore(existing_path: Path, new_path: Path, label: str) -> dict:
     if begin_match and end_idx != -1 and end_idx > begin_match.start():
         before = existing_text[: begin_match.start()]
         after = existing_text[end_idx + len(GITIGNORE_END_MARK):]
-        merged = before.rstrip("\n") + "\n\n" + _gitignore_block(new_content, label) + after.lstrip("\n")
+        prefix = before.rstrip("\n")
+        merged = prefix + ("\n\n" if prefix else "") + _gitignore_block(new_content, label) + after.lstrip("\n")
         existing_path.write_text(merged, encoding="utf-8")
         return {"action": "updated-block", "path": str(existing_path)}
 
@@ -170,35 +172,49 @@ def _hook_command(entry: dict) -> str | None:
 # (double-fire — the old hook is never removed because its command does not match
 # the new one).
 #
-# Fix: reconciliation by OWNERSHIP, not by string equality. Every harness hook
-# runs a script under `.harness/hooks/` (single source, see
-# `templates/{% if use_claude %}.claude{% endif %}/settings.json.jinja` — each
-# `command` is always `bash/python3 "$CLAUDE_PROJECT_DIR/.harness/hooks/<script>"`).
-# That path is the "hook OWNED by the harness" signal. In a reconciliation:
-#   - every EXISTING entry whose command matches the OWNED pattern is DISCARDED
-#     (the new side, from the template rendered now, is the source of truth
-#     for everything the harness owns — reconciles update, removal AND rename).
-#   - every EXISTING entry whose command does NOT match (the user's own hook,
-#     e.g. `npm run lint-staged`, a custom hook of theirs) is ALWAYS preserved.
+# Fix: reconciliation by EXPLICIT ownership inventory, never by a path-name
+# heuristic. The installer persists the exact commands it last installed in
+# `.harness/install-manifest.json`. In a reconciliation:
+#   - every EXISTING entry whose exact command is in that prior inventory is
+#     discarded (the newly rendered side reconciles update/removal/rename).
+#   - every other EXISTING entry is external and always preserved, even when a
+#     project intentionally keeps its own script under `.harness/hooks/`.
+#   - on first adoption, an exact command also present in the new side is
+#     adopted/deduplicated; no other preexisting command is claimed.
 #   - all entries from the NEW side (always OWNED, by construction) are
 #     inserted in full.
 # Result: each merge round is a full reconciliation of the OWNED set
 # (idempotent — running it twice does not duplicate, because round 2 discards and
 # reinserts the same set), preserving the EXTERNAL set untouched.
-_OWNED_HOOK_PATTERN = re.compile(r"\.harness/hooks/")
+def hook_commands(data: dict) -> set[str]:
+    commands: set[str] = set()
+    for groups in data.get("hooks", {}).values():
+        for group in groups:
+            for entry in group.get("hooks", []):
+                command = _hook_command(entry)
+                if isinstance(command, str) and command:
+                    commands.add(command)
+    return commands
 
 
-def _is_owned_hook(entry: dict) -> bool:
-    cmd = _hook_command(entry) or ""
-    return bool(_OWNED_HOOK_PATTERN.search(cmd))
-
-
-def merge_settings_json(existing_path: Path, new_path: Path) -> dict:
+def merge_settings_json(
+    existing_path: Path,
+    new_path: Path,
+    previous_owned_commands: set[str] | None = None,
+) -> dict:
     new_data = json.loads(new_path.read_text(encoding="utf-8"))
+    new_owned_commands = hook_commands(new_data)
+    prior_inventory = set(previous_owned_commands or ())
 
     if not existing_path.exists():
         existing_path.parent.mkdir(parents=True, exist_ok=True)
-        existing_path.write_text(json.dumps(new_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        # Canonical key order makes create -> first reconcile byte-idempotent.
+        # JSON object order has no semantic meaning; preserving an incidental
+        # source order here caused a one-time rewrite on the second install.
+        existing_path.write_text(
+            json.dumps(new_data, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         return {
             "action": "created", "path": str(existing_path),
             "hooks_added": 0, "hooks_kept": 0, "hooks_removed_stale_owned": 0,
@@ -221,7 +237,17 @@ def merge_settings_json(existing_path: Path, new_path: Path) -> dict:
         #    the final OWNED set (update/removal/rename resolved).
         for matcher_group in existing_hooks.get(event, []):
             group_hooks = matcher_group.get("hooks", [])
-            external_entries = [h for h in group_hooks if not _is_owned_hook(h)]
+            external_entries = []
+            for hook in group_hooks:
+                command = _hook_command(hook)
+                explicitly_owned = isinstance(command, str) and command in prior_inventory
+                exact_adoption = (
+                    not prior_inventory
+                    and isinstance(command, str)
+                    and command in new_owned_commands
+                )
+                if not explicitly_owned and not exact_adoption:
+                    external_entries.append(hook)
             removed_stale_owned += len(group_hooks) - len(external_entries)
             kept += len(external_entries)
             if external_entries:
@@ -242,7 +268,10 @@ def merge_settings_json(existing_path: Path, new_path: Path) -> dict:
 
     merged_data = dict(existing_data)
     merged_data["hooks"] = merged_hooks
-    existing_path.write_text(json.dumps(merged_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    existing_path.write_text(
+        json.dumps(merged_data, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     return {
         "action": "merged", "path": str(existing_path),
         "hooks_added": added, "hooks_kept": kept, "hooks_removed_stale_owned": removed_stale_owned,
@@ -261,6 +290,7 @@ def main(argv: list[str]) -> int:
     p_json = sub.add_parser("settings-json")
     p_json.add_argument("--existing", required=True, type=Path)
     p_json.add_argument("--new", required=True, type=Path)
+    p_json.add_argument("--owned-command", action="append", default=[])
 
     p_gi = sub.add_parser("gitignore")
     p_gi.add_argument("--existing", required=True, type=Path)
@@ -274,7 +304,7 @@ def main(argv: list[str]) -> int:
     elif args.cmd == "gitignore":
         result = merge_gitignore(args.existing, args.new, args.label)
     else:
-        result = merge_settings_json(args.existing, args.new)
+        result = merge_settings_json(args.existing, args.new, set(args.owned_command))
 
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0

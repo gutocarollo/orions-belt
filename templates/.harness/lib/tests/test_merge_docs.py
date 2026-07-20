@@ -105,6 +105,20 @@ class MergeSettingsJsonTest(unittest.TestCase):
         result = _run(["settings-json", "--existing", str(target), "--new", str(new)])
         self.assertEqual(result["action"], "created")
 
+    def test_fresh_create_then_reconcile_is_byte_idempotent(self) -> None:
+        new = self.tmpdir / "new.json"
+        # Deliberately non-canonical event order reproduces a first brownfield
+        # install followed by the ownership reconciler's second pass.
+        new.write_text(json.dumps({"hooks": {
+            "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 .harness/hooks/x.py"}]}],
+            "PostToolUse": [{"hooks": [{"type": "command", "command": "bash .harness/hooks/y.sh"}]}],
+        }}), encoding="utf-8")
+        target = self.tmpdir / "settings.json"
+        _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        first = target.read_bytes()
+        _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        self.assertEqual(target.read_bytes(), first)
+
     def test_merges_preserving_external_user_hook_and_adds_owned_hooks(self) -> None:
         target = self.tmpdir / "settings.json"
         target.write_text(json.dumps({
@@ -137,6 +151,28 @@ class MergeSettingsJsonTest(unittest.TestCase):
         self.assertTrue(any("completion-gate.py" in c for c in stop_commands))
         # new event (SessionStart) that did not exist was created
         self.assertIn("SessionStart", merged["hooks"])
+
+    def test_first_adoption_preserves_external_hook_inside_harness_namespace(self) -> None:
+        target = self.tmpdir / "settings.json"
+        custom = "bash .harness/hooks/my-company-security.sh"
+        target.write_text(json.dumps({
+            "permissions": {"allow": ["Bash(make test)"]},
+            "hooks": {"Stop": [{"hooks": [{"type": "command", "command": custom}]}]},
+        }), encoding="utf-8")
+        new = self.tmpdir / "new.json"
+        new.write_text(json.dumps({
+            "hooks": {"Stop": [{"hooks": [{
+                "type": "command",
+                "command": "python3 .harness/hooks/completion-gate.py",
+            }]}]},
+        }), encoding="utf-8")
+        result = _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        commands = [
+            h["command"] for group in json.loads(target.read_text())["hooks"]["Stop"]
+            for h in group["hooks"]
+        ]
+        self.assertIn(custom, commands)
+        self.assertEqual(result["hooks_removed_stale_owned"], 0)
 
     def test_merge_is_idempotent_no_duplicate_owned_hooks(self) -> None:
         target = self.tmpdir / "settings.json"
@@ -209,7 +245,10 @@ class MergeSettingsJsonTest(unittest.TestCase):
             "hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate.py\""}],
         }]}}), encoding="utf-8")
 
-        result = _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        result = _run([
+            "settings-json", "--existing", str(target), "--new", str(new),
+            "--owned-command", "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/gate-descontinuado.sh\"",
+        ])
         self.assertEqual(result["hooks_removed_stale_owned"], 1)
 
         merged = json.loads(target.read_text(encoding="utf-8"))
@@ -234,7 +273,10 @@ class MergeSettingsJsonTest(unittest.TestCase):
             }]},
         }), encoding="utf-8")
 
-        _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        _run([
+            "settings-json", "--existing", str(target), "--new", str(new),
+            "--owned-command", "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/dev-doctor.sh\"",
+        ])
         merged = json.loads(target.read_text(encoding="utf-8"))
         commands = [h["command"] for group in merged["hooks"]["SessionStart"] for h in group["hooks"]]
         self.assertEqual(len(commands), 1, "rename must not leave both entries (double-fire)")
@@ -260,7 +302,10 @@ class MergeSettingsJsonTest(unittest.TestCase):
             ]},
         }), encoding="utf-8")
 
-        _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        _run([
+            "settings-json", "--existing", str(target), "--new", str(new),
+            "--owned-command", "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate-antigo.sh\"",
+        ])
         merged = json.loads(target.read_text(encoding="utf-8"))
         commands = [h["command"] for group in merged["hooks"]["Stop"] for h in group["hooks"]]
         self.assertIn("npm run meu-check-custom", commands, "hook externo do usuário nunca é tocado")

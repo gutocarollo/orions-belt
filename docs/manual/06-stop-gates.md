@@ -33,30 +33,36 @@ flowchart TD
 
 ## ui-evidence-gate — mudança de UI exige pixel renderizado
 
-**O que é** — [ui-evidence-gate.sh](<../../templates/.harness/hooks/{% if use_ui_evidence %}ui-evidence-gate.sh{% endif %}.jinja>), gerado quando o módulo de evidência visual está ativado (`use_ui_evidence` no questionário, default true — desligue em backend puro). A regra: trabalho de UI só é "pronto" com evidência RENDERIZADA (screenshot + manifest), nunca com diff de código — diff não prova que a tela ficou certa. O motivo é concreto, não teórico: revisão só por diff já deixou passar bugs que só existem no pixel — texto invisível porque herdou a cor errada do tema, borda que regride depois de já ter sido corrigida mais de uma vez, ou animação de transição imperceptível ou ausente. Nenhum desses aparece numa listagem de linhas alteradas. O gate bloqueia o fim do turno quando há mudança de UI no working tree sem evidência mais recente que a mudança.
+**O que é** — [ui-evidence-gate.sh](<../../templates/.harness/hooks/{% if use_ui_evidence %}ui-evidence-gate.sh{% endif %}.jinja>), gerado quando o módulo de evidência visual é ativado explicitamente (`use_ui_evidence`, default `false`; o `harness-init` recomenda somente quando detecta frontend renderizável + Playwright). A regra: trabalho de UI só é "pronto" com evidência RENDERIZADA (screenshot + manifest), nunca com diff de código — diff não prova que a tela ficou certa. O motivo é concreto, não teórico: revisão só por diff já deixou passar bugs que só existem no pixel — texto invisível porque herdou a cor errada do tema, borda que regride depois de já ter sido corrigida mais de uma vez, ou animação de transição imperceptível ou ausente. Nenhum desses aparece numa listagem de linhas alteradas. O gate bloqueia o fim do turno quando há mudança de UI no working tree sem evidência mais recente que a mudança.
 
 **O que faz** —
-1. Coleta os arquivos de UI alterados (diff + untracked) sob o layout de app web do projeto (`apps/web/{app,components,styles}`, `.tsx|.css` — literal hoje; ver capítulo 15) e o mtime mais novo entre eles.
+1. Resolve o app configurado por `HARNESS_WEB_APP_DIR` e coleta `.tsx|.css` alterados em `{app,components,styles}`; deleção usa o mtime do diretório pai para não desaparecer da prova.
 2. Escape hatch: se existir `<HARNESS_EVIDENCE_DIR>/SKIP` com idade menor que `HARNESS_UI_EVIDENCE_SKIP_TTL_SECONDS`, libera — é a válvula para mudança comprovadamente não-visual ou stack fora do ar, com o motivo declarado no veredito. O TTL impede o SKIP de virar permanente.
-3. Procura algum `<HARNESS_EVIDENCE_DIR>/*/manifest.json` com mtime ≥ o da mudança. Achou ⇒ libera. Não achou ⇒ `exit 2` com as duas opções: gerar a evidência (skill `ui-evidence`, capítulo 09) ou tocar o SKIP declarando o motivo.
+3. Procura um manifest posterior à mudança e valida `captures > 0`, paths relativos/contidos, PNG completo (chunks/CRC/IHDR/IDAT/IEND + stream de pixels decodificável) e SHA-256 de cada imagem. JSON forjado, assinatura PNG truncada, path traversal ou hash divergente não liberam o gate.
+
+Esse controle prova consistência estrutural do artefato, não *attestation* criptográfica da origem. Um agente malicioso com escrita no projeto ainda pode fabricar um PNG válido e seu manifest/hash; o gate foi desenhado contra evidência ausente, truncada ou acidentalmente inconsistente, não contra o mesmo principal que controla código e evidência.
+
+**Threat model honesto:** o gate prova integridade estrutural e consistência entre arquivos, manifest e tempo da mudança; ele não é atestação criptográfica de que um agente malicioso abriu a rota correta. Um agente com escrita no repo ainda pode fabricar um PNG válido e um manifest coerente. A revisão humana deve olhar os pixels, e ambientes que exigem autoria forte precisam assinar o manifest fora do processo do agente/CI confiável.
 
 ```mermaid
 flowchart TD
-    A["Evento Stop: agente quer encerrar o turno"] --> B{"stop_hook_active ou jq ausente?"}
+    A["Evento Stop: agente quer encerrar o turno"] --> B{"stop_hook_active ou python3 ausente?"}
     B -- "sim" --> Z["exit 0 — parada permitida"]
-    B -- "não" --> C["Diff + untracked em apps/web/app, components e styles — só .tsx e .css"]
+    B -- "não" --> C["Diff + untracked no HARNESS_WEB_APP_DIR configurado — só .tsx e .css"]
     C --> D{"Algum arquivo de UI alterado?"}
     D -- "não" --> Z
     D -- "sim" --> E["Calcula o mtime mais novo entre os arquivos alterados"]
     E --> F{"SKIP existe com idade menor que o TTL configurado?"}
     F -- "sim" --> Z
     F -- "não" --> G{"Algum manifest.json no diretório de evidência é mais novo que a mudança?"}
-    G -- "sim" --> Z
+    G -- "sim" --> V{"paths contidos + PNG real + SHA confere?"}
+    V -- "sim" --> Z
+    V -- "não" --> H
     G -- "não" --> H["stderr: rode a skill ui-evidence ou toque o SKIP com motivo declarado"]
     H --> I["exit 2 — parada bloqueada"]
 ```
 
-**Exemplo (cenário simulado)** — O agente ajusta a cor de fundo de `apps/web/components/ui/badge.tsx` no projeto `demo-app` e tenta encerrar o turno. O gate roda o diff, encontra `badge.tsx` alterado dentro de `apps/web/components`, calcula o mtime da mudança e varre `<HARNESS_EVIDENCE_DIR>/*/manifest.json` — nenhum manifest é mais novo que a mudança, e não existe `SKIP` válido. Bloqueia com `exit 2` listando o arquivo descoberto. O agente roda `npm run ui:evidence -- after --routes /`, o manifest é gerado com mtime posterior à mudança, e na tentativa seguinte de parada o gate libera.
+**Exemplo (cenário simulado)** — Com `HARNESS_WEB_APP_DIR=frontend`, o agente ajusta `frontend/components/ui/badge.tsx` e tenta encerrar o turno. O gate encontra a mudança e rejeita tanto ausência de manifest quanto `fake.png` renomeado: só libera depois que `npm run ui:evidence -- after --routes /` produz PNG com assinatura e hash registrados no manifest (ou após um `SKIP` recente com motivo declarado).
 
 **Como configurar** — `use_ui_evidence` (gera ou não o módulo), `HARNESS_EVIDENCE_DIR` (default `.claude/evidence`), `HARNESS_UI_EVIDENCE_SKIP_TTL_SECONDS` (default 14400 = 4h) e `HARNESS_UI_EVIDENCE_THEMES` (CSV de temas que a skill captura; default `light,dark`).
 
@@ -74,19 +80,21 @@ flowchart TD
 
 Este hook nasce de um mecanismo real, não de teoria: um servidor de automação acumulou dezenas de navegadores headless vazados de scripts que quebravam antes do teardown, o swap encheu e a máquina ficou lenta para o resto do trabalho. O detalhe que importa não é o incidente em si, é a causa raiz: a limpeza já existia como comando manual, mas cobria só o padrão previsto (processos de tooling de agente com nome reconhecível) — o vazamento real era um navegador headless CRU, fora desse padrão, e ninguém rodava o comando porque nada o disparava sozinho. Daí o hook: fecha os dois buracos ao mesmo tempo, amplia a detecção e a liga a um evento determinístico.
 
-**O que faz** — Delega a limpeza ao modo `reap` do [dev-doctor genérico](../../templates/.harness/hooks/dev-doctor.sh) instalado (capítulo 02), em três frentes: (1) mata tooling de agente órfão — processos de MCP/automação re-parentados ao init; (2) mata navegador headless vazado — órfão, ou vivo além do cap de idade (`HARNESS_REAP_CHROMIUM_MAX_AGE_SECONDS`); (3) processo de alta CPU acumulada e vida longa gera só WARN — nunca é morto, pode ser servidor ativo legítimo (`next dev`, `uvicorn --reload`, um watcher de build). O hook em si é um invólucro fino e não-bloqueante (exit 0 sempre) e silencioso quando não há nada a colher — só fala quando reapou algo, com a contagem.
+**O que faz** — Delega ao modo `reap` do [dev-doctor genérico](../../templates/.harness/hooks/dev-doctor.sh), mas nunca descobre nem mata processos globalmente. Um launcher que deseja limpeza automática registra `<pid> <start_ticks> <reap_after_epoch>` em `<HARNESS_PID_REGISTRY_DIR>/<nome>.pid`. Antes de enviar `TERM`, o reaper prova simultaneamente: registry contido no projeto, entrada regular não-symlink, lease expirada, PID ainda existente, start-time igual (proteção contra reúso de PID), cwd vivo dentro da raiz e comando reconhecido como tooling de agente/headless. Registro prova ownership; só a expiração explícita prova autorização de cleanup. Entrada inválida, lease ativa, processo externo ou comando não reconhecido gera apenas WARN. Processo de alta CPU e vida longa também gera só WARN.
 
-A detecção de headless é segura por construção: a assinatura usada (flag `--headless` nos argumentos do processo, path apontando para o cache de binários do framework de automação, ou o nome do executável do navegador sem interface) é algo que um navegador aberto por um humano NUNCA carrega — ninguém abre o navegador do dia a dia em modo headless nem aponta o binário para o cache de uma lib de automação. Por isso o `kill -9` pode ser aplicado sem checagem adicional em qualquer máquina onde o hook rode: o guard nunca derruba o navegador real de quem está usando o teclado, só processos que existem exclusivamente para automação sem interface.
+O trade-off é deliberado: sem registro explícito, um leak real não será morto automaticamente. Em troca, um Chromium/Playwright pertencente a outro projeto ou outra sessão não pode ser derrubado apenas por casar nome, idade ou flag `--headless`.
 
 ```mermaid
 flowchart TD
     A["Evento Stop: fim de qualquer turno"] --> B["Chama o modo reap do dev-doctor"]
-    B --> C{"Tooling de agente órfão? processo de MCP/automação com PPID 1"}
-    C -- "sim" --> D["kill no processo"]
-    C -- "não" --> E{"Headless órfão OU vivo além da idade máxima configurada?"}
-    D --> E
-    E -- "sim" --> F["kill -9 no navegador vazado"]
-    E -- "não" --> G{"Runaway: CPU acima do limite e vida acima do mínimo configurado?"}
+    B --> C{"Existe entrada no registry local do projeto?"}
+    C -- "não" --> G{"Runaway: CPU acima do limite e vida acima do mínimo configurado?"}
+    C -- "sim" --> D{"PID + start-time + cwd + comando provam ownership?"}
+    D -- "sim" --> X{"lease reap_after_epoch expirou?"}
+    X -- "sim" --> E["TERM apenas no PID registrado"]
+    X -- "não" --> F
+    D -- "não" --> F["WARN; não mata"]
+    E --> G
     F --> G
     G -- "sim" --> H["Só WARN — não mata, pode ser servidor legítimo"]
     G -- "não" --> I["Nada a fazer"]
@@ -98,9 +106,9 @@ flowchart TD
     L --> Z
 ```
 
-**Exemplo (cenário simulado)** — Um script de captura `screenshot-check.mjs` do projeto `demo-app` chama `chromium.launch({headless: true})` para revisar uma página em `localhost:8000`, mas uma asserção falha antes do `browser.close()`. O processo do navegador fica órfão, vivo, consumindo memória — ninguém percebe durante o resto do turno. Ao fim do turno, o `reap-leaks` roda o modo `reap` do dev-doctor: a frente de detecção de headless encontra o processo com idade acima de `HARNESS_REAP_CHROMIUM_MAX_AGE_SECONDS` (default 300s), aplica `kill -9` e imprime `reap-leaks: chromium headless leaked <pid> (380s)` seguido de `1 processo(s) reapados`. A parada é liberada normalmente — o hook nunca bloqueia, só limpa.
+**Exemplo (cenário simulado)** — Um launcher do projeto `demo-app` inicia Playwright, lê o field 22 de `/proc/<pid>/stat` e grava `<pid> <start_ticks> <reap_after_epoch>` em `.harness/pids/ui-evidence.pid`. Antes desse instante, o Stop hook preserva o processo mesmo com ownership válida. Depois da expiração, confirma que o mesmo processo ainda roda com cwd dentro de `demo-app` e comando Playwright/headless, envia `TERM`, remove a entrada consumida e contabiliza um reap. Sem o arquivo, com start-time divergente ou cwd em outro clone, não mata.
 
-**Como configurar** — `HARNESS_REAP_CHROMIUM_MAX_AGE_SECONDS` (idade a partir da qual um headless é leak; default 300), `HARNESS_RUNAWAY_CPU_PCT` (default 50) e `HARNESS_RUNAWAY_MIN_AGE_SECONDS` (default 3600) — lidos da config central pelo dev-doctor.
+**Como configurar** — `HARNESS_PID_REGISTRY_DIR` (default `.harness/pids`), `HARNESS_RUNAWAY_CPU_PCT` (default 50) e `HARNESS_RUNAWAY_MIN_AGE_SECONDS` (default 3600). `HARNESS_REAP_CHROMIUM_MAX_AGE_SECONDS` permanece no schema por compatibilidade, mas idade isolada não autoriza mais kill.
 
 **Checklist universal — construir qualquer guard/checker que funcione de verdade**
 

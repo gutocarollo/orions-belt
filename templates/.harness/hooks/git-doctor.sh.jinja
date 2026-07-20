@@ -3,8 +3,8 @@
 # that poisons the session and reports it with the repair command + push status.
 # Origin: friction audit 2026-07-03, cluster 8 (abandoned rebase-merge
 # polluted weeks of SessionStart; push became a negotiation).
-# Philosophy: SessionStart does NOT abort rebase/merge on its own (too irreversible
-# to automate). It only makes a non-destructive backup (stash -u if dirty) and guides.
+# Philosophy: SessionStart is diagnose-only. It never aborts a rebase/merge and
+# never stashes or otherwise mutates the working tree without explicit consent.
 set -uo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -n "$ROOT" ] || exit 0
@@ -21,11 +21,8 @@ if [ -f "$GD/MERGE_HEAD" ]; then
 fi
 
 if [ -n "$MSG" ]; then
-  # NON-destructive backup of the dirty working tree before anything the
-  # user/agent does next (we do not abort ourselves; we only protect the content).
   if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-    git stash push -u -m "git-doctor backup $(date +%FT%T)" >/dev/null 2>&1 \
-      && MSG+="Dirty working tree → saved in 'git stash' (git stash pop to recover).\n"
+    MSG+="Dirty working tree detected. No files were changed or stashed. If you choose to back it up: git stash push -u -m 'manual backup before git recovery'.\n"
   fi
   {
     echo "<git-doctor-alert>"

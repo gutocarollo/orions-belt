@@ -8,7 +8,7 @@
 # unconditional dir -- same group as scan_project.py/merge_docs.py);
 # (b) running with the real PATH (all deps present on this CI/dev-box),
 # exits 0; (c) running with a REALLY missing dependency simulated (minimal
-# PATH without `flock`), detects and reports "FALTA flock" and exits != 0 --
+# PATH without `flock`), detects the stable `MISSING` status for flock and exits != 0 --
 # it is not a cosmetic report, the preflight actually CATCHES the absence.
 set -uo pipefail
 
@@ -41,12 +41,12 @@ done
 
 FAKE_OUT="$(PATH="$FAKEBIN" bash "$SCRIPT" 2>&1)"
 FAKE_EXIT=$?
-assert "with flock absent from PATH, check-platform.sh detects and reports 'FALTA flock'" \
-  'echo "$FAKE_OUT" | grep -q "FALTA.*flock"'
+assert "with flock absent from PATH, check-platform.sh emits the stable MISSING status" \
+  'echo "$FAKE_OUT" | grep -qE "^[[:space:]]*MISSING[[:space:]]+flock([[:space:]]|$)"'
 assert "with a required dependency absent, exit code != 0 (does not pass as green)" \
   '[ "$FAKE_EXIT" -ne 0 ]'
 assert "the missing-timeout warning also appears (soft dependency)" \
-  'echo "$FAKE_OUT" | grep -q "AVISO.*timeout"'
+  'echo "$FAKE_OUT" | grep -qE "^[[:space:]]*WARN[[:space:]]+timeout([[:space:]]|$)"'
 
 echo
 echo "=== summary ==="

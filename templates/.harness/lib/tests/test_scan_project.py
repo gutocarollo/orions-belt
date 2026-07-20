@@ -28,9 +28,9 @@ def _git(args: list[str], cwd: Path) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
 
 
-def _run_scan(cmd: str, target: Path) -> dict:
+def _run_scan(cmd: str, target: Path, *extra_args: str) -> dict:
     proc = subprocess.run(
-        [sys.executable, str(SCAN_SCRIPT), cmd, "--target", str(target)],
+        [sys.executable, str(SCAN_SCRIPT), cmd, "--target", str(target), *extra_args],
         capture_output=True, text=True, timeout=15,
     )
     assert proc.returncode == 0, f"scan_project.py {cmd} falhou: {proc.stderr}"
@@ -221,6 +221,167 @@ class ScanProjectNoGitTest(unittest.TestCase):
         facts = _run_scan("scan", self.tmpdir)
         self.assertFalse(facts["is_git_repo"])
         self.assertIsNone(facts["git_root"])
+
+
+class ScanProjectMultiRootLayoutTest(unittest.TestCase):
+    """A root without a language manifest and sibling frontend/backend apps.
+
+    This is the brownfield topology that the original root-only scanner missed.
+    It also proves that discovery stays bounded: nested fixtures and dependency
+    directories must not become components.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tmpdir = Path(tempfile.mkdtemp(prefix="harness-init-multi-root-"))
+        (cls.tmpdir / "frontend").mkdir()
+        (cls.tmpdir / "backend" / "tests").mkdir(parents=True)
+        (cls.tmpdir / "node_modules" / "fake").mkdir(parents=True)
+        (cls.tmpdir / "frontend" / "fixtures" / "nested-app").mkdir(parents=True)
+        (cls.tmpdir / "odd-service").mkdir()
+
+        (cls.tmpdir / "frontend" / "package.json").write_text(json.dumps({
+            "name": "sample-web",
+            "scripts": {"dev": "next dev --port 3000", "test": "vitest"},
+            "dependencies": {"next": "^15.0.0", "react": "^19.0.0"},
+            "devDependencies": {"vitest": "^3.0.0", "@playwright/test": "^1.50.0"},
+        }), encoding="utf-8")
+        (cls.tmpdir / "frontend" / "playwright.config.ts").write_text(
+            "export default { testDir: './tests' };\n", encoding="utf-8"
+        )
+        (cls.tmpdir / "backend" / "requirements.txt").write_text(
+            "fastapi==0.115.0\npytest==8.3.0\n", encoding="utf-8"
+        )
+        (cls.tmpdir / "backend" / "pytest.ini").write_text(
+            "[pytest]\ntestpaths = tests\n", encoding="utf-8"
+        )
+        (cls.tmpdir / "node_modules" / "fake" / "package.json").write_text(
+            '{"dependencies":{"express":"latest"}}', encoding="utf-8"
+        )
+        (cls.tmpdir / "frontend" / "fixtures" / "nested-app" / "package.json").write_text(
+            '{"dependencies":{"nuxt":"latest"}}', encoding="utf-8"
+        )
+        (cls.tmpdir / "odd-service" / "requirements.txt").write_text(
+            "flask==3.0.0\n", encoding="utf-8"
+        )
+        (cls.tmpdir / "dev.sh").write_text(
+            "uvicorn backend.main:app --port 8000 &\n"
+            "npm --prefix frontend run dev -- --port 3000\n",
+            encoding="utf-8",
+        )
+        _git(["init", "-q"], cls.tmpdir)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.tmpdir, ignore_errors=True)
+
+    def test_discovers_frontend_and_backend_with_component_evidence(self) -> None:
+        facts = _run_scan("scan", self.tmpdir)
+        components = {row["path"]: row for row in facts["components"]}
+
+        self.assertEqual(set(components), {"frontend", "backend"})
+        self.assertEqual(components["frontend"]["web_framework"], "nextjs")
+        self.assertEqual(components["backend"]["web_framework"], "fastapi")
+        self.assertEqual(components["frontend"]["test_frameworks"], ["playwright", "vitest"])
+        self.assertEqual(components["backend"]["test_frameworks"], ["pytest"])
+
+        next_evidence = components["frontend"]["evidence"]["web_frameworks"][0]
+        self.assertEqual(next_evidence, {
+            "value": "nextjs", "source": "frontend/package.json", "confidence": "high",
+        })
+        fastapi_evidence = components["backend"]["evidence"]["web_frameworks"][0]
+        self.assertEqual(fastapi_evidence["source"], "backend/requirements.txt")
+        self.assertEqual(fastapi_evidence["confidence"], "high")
+
+    def test_preserves_compatible_aggregates_and_port_provenance(self) -> None:
+        facts = _run_scan("scan", self.tmpdir)
+        self.assertEqual(facts["primary_language"], "javascript")
+        self.assertEqual(facts["web_framework"], "nextjs")
+        self.assertTrue(facts["has_frontend_ui"])
+        self.assertEqual(facts["test_frameworks"], ["playwright", "pytest", "vitest"])
+        self.assertEqual(facts["ports_detected"], [3000, 8000])
+        self.assertEqual(
+            {(row["port"], row["source"], row["confidence"]) for row in facts["evidence"]["ports"]},
+            {(3000, "dev.sh", "medium"), (8000, "dev.sh", "medium"),
+             (3000, "frontend/package.json", "high")},
+        )
+
+    def test_explicit_component_root_is_a_bounded_fallback(self) -> None:
+        facts = _run_scan("scan", self.tmpdir, "--component-root", "odd-service")
+        components = {row["path"]: row for row in facts["components"]}
+        self.assertEqual(set(components), {"frontend", "backend", "odd-service"})
+        self.assertEqual(components["odd-service"]["discovery_source"], "explicit")
+        self.assertEqual(components["odd-service"]["web_framework"], "flask")
+
+    def test_explicit_root_cannot_escape_or_cross_a_symlink(self) -> None:
+        outside = Path(tempfile.mkdtemp(prefix="harness-init-outside-component-"))
+        try:
+            (outside / "package.json").write_text(
+                '{"dependencies":{"express":"latest"}}', encoding="utf-8"
+            )
+            (self.tmpdir / "linked-service").symlink_to(outside, target_is_directory=True)
+            facts = _run_scan(
+                "scan", self.tmpdir,
+                "--component-root", "../" + outside.name,
+                "--component-root", "linked-service",
+            )
+            self.assertNotIn("linked-service", {row["path"] for row in facts["components"]})
+            self.assertFalse(any(row["web_framework"] == "express" for row in facts["components"]))
+        finally:
+            (self.tmpdir / "linked-service").unlink(missing_ok=True)
+            shutil.rmtree(outside, ignore_errors=True)
+
+    def test_understand_root_candidate_ignores_symlinked_apps_children(self) -> None:
+        outside = Path(tempfile.mkdtemp(prefix="harness-init-outside-apps-"))
+        apps = self.tmpdir / "apps"
+        apps.mkdir()
+        try:
+            for name in ("one", "two"):
+                service = outside / name
+                service.mkdir()
+                (service / "pyproject.toml").write_text("[project]\nname='outside'\n")
+                (apps / name).symlink_to(service, target_is_directory=True)
+            facts = _run_scan("scan", self.tmpdir)
+            self.assertIsNone(facts["understand_apps_root_offset_candidate"])
+            self.assertFalse(any(row["path"].startswith("apps/") for row in facts["components"]))
+        finally:
+            for child in apps.iterdir():
+                child.unlink(missing_ok=True)
+            apps.rmdir()
+            shutil.rmtree(outside, ignore_errors=True)
+
+
+class ScanProjectDeclaredWorkspaceTest(unittest.TestCase):
+    """Declared workspaces outside conventional names are discovered safely."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tmpdir = Path(tempfile.mkdtemp(prefix="harness-init-workspace-"))
+        (cls.tmpdir / "modules" / "dashboard").mkdir(parents=True)
+        (cls.tmpdir / "examples" / "demo").mkdir(parents=True)
+        (cls.tmpdir / "package.json").write_text(json.dumps({
+            "name": "workspace-root",
+            "private": True,
+            "workspaces": ["modules/*", "examples/*", "too/deep/*", "any/**"],
+        }), encoding="utf-8")
+        (cls.tmpdir / "modules" / "dashboard" / "package.json").write_text(json.dumps({
+            "name": "dashboard",
+            "dependencies": {"vite": "latest", "react": "latest"},
+        }), encoding="utf-8")
+        (cls.tmpdir / "examples" / "demo" / "package.json").write_text(json.dumps({
+            "name": "demo", "dependencies": {"express": "latest"},
+        }), encoding="utf-8")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.tmpdir, ignore_errors=True)
+
+    def test_declared_one_level_workspace_is_discovered_but_excluded_or_deep_globs_are_not(self) -> None:
+        facts = _run_scan("scan", self.tmpdir)
+        components = {row["path"]: row for row in facts["components"]}
+        self.assertEqual(set(components), {".", "modules/dashboard"})
+        self.assertEqual(components["modules/dashboard"]["discovery_source"], "workspace:modules/*")
+        self.assertEqual(components["modules/dashboard"]["web_framework"], "vite-spa")
 
 
 if __name__ == "__main__":

@@ -45,7 +45,7 @@ COUNCIL_SKILL="${PROJECT_NAME}-delivery-council"
 CLAUDE_ONLY="$WORK/claude-only"
 if ! uvx copier copy "$REPO_ROOT" "$CLAUDE_ONLY" --vcs-ref HEAD \
     --data project_name="$PROJECT_NAME" --data owner_name=Tester \
-    --data use_claude=true --data use_codex=false \
+    --data use_claude=true --data use_codex=false --data harness_language=pt \
     --defaults --trust -q > "$WORK/copy-claude.log" 2>&1; then
   echo "FAIL: copier copy --vcs-ref HEAD (claude-only) failed -- $(tail -20 "$WORK/copy-claude.log")"
   exit 1
@@ -59,6 +59,10 @@ assert "claude-only: .agents/skills does NOT have the council or adversarial-rev
   '[ ! -e "$CLAUDE_ONLY/.agents/skills/$COUNCIL_SKILL" ] && [ ! -e "$CLAUDE_ONLY/.agents/skills/adversarial-review" ]'
 assert "claude-only: CLAUDE.md cites the council skill" \
   'grep -q "$COUNCIL_SKILL" "$CLAUDE_ONLY/.claude/CLAUDE.md"'
+assert "PT adversarial-review keeps heading and prose on separate lines" \
+  '! grep -q "Adversarial ReviewRevisor" "$CLAUDE_ONLY/.claude/skills/adversarial-review/SKILL.md"'
+assert "PT council keeps prose and arguments heading separated" \
+  '! grep -q "sessao.## Argumentos" "$CLAUDE_ONLY/.claude/skills/$COUNCIL_SKILL/SKILL.md"'
 
 # =============================================================================
 # 2. Real CODEX-ONLY render
@@ -80,6 +84,10 @@ assert "codex-only: .claude/ does NOT exist (use_claude=false)" \
   '[ ! -d "$CODEX_ONLY/.claude" ]'
 assert "codex-only: the council's companion openai.yaml exists (.agents/skills/$COUNCIL_SKILL/agents/openai.yaml)" \
   '[ -f "$CODEX_ONLY/.agents/skills/$COUNCIL_SKILL/agents/openai.yaml" ]'
+assert "EN adversarial-review keeps heading and prose on separate lines" \
+  '! grep -q "Adversarial ReviewA reviewer" "$CODEX_ONLY/.agents/skills/adversarial-review/SKILL.md"'
+assert "EN council keeps prose and arguments heading separated" \
+  '! grep -q "session.## Input Arguments" "$CODEX_ONLY/.agents/skills/$COUNCIL_SKILL/SKILL.md"'
 
 # --- neutral HARNESS_RUNS_DIR (harness_runs_dir default) ---
 assert "codex-only: HARNESS_RUNS_DIR resolves to .harness/runs (neutral default, not .claude/runs)" \
@@ -122,6 +130,8 @@ assert "rendered council has the real sentinels (not an empty stub)" \
   'grep -q "PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | SABATINAR | BLOQUEADO" "$BOTH/.claude/skills/$COUNCIL_SKILL/SKILL.md"'
 assert "rendered adversarial-review has the real protocol (not an empty stub)" \
   'grep -q "ADVERSARIAL-VERIFICATION" "$BOTH/.claude/skills/adversarial-review/SKILL.md"'
+assert "core skills do not hardcode donor apps/api or apps/web topology" \
+  '! grep -Eq "apps/(api|web)" "$BOTH/.claude/skills/$COUNCIL_SKILL/SKILL.md" "$BOTH/.claude/skills/adversarial-review/SKILL.md"'
 
 # =============================================================================
 # grep of donor/other-owner-project terms = 0 (path-neutral required)

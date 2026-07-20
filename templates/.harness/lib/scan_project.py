@@ -20,7 +20,7 @@ tomli installed; `tomllib` is stdlib since 3.11, used only for real TOML
 raw text — it is not a full YAML parser, it is key-presence detection).
 
 CLI:
-  scan_project.py scan             [--target DIR] [--json]
+  scan_project.py scan             [--target DIR] [--component-root DIR ...] [--json]
   scan_project.py classify         [--target DIR] [--json]
   scan_project.py memory-surfaces  [--target DIR] [--json]
   scan_project.py answers          [--target DIR] [--json]
@@ -38,6 +38,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Iterable
 
 try:
     import tomllib
@@ -115,9 +116,23 @@ MANIFEST_PRIORITY = [
 
 PORT_PATTERNS = [
     re.compile(r"\bPORT\s*=\s*['\"]?(\d{2,5})", re.I),
-    re.compile(r"--port[= ](\d{2,5})"),
+    re.compile(r"(?:--port|-p)(?:=|\s+)(\d{2,5})"),
     re.compile(r"\b(\d{2,5}):(\d{2,5})\b"),  # docker-compose "host:container"
 ]
+SHELL_PORT_ARRAY = re.compile(r"\bPORTS?\s*=\s*\(([^)]*)\)", re.I)
+
+# Discovery is deliberately bounded.  These are product/source roots, not a
+# request to recursively crawl the repository (which would classify fixtures,
+# vendored code and build outputs as real applications).
+DIRECT_COMPONENT_DIRS = {
+    "frontend", "backend", "web", "api", "client", "server", "worker",
+}
+COMPONENT_CONTAINER_DIRS = {"apps", "packages", "services"}
+EXCLUDED_COMPONENT_PARTS = {
+    ".git", ".hg", ".svn", ".next", ".turbo", ".venv", "venv",
+    "node_modules", "vendor", "dist", "build", "coverage", "fixtures",
+    "examples", "__pycache__",
+}
 
 
 def _detect_package_manager(target: Path, language: str | None) -> str | None:
@@ -200,7 +215,9 @@ def _detect_test_frameworks(target: Path) -> list[str]:
         found.append("cypress")
     pytest_ini = (target / "pytest.ini").exists() or (target / "setup.cfg").exists()
     pyproject = _read_toml(target / "pyproject.toml")
-    if pytest_ini or "pytest" in pyproject.get("tool", {}) or (target / "conftest.py").exists():
+    requirements = (_read_text(target / "requirements.txt") or "").lower()
+    pytest_dependency = bool(re.search(r"(?m)^\s*pytest(?:\b|[-_])", requirements))
+    if pytest_ini or pytest_dependency or "pytest" in pyproject.get("tool", {}) or (target / "conftest.py").exists():
         found.append("pytest")
     return found
 
@@ -229,25 +246,222 @@ def _detect_docker(target: Path) -> dict:
 
 
 def _detect_ports(target: Path) -> list[int]:
-    ports: set[int] = set()
+    return sorted({row["port"] for row in _detect_port_evidence(target, target)})
+
+
+def _relative_source(path: Path, project_root: Path) -> str:
+    try:
+        return path.relative_to(project_root).as_posix() or "."
+    except ValueError:
+        return str(path)
+
+
+def _detect_port_evidence(target: Path, project_root: Path) -> list[dict]:
+    """Return ports together with their provenance.
+
+    Only known configuration surfaces in the component directory are read.
+    Shell launchers are intentionally restricted to a small allowlist rather
+    than scanning every source file for number-shaped strings.
+    """
+    evidence: list[dict] = []
     candidates = list(target.glob(".env*")) + [
-        target / n for n in ("docker-compose.yml", "docker-compose.yaml", "compose.yml")
+        target / n for n in (
+            "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml",
+            "package.json", "dev.sh", "start.sh", "run.sh",
+        )
     ]
-    pkg = target / "package.json"
-    if pkg.is_file():
-        candidates.append(pkg)
     for p in candidates:
+        if not p.is_file():
+            continue
         text = _read_text(p)
         if not text:
             continue
+        if p.suffix == ".sh":
+            for array_match in SHELL_PORT_ARRAY.finditer(text):
+                for raw_port in re.findall(r"\b\d{2,5}\b", array_match.group(1)):
+                    value = int(raw_port)
+                    if 1024 <= value <= 65535:
+                        evidence.append({
+                            "port": value,
+                            "source": _relative_source(p, project_root),
+                            "confidence": "high",
+                        })
         for pat in PORT_PATTERNS:
             for m in pat.finditer(text):
                 for g in m.groups():
                     if g and g.isdigit():
                         v = int(g)
                         if 1024 <= v <= 65535:
-                            ports.add(v)
-    return sorted(ports)
+                            evidence.append({
+                                "port": v,
+                                "source": _relative_source(p, project_root),
+                                "confidence": "high" if p.name == "package.json" or p.name.startswith(".env") or "compose" in p.name else "medium",
+                            })
+    # Stable and duplicate-free even when a compose mapping captures host and
+    # container ports with the same value.
+    unique = {(row["port"], row["source"], row["confidence"]): row for row in evidence}
+    return [unique[key] for key in sorted(unique)]
+
+
+def _manifest_names(root: Path) -> list[str]:
+    return [
+        name for name in MANIFEST_PRIORITY
+        if (root / name).is_file() and not (root / name).is_symlink()
+    ]
+
+
+def _safe_component_dir(target: Path, candidate: Path) -> Path | None:
+    """Resolve a candidate without accepting an escape or symlinked root."""
+    if candidate.is_symlink() or not candidate.is_dir():
+        return None
+    try:
+        resolved_target = target.resolve(strict=True)
+        lexical_relative = candidate.absolute().relative_to(target.absolute())
+        cursor = target.absolute()
+        for part in lexical_relative.parts:
+            cursor = cursor / part
+            if cursor.is_symlink():
+                return None
+        resolved = candidate.resolve(strict=True)
+        relative = resolved.relative_to(resolved_target)
+    except (OSError, ValueError):
+        return None
+    if any(part in EXCLUDED_COMPONENT_PARTS for part in relative.parts):
+        return None
+    return resolved
+
+
+def _workspace_patterns(target: Path) -> list[str]:
+    patterns: list[str] = []
+    package = _read_json(target / "package.json")
+    workspaces = package.get("workspaces", [])
+    if isinstance(workspaces, dict):
+        workspaces = workspaces.get("packages", [])
+    if isinstance(workspaces, list):
+        patterns.extend(item for item in workspaces if isinstance(item, str))
+
+    # pnpm-workspace.yaml is parsed only for its documented list of package
+    # globs.  No general YAML interpretation is attempted.
+    text = _read_text(target / "pnpm-workspace.yaml") or ""
+    in_packages = False
+    for raw in text.splitlines():
+        if re.match(r"^packages\s*:\s*$", raw):
+            in_packages = True
+            continue
+        if in_packages and re.match(r"^[A-Za-z_]", raw):
+            break
+        match = re.match(r"^\s*-\s*['\"]?([^'\"#]+?)['\"]?\s*$", raw) if in_packages else None
+        if match:
+            patterns.append(match.group(1).strip())
+    return patterns
+
+
+def _expand_bounded_workspace_pattern(target: Path, pattern: str) -> Iterable[Path]:
+    """Expand only one-level workspace globs (e.g. apps/*), never **."""
+    clean = pattern.strip().rstrip("/")
+    if not clean or clean.startswith(("/", "../")) or "**" in clean:
+        return []
+    parts = Path(clean).parts
+    if len(parts) > 2 or any(part in EXCLUDED_COMPONENT_PARTS for part in parts):
+        return []
+    if "*" not in clean:
+        return [target / clean]
+    if len(parts) == 2 and parts[1] == "*" and "*" not in parts[0]:
+        parent = target / parts[0]
+        try:
+            return sorted((p for p in parent.iterdir() if p.is_dir()), key=lambda p: p.name) if parent.is_dir() else []
+        except OSError:
+            return []
+    return []
+
+
+def _discover_component_roots(target: Path, explicit_roots: list[str] | None = None) -> list[tuple[Path, str]]:
+    """Discover manifest-bearing component roots with a strict depth bound."""
+    candidates: dict[Path, str] = {}
+
+    def add(candidate: Path, source: str) -> None:
+        safe = _safe_component_dir(target, candidate)
+        if safe is not None and _manifest_names(safe):
+            candidates.setdefault(safe, source)
+
+    add(target, "project-root")
+    for raw in explicit_roots or []:
+        candidate = Path(raw)
+        add(candidate if candidate.is_absolute() else target / candidate, "explicit")
+
+    for pattern in _workspace_patterns(target):
+        for candidate in _expand_bounded_workspace_pattern(target, pattern):
+            add(candidate, f"workspace:{pattern}")
+
+    for name in sorted(DIRECT_COMPONENT_DIRS):
+        add(target / name, f"conventional:{name}")
+    for container_name in sorted(COMPONENT_CONTAINER_DIRS):
+        container = target / container_name
+        if not container.is_dir() or container.is_symlink():
+            continue
+        try:
+            children = sorted(container.iterdir(), key=lambda p: p.name)
+        except OSError:
+            continue
+        for child in children:
+            add(child, f"conventional:{container_name}/*")
+
+    return sorted(candidates.items(), key=lambda row: (row[0] != target.resolve(), _relative_source(row[0], target)))
+
+
+def _framework_evidence(component: Path, project_root: Path, framework: str | None) -> list[dict]:
+    if framework is None:
+        return []
+    if framework in BACKEND_FRAMEWORKS and framework != "express" and (component / "requirements.txt").is_file():
+        source = component / "requirements.txt"
+    elif framework in BACKEND_FRAMEWORKS and framework != "express" and (component / "pyproject.toml").is_file():
+        source = component / "pyproject.toml"
+    elif (component / "package.json").is_file():
+        source = component / "package.json"
+    else:
+        source = component / "pyproject.toml"
+    return [{"value": framework, "source": _relative_source(source, project_root), "confidence": "high"}]
+
+
+def _test_framework_evidence(component: Path, project_root: Path, frameworks: list[str]) -> list[dict]:
+    evidence: list[dict] = []
+    config_names = {
+        "playwright": ("playwright.config.ts", "playwright.config.js", "playwright.config.mjs", "package.json"),
+        "vitest": ("vitest.config.ts", "package.json"),
+        "jest": ("jest.config.js", "jest.config.ts", "package.json"),
+        "cypress": ("cypress.config.js", "package.json"),
+        "pytest": ("pytest.ini", "pyproject.toml", "setup.cfg", "conftest.py", "requirements.txt"),
+    }
+    for framework in frameworks:
+        name = next((n for n in config_names[framework] if (component / n).exists()), "package.json")
+        evidence.append({"value": framework, "source": _relative_source(component / name, project_root), "confidence": "high"})
+    return evidence
+
+
+def _scan_component(component: Path, project_root: Path, discovery_source: str) -> dict:
+    manifests = _manifest_names(component)
+    manifest = manifests[0] if manifests else None
+    language = MANIFEST_LANGUAGE.get(manifest) if manifest else None
+    framework = _detect_web_framework(component, language)
+    tests = _detect_test_frameworks(component)
+    port_evidence = _detect_port_evidence(component, project_root)
+    return {
+        "path": _relative_source(component, project_root),
+        "discovery_source": discovery_source,
+        "manifests": manifests,
+        "primary_manifest": manifest,
+        "primary_language": language,
+        "package_manager": _detect_package_manager(component, language),
+        "web_framework": framework,
+        "has_frontend_ui": framework in FRONTEND_FRAMEWORKS,
+        "test_frameworks": tests,
+        "ports_detected": sorted({row["port"] for row in port_evidence}),
+        "evidence": {
+            "web_frameworks": _framework_evidence(component, project_root, framework),
+            "test_frameworks": _test_framework_evidence(component, project_root, tests),
+            "ports": port_evidence,
+        },
+    }
 
 
 def _detect_understand_root_offset(target: Path) -> str | None:
@@ -255,29 +469,41 @@ def _detect_understand_root_offset(target: Path) -> str | None:
     containing its own manifest suggests a monorepo with PROJECT_ROOT != git-root
     (the PROJECT_ROOT≠git-root pitfall documented in the reference donor harness)."""
     apps_dir = target / "apps"
-    if not apps_dir.is_dir():
+    safe_apps = _safe_component_dir(target, apps_dir)
+    if safe_apps is None:
         return None
     sub_with_manifest = 0
-    for child in apps_dir.iterdir():
-        if not child.is_dir():
+    for child in safe_apps.iterdir():
+        safe_child = _safe_component_dir(target, child)
+        if safe_child is None:
             continue
-        if any((child / m).exists() for m in MANIFEST_PRIORITY):
+        if _manifest_names(safe_child):
             sub_with_manifest += 1
     return "apps" if sub_with_manifest >= 2 else None
 
 
-def scan(target: Path) -> dict:
+def scan(target: Path, explicit_component_roots: list[str] | None = None) -> dict:
     is_git = _sh(["git", "rev-parse", "--is-inside-work-tree"], target) == "true"
     git_root = _sh(["git", "rev-parse", "--show-toplevel"], target) if is_git else None
 
-    manifest = next((m for m in MANIFEST_PRIORITY if (target / m).is_file()), None)
-    language = MANIFEST_LANGUAGE.get(manifest) if manifest else None
+    component_roots = _discover_component_roots(target, explicit_component_roots)
+    components = [_scan_component(path, target, source) for path, source in component_roots]
+    root_component = next((row for row in components if row["path"] == "."), None)
+    representative = root_component or next((row for row in components if row["has_frontend_ui"]), None)
+    representative = representative or (components[0] if components else None)
+
+    manifest = representative["primary_manifest"] if representative else None
+    language = representative["primary_language"] if representative else None
 
     docker = _detect_docker(target)
-    package_manager = _detect_package_manager(target, language)
-    web_framework = _detect_web_framework(target, language)
-    test_frameworks = _detect_test_frameworks(target)
-    ports = _detect_ports(target)
+    package_manager = representative["package_manager"] if representative else None
+    frontend = next((row for row in components if row["has_frontend_ui"]), None)
+    framework_component = frontend or next((row for row in components if row["web_framework"]), None)
+    web_framework = framework_component["web_framework"] if framework_component else None
+    test_frameworks = sorted({name for row in components for name in row["test_frameworks"]})
+    root_port_evidence = _detect_port_evidence(target, target)
+    all_port_evidence = root_port_evidence + [ev for row in components for ev in row["evidence"]["ports"] if row["path"] != "."]
+    ports = sorted({row["port"] for row in all_port_evidence})
     understand_root = _detect_understand_root_offset(target)
 
     local_surfaces = {
@@ -305,6 +531,14 @@ def scan(target: Path) -> dict:
         "web_framework": web_framework,
         "has_frontend_ui": web_framework in FRONTEND_FRAMEWORKS,
         "test_frameworks": test_frameworks,
+        "components": components,
+        "component_discovery": {
+            "mode": "bounded-manifest",
+            "max_depth": 2,
+            "explicit_roots": explicit_component_roots or [],
+            "excluded_parts": sorted(EXCLUDED_COMPONENT_PARTS),
+        },
+        "evidence": {"ports": all_port_evidence},
         "docker": docker,
         "ports_detected": ports,
         "understand_apps_root_offset_candidate": understand_root,
@@ -608,8 +842,20 @@ def suggest_answers(facts: dict) -> dict:
 def _target_from_args(args: list[str]) -> Path:
     if "--target" in args:
         idx = args.index("--target")
+        if idx + 1 >= len(args):
+            raise ValueError("--target requires a directory")
         return Path(args[idx + 1]).resolve()
     return Path.cwd().resolve()
+
+
+def _component_roots_from_args(args: list[str]) -> list[str]:
+    roots: list[str] = []
+    for idx, value in enumerate(args):
+        if value == "--component-root":
+            if idx + 1 >= len(args):
+                raise ValueError("--component-root requires a directory")
+            roots.append(args[idx + 1])
+    return roots
 
 
 def main(argv: list[str]) -> int:
@@ -617,8 +863,13 @@ def main(argv: list[str]) -> int:
         print("usage: scan_project.py {scan|classify|memory-surfaces|answers|all} [--target DIR]", file=sys.stderr)
         return 1
     cmd, rest = argv[0], argv[1:]
-    target = _target_from_args(rest)
-    facts = scan(target)
+    try:
+        target = _target_from_args(rest)
+        component_roots = _component_roots_from_args(rest)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    facts = scan(target, component_roots)
 
     if cmd == "scan":
         out = facts

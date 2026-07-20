@@ -93,6 +93,9 @@ _exclude:
   - "/tests/test_copier_update_no_op.sh"
   - "/tests/test_check_platform.sh"
   - "/tests/test_skill_runtime_parity.sh"
+  - "/tests/test_contained_runtime_safety.sh"
+  - "/tests/test_harness_install_fail_closed.sh"
+  - "/tests/test_capability_readiness.sh"
   - "/verification/council-witness.json"
   # H3/A1 (fonte única de skills dual-runtime — grill-me,
   # prova-de-conclusao, marathon, repo-wiki-curator, ui-evidence, verify):
@@ -275,6 +278,32 @@ use_codex:
     type: bool
     help: Gerar as superfícies do Codex (.codex/, AGENTS.md)?
     default: true
+    validator: >-
+        {% if not use_codex and not use_claude %}
+        Ao menos um runtime deve estar ativo: use_claude=true ou use_codex=true.
+        {% endif %}
+
+# A run skill with guessed commands is more dangerous than no run skill: agents
+# treat registered skills as executable contracts. Empty keeps the capability
+# disabled until harness-init or the operator supplies the real entrypoint.
+harness_run_command:
+    type: str
+    help: >-
+        Comando canônico real para subir o projeto em dev (ex.: ./dev.sh ou
+        docker compose up). Vazio = não gerar/registrar skill run-*.
+    default: ""
+
+harness_run_health_command:
+    type: str
+    help: Comando read-only opcional que prova que a stack dev está saudável.
+    default: ""
+    when: "{{ harness_run_command != '' }}"
+
+harness_run_stop_command:
+    type: str
+    help: Comando opcional para desligar a stack iniciada pelo comando canônico.
+    default: ""
+    when: "{{ harness_run_command != '' }}"
 
 # =========================================================================
 # --- dev stack ---
@@ -336,6 +365,20 @@ has_prod_stack:
         (guardas hookify anti-destroy/anti-prune, skill de deploy)? "Não" pula
         todo o bloco PROD_* do .conf e os hookify de proteção de prod.
     default: false
+
+prod_deployment_driver:
+    type: str
+    help: >-
+        Driver operacional comprovado do deploy. Somente swarm-direct gera a
+        skill e os guardas mutantes de Docker Swarm; easypanel permanece sem
+        comandos gerados até existir um adapter próprio. Unconfigured é o
+        default fail-closed.
+    choices:
+        Não configurado: unconfigured
+        Docker Swarm direto: swarm-direct
+        EasyPanel: easypanel
+    default: unconfigured
+    when: "{{ has_prod_stack }}"
 
 harness_mcp_db_prod_port:
     type: int
@@ -591,18 +634,23 @@ e2e_admin_email:
     default: admin@example.test
     when: "{{ has_e2e }}"
 
-e2e_admin_password:
+e2e_admin_password_env_var:
     type: str
-    secret: true
-    help: Senha do usuário admin fixo de E2E (NUNCA a senha real de produção).
-    default: ""
+    help: >-
+        Nome da variável de ambiente que fornece a senha do usuário E2E em
+        runtime. O valor secreto nunca é perguntado nem persistido pelo template.
+    default: E2E_ADMIN_PASSWORD
     when: "{{ has_e2e }}"
+    validator: >-
+        {% if not (e2e_admin_password_env_var | regex_search('^[A-Z_][A-Z0-9_]*$')) %}
+        Use um nome de variável de ambiente em maiúsculas, por exemplo E2E_ADMIN_PASSWORD.
+        {% endif %}
 
 # =========================================================================
 # --- módulos stack-específicos (flags por módulo — decisão D5: o harness-init
 #     detecta a stack e passa estes valores via --data conforme o relatório de
-#     aplicabilidade; default true = comportamento anterior preservado, mas um
-#     repo backend-puro pode desligar sem herdar artefato de UI inútil) ---
+#     aplicabilidade; defaults false = nenhuma capability específica de UI é
+#     ativada sem stack detectada e confirmação explícita) ---
 # =========================================================================
 use_ui_evidence:
     type: bool
@@ -612,7 +660,7 @@ use_ui_evidence:
         sentido só em projeto com frontend renderizável + Playwright; num
         backend puro deixa artefatos inertes — desligue (o harness-init marca
         NAO_APLICAVEL nesses casos).
-    default: true
+    default: false
 
 use_icon_guard:
     type: bool
@@ -621,7 +669,7 @@ use_icon_guard:
         ao importar ícone fora da lib canônica em código de UI)? Só faz
         sentido em projeto com frontend de componentes; desligue em backend
         puro.
-    default: true
+    default: false
 
 use_ds_gate:
     type: bool
@@ -633,7 +681,7 @@ use_ds_gate:
         WCAG dos pares texto×fundo); só faz sentido com um app web que use
         classes Tailwind + tokens CSS num arquivo tipo globals.css. Desligue
         em backend puro (o harness-init marca NAO_APLICAVEL nesses casos).
-    default: true
+    default: false
 
 use_ui_skills:
     type: bool
@@ -643,7 +691,7 @@ use_ui_skills:
         mineração/tokenização de className)? Fazem sentido só em projeto com
         frontend de componentes; desligue em backend puro (o harness-init
         marca NAO_APLICAVEL nesses casos).
-    default: true
+    default: false
 
 use_data_warehouse:
     type: bool
@@ -669,7 +717,6 @@ harness_web_app_dir:
         frontend — sem isso, esses módulos reintroduziriam "apps/web"
         hardcoded.
     default: "."
-    when: "{{ use_ui_evidence or use_ds_gate or use_ui_skills }}"
 
 use_github_ci:
     type: bool

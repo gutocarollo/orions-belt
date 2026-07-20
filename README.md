@@ -38,28 +38,30 @@ driven by one central config and serving **Claude Code and Codex from a single s
 ## Quickstart
 
 ```bash
-# into a fresh directory
-copier copy --trust gh:gutocarollo/orions-belt my-project
+# into a fresh directory, pinned to a reviewed release tag
+ORIONS_BELT_REF=<reviewed-release-tag>
+copier copy --trust --vcs-ref "$ORIONS_BELT_REF" gh:gutocarollo/orions-belt my-project
 
-# …or into an existing repo — the 4 sensitive files (AGENTS.md, .claude/CLAUDE.md,
-# .claude/settings.json, .gitignore) merge additively; review with `git diff` after
-curl -fsSL https://raw.githubusercontent.com/gutocarollo/orions-belt/main/harness-install.sh \
-  | bash -s -- . --data project_name=my-project --data owner_name="Me" --defaults
+# …or into an existing repo: clone one reviewed release, then run its local installer
+git clone --depth 1 --branch "$ORIONS_BELT_REF" \
+  https://github.com/gutocarollo/orions-belt.git /tmp/orions-belt-"$ORIONS_BELT_REF"
+/tmp/orions-belt-"$ORIONS_BELT_REF"/harness-install.sh . \
+  --vcs-ref "$ORIONS_BELT_REF" \
+  --data project_name=my-project --data owner_name="Me" --defaults
 ```
 
-> **Brownfield status (honest):** the installer merges the 4 sensitive files additively and
-> refuses to write outside the target (symlink-guarded), but it does **not yet** have an
-> ownership manifest — a framework-shipped path (e.g. a skill name it also ships) that already
-> exists in your repo is overwritten. And `copier update` is **not yet proven safe** on a
-> brownfield install whose instruction files are git-ignored. Until those land, treat an
-> existing-repo install as *review-required* (`git diff`), not "absolute success". See
-> [chapter 15](docs/manual/15-limitacoes-conhecidas.md).
+> **Brownfield status:** installation is fail-closed. The renderer computes a complete plan before
+> writing, rejects symlinks/escapes and unknown or locally-modified whole-file collisions, records
+> ownership hashes in `.harness/install-manifest.json`, and uses a rollback journal for controlled
+> failures. Use repeatable `--preserve <exact-path>` only after reviewing a collision. Raw
+> `copier update` remains prohibited when managed instruction files are git-ignored; update by
+> rerunning `harness-install.sh` from a pinned newer release. See [chapter 14](docs/manual/14-instalacao-e-update.md).
 
-The installer runs a platform preflight, scans your stack **with zero LLM**, classifies every
-component as applicable / conditional / not-applicable, renders to a scratch dir, and merges
-in **additively** — `AGENTS.md`, `.claude/settings.json`, `.gitignore` get a marked block, never
-an overwrite. A full install is **189 files · 31 skills · 15 hooks**, and `git status` on your
-existing files stays clean.
+The deterministic installer runs a platform preflight, renders to scratch, emits `--dry-run`/
+`--plan-json`, and applies a stateful ownership plan. The four shared surfaces (`AGENTS.md`,
+`.claude/CLAUDE.md`, `.claude/settings.json`, `.gitignore`) use marked-block/structured merge;
+other generated files update only when their current hash proves harness ownership. Stack scanning
+and applicability classification belong to the separate, agent-guided `harness-init` flow.
 
 ## What you get
 
@@ -114,8 +116,9 @@ output regardless of this choice. See [chapter 14](docs/manual/14-instalacao-e-u
 
 - **Install / adapt:** `harness-install.sh` (deterministic) or the `harness-init` skill
   (agent-guided, resolves conditional components in conversation).
-- **Update:** `copier update --trust --answers-file .harness/answers.yml` — 3-way merge; your
-  customizations survive, real conflicts get markers.
+- **Update:** rerun the installer from a pinned newer release; its manifest-based reconciler is
+  independent from the target Git index. Native `copier update` is supported only for projects
+  created directly by Copier whose managed files participate in Git's merge baseline.
 
 Full procedure, decision trees per component, and gotchas: **[chapter 14](docs/manual/14-instalacao-e-update.md)**.
 

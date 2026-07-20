@@ -3,8 +3,8 @@
 # pile up (headless chromium leaked from raw Playwright scripts without teardown,
 # orphaned MCP servers, etc.). Delegates to the `reap` mode of the generic dev-doctor.
 #
-# NON-BLOCKING (always exit 0) and SILENT when there is nothing to reap — it only
-# speaks if it killed something. Does not touch ACTIVE dev servers.
+# NON-BLOCKING (always exit 0). It reports ownership/registry warnings even
+# when nothing was killed. It never touches unregistered or cross-project PIDs.
 #
 # MATERIALIZATION (F9-fixes): it used to point at `scripts/dev-doctor.sh` (a script
 # the framework never installed — a dead reference in every target project); it now
@@ -21,5 +21,7 @@ n=$(printf '%s\n' "$out" | sed -n 's/.* \([0-9]\{1,\}\) process(es) reaped/\1/p'
 if [ "${n:-0}" -gt 0 ]; then
   echo "reap-leaks: $n process(es) reaped this turn"
   printf '%s\n' "$out" | grep -E 'leaked|orphan tooling|reaped' | sed 's/^/  /'
+else
+  printf '%s\n' "$out" | grep -E 'WARN' | sed 's/^/reap-leaks: /' || true
 fi
 exit 0

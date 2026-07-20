@@ -1,263 +1,118 @@
-{#-
-  Single source (orions-belt) — this file is NOT copied into the target project
-  (excluded by name in copier.yml `_exclude`); it exists only to be
-  {% raw %}{% include %}{% endraw %}d by the two real wrappers:
-  `.claude/skills/harness-init/SKILL.md.jinja` (Claude Code, use_claude=true) and
-  `.agents/skills/{% raw %}{% if use_codex %}{% endraw %}harness-init{% raw %}{% endif %}{% endraw %}/SKILL.md.jinja`
-  (Codex, use_codex=true). Migration of the Codex-only gap declared in the README (F5):
-  before, this skill existed only under `.claude/skills/`, so a project with
-  use_codex=true/use_claude=false installed the harness but had NO native
-  invocation of the guided installer — same skills-shared mechanism already used by
-  grill-me/council/adversarial-review/etc. Body is 100% runtime-neutral (already treats
-  AskUserQuestion as optional "if available in your runtime"); zero Jinja token
-  in the body (nothing to `{% raw %}{% endraw %}`-escape). Edit ONLY here.
--#}
+{# Shared source: this file is not materialized directly. #}
 ---
 name: harness-init
-description: >-
-  Semantic configurator for orions-belt — runs INSIDE an already-bootstrapped
-  target project (post `copier copy`) to scan the real stack, generate an
-  applicability report per component (APLICAVEL/NAO_APLICAVEL/
-  CONDICIONAL), confirm the CONDICIONAL items with the user, and apply
-  `copier copy`/`update` + non-destructive merge into preexisting CLAUDE.md/AGENTS.md/
-  settings.json. Use when the user asks to initialize,
-  reconfigure, update, or adapt the harness to a real project — "run the
-  harness-init", "adapt the harness to this project", "update to the new
-  template version", "detect my stack and configure the harness".
+description: >
+  Scans an existing project, classifies capabilities, and installs or updates
+  the harness through a fail-closed plan with persistent ownership. Use for
+  adoption, reconfiguration, or validation against the real stack.
 ---
 
-# harness-init
+# Initialize the harness in an existing project
 
-Blueprint: `docs/planning/research/07-autoconfig-patterns.md` (the
-understand-anything pattern — SCAN is always a deterministic script, the LLM only decides/
-narrates on top of the JSON the script produces; never reimplement the detection
-logic in prose). Decision D5 (`docs/planning/00-plano-consolidado.md` §11):
-the framework installs EVERYTHING, but each stack-specific component is classified
-by a deterministic RULE, never by the model's "guesswork" — and nothing CONDICIONAL
-is enabled without explicit human confirmation.
+The scanner discovers facts; it does not authorize conditional capabilities.
+The versioned installer is the only routine allowed to render and reconcile the
+target. Do not copy files manually, run `copier copy` directly into the project,
+or use `copier update` after brownfield adoption.
 
-Engine: `.harness/lib/scan_project.py` (scan/classify/memory-surfaces/answers)
-+ `.harness/lib/merge_docs.py` (additive merge). You (the agent running this
-skill) only orchestrate calls to these two scripts and drive the conversation with the
-user — you never decide applicability "by eye".
-
-## ARGS
+## Inputs
 
 ```text
-AGENT=claude | codex | both   (default: both — controls copier's use_claude/use_codex)
-MODE=install | update          (default: auto-detected by `.harness/answers.yml` existing)
+TARGET=<absolute project root; default: git rev-parse --show-toplevel>
+HARNESS_CHECKOUT=<local checkout of a reviewed orions-belt tag>
+AGENT=claude | codex | both
 ```
 
-## Step 0 — valid git repo (blocking)
+`HARNESS_CHECKOUT` must contain `harness-install.sh`, `copier.yml`, and
+`templates/.harness/lib/install_apply.py`. Stop if the versioned checkout is
+missing: `curl | bash` cannot provide the template tree.
+
+## 1. Scan real facts
 
 ```bash
-git -C <target> rev-parse --is-inside-work-tree
+python3 "$HARNESS_CHECKOUT/templates/.harness/lib/scan_project.py" all \
+  --target "$TARGET" > /tmp/harness-scan.json
 ```
 
-If it fails (real finding from report 08: `central-ordens-bi` was not even a git repo):
-**stop and ask** the user whether you should run `git init` in the target directory, or
-refuse the installation. Never proceed silently over a directory that
-is not a repository — hooks/gitignore-allowlist/commits presuppose a valid git repo.
+For a monorepo, use `--component-root path` only for a root not found through
+declared workspaces or bounded conventional directories. Read `components[]`,
+`evidence.source`, and `confidence`. A missing signal is unknown; it is not
+permission to invent `apps/web`, Compose, ports, frameworks, or commands.
 
-## Step 1 — deterministic scan (zero LLM)
+## 2. Classify capabilities
+
+- `APPLICABLE`: deterministic scanner fact; it may become an answer.
+- `CONDITIONAL`: requires explicit human confirmation.
+- `NOT_APPLICABLE`: materialize the flag as `false`; do not ask.
+
+Operational contracts:
+
+- Empty `harness_run_command` disables the `run-*` skill. Supply only the real
+  project entrypoint; health and stop commands must also be real.
+- `has_prod_stack=true` does not imply Docker Swarm. Only
+  `prod_deployment_driver=swarm-direct` generates the Swarm deployment skill
+  and mutating guards. `easypanel` has no active adapter in this version.
+- `use_ui_evidence=false` is the default. Enable only with a renderable
+  frontend, working Playwright, and an implemented authentication contract.
+- For E2E, collect only `e2e_admin_password_env_var` (a name such as
+  `E2E_ADMIN_PASSWORD`). Never request, print, or persist the password value.
+- Never infer production, credentials, destructive commands, or public URLs.
+
+## 3. Generate and review the plan
+
+Pass answers with `--data key=value`. First run a dry-run whose plan is outside
+the target:
 
 ```bash
-python3 .harness/lib/scan_project.py all --target <target> > /tmp/harness-init-scan.json
+bash "$HARNESS_CHECKOUT/harness-install.sh" "$TARGET" \
+  --dry-run --plan-json /tmp/orions-belt-plan.json \
+  --defaults \
+  --data project_name=<slug> --data owner_name=<owner> \
+  --data use_claude=<true|false> --data use_codex=<true|false>
 ```
 
-Read the resulting JSON (`scan`, `classify`, `memory_surfaces`, `answers`).
-**Do not re-derive any of these facts "by eye"** — if a piece of data you need
-is not in the JSON, that is a gap in the scanner (report it, don't invent it).
+Review every `create`, `merge`, `update`, `unchanged`, and `preserve`. Unknown
+collisions and edited owned files must exit nonzero without writing. If the
+project must keep one exact conflicting file, repeat the dry-run with
+`--preserve exact/path`; never preserve a directory, glob, or all conflicts.
+The manifest persists this choice and stops upstream updates to that path.
 
-## Step 2 — present the applicability report and confirm CONDICIONAL
+## 4. Apply
 
-For each component with `status: CONDICIONAL` in `classify.components`,
-present it to the user in the D[n] format from the `grill-me` skill (same
-principle: concrete behavior + real applied examples, never a dry "A or B?").
-Use the `AskUserQuestion` tool if available in your runtime; if it is not
-available (skills do not guarantee the tool — not every agent running this skill
-has `AskUserQuestion`), present it as structured text and **stop, waiting
-for the user's answer before proceeding** — never assume the answer.
+Repeat the same command without `--dry-run`. Add `--chain-hooks` only when the
+target uses Husky and the user authorized the idempotent pre-commit block.
 
-Example block per CONDICIONAL item:
+The apply writes `.harness/install-manifest.json` and uses backups plus a
+journal for recovery. This is per-file atomicity with recovery, not a global
+transaction: hook activation and the DS baseline are post-tasks and may need a
+manual retry.
 
-```md
-### C[n] — Enable `<component>`?
-
-**Detected signal:** <reason from JSON, verbatim>
-**If YES:** <what takes effect — e.g.: "the ui-evidence-gate hook now blocks
-Stop when apps/web/{app,components,styles} changes without more recent visual
-evidence">
-**If NO:** the component is left out of this installation (it never stays "half
-enabled" — either it is in `.harness/answers.yml` as true, or it is not even asked
-about in the next rounds of `copier update` until the user changes their mind).
-```
-
-Components with `status: NAO_APLICAVEL` **are not asked about** — they are
-listed in the final report as "not installed (reason: <reason>)", without
-asking for confirmation (asking about something that does not apply is useless friction).
-`APLICAVEL` components go straight through, without a question.
-
-Confirmations that map to real `copier.yml` fields (record the
-answers, you will use them in Step 3): `has_prod_stack` (+ `prod_stack_prefix`/
-`prod_registry_url`/`prod_public_web_url` if yes), `harness_understand_apps_root`
-(use `understand_apps_root_offset_candidate` from the scan as a suggestion, never as
-the definitive value), `has_e2e` (+ `e2e_admin_email`, never ask for the real password —
-`e2e_admin_password` is `secret: true` in the schema, collect it separately/never in
-plain text in the chat).
-
-## Step 3 — assemble the final answers and run copier
-
-Combine `answers` from the JSON (safe fields: `project_name`, `project_root`,
-detected ports) with the confirmations from Step 2 and with `AGENT` from the
-`ARGS:` block (`AGENT=claude` → `use_claude=true,use_codex=false`; `AGENT=codex` →
-the inverse; `AGENT=both`/omitted → both `true`).
-
-Render the WHOLE template into a **scratch** directory (never straight into the
-target project — this avoids Copier's interactive conflict prompt AND allows the
-controlled merge in Step 4):
+## 5. Verify the real target
 
 ```bash
-uvx copier copy <path-to-orions-belt> <scratch-dir> \
-  --data project_name=<...> --data owner_name=<...> \
-  --data use_claude=<...> --data use_codex=<...> \
-  --data has_prod_stack=<...> [other confirmed --data] \
-  --defaults --trust -q
+python3 "$TARGET/.harness/lib/scan_project.py" all --target "$TARGET"
+bash "$TARGET/.harness/lib/check-platform.sh"
+python3 -m json.tool "$TARGET/.harness/install-manifest.json" >/dev/null
+git -C "$TARGET" diff --check
 ```
 
-`<path-to-orions-belt>` is the ROOT of the repo (not `.../templates`) — since F8,
-`copier.yml` lives at the root with `_subdirectory: templates` (real finding: pointing
-at `templates/` directly BREAKS VCS versioning — `--vcs-ref`/tags always
-ignored, "Copying from template version None"; confirmed empirically and
-against `copier.readthedocs.io/en/stable/configuring/`). If you want to test against
-a specific tag instead of the orions-belt HEAD, add
-`--vcs-ref <tag>`.
+Also prove that no rendered file contains the temporary scratch path, existing
+content in the four sensitive files survived once, a second identical apply is
+idempotent, Husky was preserved or chained exactly once, rendered TOML/JSON
+parses, and a local edit to an `owned` file blocks the next update.
 
-(`MODE=update`: if `<target>/.harness/answers.yml` already exists, read it first
-and reuse the values as defaults — only re-ask what changed, the same
-principle as native `copier update`: "ask only what changed since the last
-version".)
+Do not claim UI, a live application, or production validation without executing
+the corresponding evidence on that target.
 
-## Step 4 — apply into the target project: copy directly + additive merge
+## Updates and limits
 
-Two groups of files, handled differently:
+Update by checking out a newer tag and repeating this flow. Do not use native
+`copier update` for brownfield or local-only surfaces. Removed upstream paths
+remain `orphaned`; there is no automatic prune. `preserve` has no reversal
+command in this version. EasyPanel and other non-Swarm drivers need a dedicated
+adapter before they receive operational commands.
 
-1. **Framework-owned (no risk of user content)** — the entire rest of the
-   rendered tree (`.harness/`, `.claude/skills/`, `.claude/hooks*` via
-   `.harness/hooks/`, `.codex/`, `.agents/skills/`, hookify `*.local.md.jinja`
-   rendered, `docs/SCHEMA.md`, `tasks/lessons.md` seed): copy from
-   `<scratch>` into `<target>` freely (direct overwrite — these are files that
-   the harness owns, not the user; if the user edited a hook manually,
-   that is unsupported customization in this version of the merge, not a case to
-   protect).
-2. **Sensitive (may contain user content)** — `AGENTS.md`,
-   `.claude/CLAUDE.md`, `.claude/settings.json`, `.gitignore`: **NEVER copy
-   directly**. Always use:
+## Required report
 
-   ```bash
-   python3 .harness/lib/merge_docs.py markdown \
-     --existing <target>/AGENTS.md --new <scratch>/AGENTS.md --label harness-init
-   python3 .harness/lib/merge_docs.py markdown \
-     --existing <target>/.claude/CLAUDE.md --new <scratch>/.claude/CLAUDE.md --label harness-init
-   python3 .harness/lib/merge_docs.py settings-json \
-     --existing <target>/.claude/settings.json --new <scratch>/.claude/settings.json
-   python3 .harness/lib/merge_docs.py gitignore \
-     --existing <target>/.gitignore --new <scratch>/.gitignore --label harness-init
-   ```
-
-   Each call prints `{"action": "created"|"appended"|"updated-block"|"merged", ...}`
-   — report that action to the user per file (it is the proof that nothing was
-   overwritten). `created` = the file did not exist, it became the pure template.
-   `appended`/`updated-block` = user content preserved, the harness block
-   appended/updated (Markdown and `.gitignore` use the same
-   marked-block mechanism; `.gitignore` uses the `#` comment, not
-   `<!-- -->`). `merged` = hooks reconciled by OWNERSHIP (A4, no longer
-   naive dedup by `command`): every hook whose `command` points to
-   `.harness/hooks/` is OWNED by the harness — the NEW template side always
-   wins (resolves update/removal/rename of the hook itself without duplicating,
-   `hooks_removed_stale_owned` in the output JSON counts how many old owned hooks
-   were discarded in this round); a hook whose `command` is outside that pattern is
-   EXTERNAL (the user's) and is never touched; the user's other settings.json keys
-   are left untouched.
-
-   For **non-interactive** installation (you already know the answers or are
-   automating), `harness-install.sh` at the root of the orions-belt repo
-   automates exactly these steps 3-4 via `--data`; this skill remains
-   the path for when `CONDICIONAL` items from Step 2 need human
-   confirmation in conversation — see `docs/manual/14-instalacao-e-update.md`.
-
-## Step 4.5 — ds-gate baseline (only if `use_ds_gate` active)
-
-H2/A6.2 (adversarial audit post-v1.0.0): `.harness/lib/ds-gate.sh` is a
-RATCHET — without `.ds-baseline.txt` it always runs in `--report` (never fails,
-even with obvious hardcode). `harness-install.sh` already automates this (see
-the "H2/A6.2" comment in the script itself), but if you are following this
-flow manually (scratch + merge, not `harness-install.sh`) and confirmed
-`use_ds_gate=true` in Step 2, generate the baseline explicitly BEFORE the
-final report, against the real `<target>` (never against the `<scratch>` —
-scratch does not have the project's code):
-
-```bash
-[ -f "<target>/.ds-baseline.txt" ] || \
-  bash <target>/.harness/lib/ds-gate.sh --update-baseline
-```
-
-Do not regenerate if `.ds-baseline.txt` already exists (reinstall/update must not
-reset a ratchet in progress — regenerating is an explicit user action).
-Report the generated baseline (or the already existing one) in Step 6.
-
-## Step 5 — GLOBAL memory: only report, never write
-
-Read `memory_surfaces.global_claude_READONLY`/`global_codex_READONLY` from the JSON
-of Step 1 and **present it as information**, without action: "I found
-`~/.claude/rules/context7.md` — your Context7 rule is already covered
-globally, I did not duplicate it in the project's CLAUDE.md." **FORBIDDEN**: writing,
-copying, or suggesting to copy any content from the `env` key of
-`~/.claude/settings.json` (it may contain a plaintext secret — finding 4 of report 08). The memory
-slug (`memory_surfaces.slug_computed_from`) is always the root of the target repo,
-never the CWD from which you were invoked — if you were called from within a
-subdirectory, the scan already corrected this via `git rev-parse --show-toplevel`.
-
-## Step 6 — final report
-
-Summarize: (a) APLICAVEL components installed, (b) CONDICIONAL confirmed
-(enabled) vs refused (not installed), (c) NAO_APLICAVEL (not installed,
-with reason), (d) action per sensitive file (created/appended/updated-block/
-merged), (e) detected global surfaces (informational). Confirm that
-`.harness/answers.yml` exists post-execution in the target project — it is the formal gate
-of this skill.
-
-## Known gap (not resolved in this round — future architecture decision, H2)
-
-This flow (scratch render + direct copy + `merge_docs.py` on the 4 "sensitive"
-files) is DIFFERENT from Copier's NATIVE `copier update` (a real 3-way merge,
-tested end-to-end in `templates/tests/test_copier_update_e2e.sh`
-— but only against a project born 100% from `copier copy`, not from a
-brownfield installed by this flow). The practical difference that PERSISTS: if the
-user hand-edits a "framework-owned" file outside the 4 protected ones (e.g.:
-`.harness/harness.conf` — changing a port directly in the rendered file, instead
-of via a copier.yml answer), Step 4 item 1 above OVERWRITES that
-edit without warning ("unsupported customization in this version"). Native `copier
-update`, by contrast, does a 3-way merge on ANY file (not just 4)
-and generates conflict markers (`<<<<<<< before updating` / `=======` /
-`>>>>>>> after updating`) instead of silently discarding — but it requires a
-clean git tree at the destination, PEP440 tags on the template, and an explicit `--answers-file
-.harness/answers.yml`.
-
-(What this flow ALREADY resolves, adversarial review post-v1.0.0: B3 — our own
-merge never again runs `copier copy` directly against the target project, always
-scratch + merge; A2 — `core.hooksPath` never overwrites an already-configured hook
-manager; A3 — a `NAO_APLICAVEL` module materializes `use_*=false` instead of
-falling into the default `true`; A4 — `settings.json` reconciles by ownership of
-`command`, not by naive dedup — update/removal/rename of the harness's OWN
-hook are resolved correctly, only the whole file outside the 4
-protected ones stays in the "direct overwrite" regime.)
-
-Migrating `harness-init`/`harness-install.sh` to invoke native `copier update`
-instead of our own merge (gaining protection on ALL files, not
-just 4) is a candidate for H2 — not decided here because it would require designing the UX of
-conflict resolution inside the skill (today the user would resolve it by hand in the
-editor; the skill would need to guide that explicitly) AND proving
-`copier update` working end-to-end over a project whose 1st
-installation went through the brownfield merge (not yet tested — see
-`docs/manual/14-instalacao-e-update.md`, section "Update").
+Report the tag/ref, canonical target, plan summary, preserved paths, hook state,
+verification commands, and real gaps. Never say “absolute success” without a
+reproducible proof from the isolated target.

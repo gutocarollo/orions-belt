@@ -2,8 +2,8 @@
 # test_ds_pairs_oklch.sh — regression for A6.1 (post-v1.0.0 adversarial
 # audit, H2 hardening): a color pair defined in OKLCH (the format
 # that this repo's AGENTS.md recommends via TweakCN) with ~zero contrast
-# became a silent SKIP in ds-pairs-check.py and the summary said "CONTRATO OK
-# em todos os pares" anyway. Proves, against the script RENDERED via
+# became a silent SKIP in ds-pairs-check.py and the summary falsely declared
+# the contract OK. Proves, against the script RENDERED via
 # `copier copy --vcs-ref HEAD` (never against the file in templates/ directly —
 # there is no Jinja in the file here, but the repo convention is to always test the
 # real installable artifact):
@@ -11,7 +11,7 @@
 #   2. a high-contrast OKLCH pair really passes OK (correct conversion,
 #      not just "not crediting a false positive").
 #   3. a REALLY unresolvable format (translucent rgba) still reports
-#      "NAO AVALIADOS" in the summary -- never "OK em todos os pares" -- and exits
+#      the stable `NOT EVALUATED` status in the summary -- never contract OK -- and exits
 #      with code != 0 (never a false green).
 #
 # Requires `uvx`. Runs outside orions-belt (fixture in $TMPDIR).
@@ -67,10 +67,10 @@ EOF
 OUT_LOW=$(HARNESS_PROJECT_ROOT="$LOW" HARNESS_WEB_APP_DIR=. python3 "$CHECK" 2>&1)
 LOW_EXIT=$?
 assert "OKLCH low contrast: exit != 0 (real violation, not SKIP)" '[ "$LOW_EXIT" -ne 0 ]'
-assert "OKLCH low contrast: appears as VIOLA (not SKIP) in the output" \
-  'echo "$OUT_LOW" | grep -q "primary.*VIOLA\|VIOLA.*primary"'
-assert "OKLCH low contrast: summary does NOT say 'OK em todos os pares'" \
-  '! echo "$OUT_LOW" | grep -q "OK em todos os pares"'
+assert "OKLCH low contrast: pair has the stable VIOLATES status (not SKIP)" \
+  'echo "$OUT_LOW" | grep -qE "primary.*VIOLATES|VIOLATES.*primary"'
+assert "OKLCH low contrast: summary does not declare the contract OK" \
+  '! echo "$OUT_LOW" | grep -qE "^CONTRACT[[:space:]]+OK([[:space:]]|$)"'
 
 # --- 2. HIGH-contrast OKLCH pair (pure white over a saturated tone) -- real OK ---
 HIGH="$WORK/high-contrast"
@@ -88,8 +88,8 @@ EOF
 OUT_HIGH=$(HARNESS_PROJECT_ROOT="$HIGH" HARNESS_WEB_APP_DIR=. python3 "$CHECK" 2>&1)
 HIGH_EXIT=$?
 assert "OKLCH high contrast (pure white over a saturated tone): exit 0" '[ "$HIGH_EXIT" -eq 0 ]'
-assert "OKLCH high contrast: summary says 'OK em todos os pares'" \
-  'echo "$OUT_HIGH" | grep -q "OK em todos os pares"'
+assert "OKLCH high contrast: summary emits the stable CONTRACT OK status" \
+  'echo "$OUT_HIGH" | grep -qE "^CONTRACT[[:space:]]+OK([[:space:]]|$)"'
 assert "oklch(1 0 0) resolved to real white (#ffffff on the pair line)" \
   'echo "$OUT_HIGH" | grep -q "#ffffff"'
 
@@ -109,8 +109,8 @@ EOF
 OUT_SKIP=$(HARNESS_PROJECT_ROOT="$SKIP" HARNESS_WEB_APP_DIR=. python3 "$CHECK" 2>&1)
 SKIP_EXIT=$?
 assert "translucent rgba (really-unresolvable): exit != 0 (never a false green)" '[ "$SKIP_EXIT" -ne 0 ]'
-assert "translucent rgba: summary reports 'NAO AVALIADOS', never 'OK em todos os pares'" \
-  'echo "$OUT_SKIP" | grep -qi "NAO AVALIADOS" && ! echo "$OUT_SKIP" | grep -q "OK em todos os pares"'
+assert "translucent rgba: summary reports NOT EVALUATED and never CONTRACT OK" \
+  'echo "$OUT_SKIP" | grep -q "NOT EVALUATED" && ! echo "$OUT_SKIP" | grep -qE "^CONTRACT[[:space:]]+OK([[:space:]]|$)"'
 
 echo
 echo "=== summary ==="

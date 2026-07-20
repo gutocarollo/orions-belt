@@ -17,8 +17,14 @@
 # already given — only the default for NEW installs changes).
 set -uo pipefail
 IN=$(cat)
-command -v jq >/dev/null 2>&1 || exit 0
-[ "$(jq -r '.stop_hook_active // false' <<<"$IN")" = "true" ] && exit 0
+command -v python3 >/dev/null 2>&1 || {
+  echo "marathon-stop-gate: WARN python3 unavailable; gate inactive" >&2
+  exit 0
+}
+STOP_ACTIVE="$(python3 -c 'import json,sys
+try: print(str(bool(json.load(sys.stdin).get("stop_hook_active", False))).lower())
+except Exception: print("false")' <<<"$IN")"
+[ "$STOP_ACTIVE" = "true" ] && exit 0
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -n "$ROOT" ] || exit 0
 

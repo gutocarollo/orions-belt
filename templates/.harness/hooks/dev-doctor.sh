@@ -5,9 +5,9 @@
 #            HARNESS_DEV_CONTAINER_PREFIX prefix running (if docker exists) + WARN
 #            for a runaway process. Informative, always exit 0 (SessionStart
 #            must never fail because of an incomplete stack).
-#   reap   : kills orphaned agent tooling (PPID 1: serena/mcp/playwright-mcp)
-#            and leaked HEADLESS chromium (orphan OR lifetime > configurable cap);
-#            WARN for runaway (never kills — it may be an active server).
+#   reap   : terminates only agent-tooling PIDs explicitly registered by this
+#            project and whose live cwd/start-time still prove ownership;
+#            WARN for unowned/invalid entries and runaway processes.
 #
 # MATERIALIZATION (F9-fixes): minimal generic version of the dev-doctor from
 # the reference donor harness — the donor's version knew its own stack
@@ -44,6 +44,7 @@ _conf_int() {
 REAP_CHROMIUM_MAX_AGE="$(_conf_int HARNESS_REAP_CHROMIUM_MAX_AGE_SECONDS 300)"
 RUNAWAY_CPU_PCT="$(_conf_int HARNESS_RUNAWAY_CPU_PCT 50)"
 RUNAWAY_MIN_AGE="$(_conf_int HARNESS_RUNAWAY_MIN_AGE_SECONDS 3600)"
+PID_REGISTRY_DIR="$(_conf_get HARNESS_PID_REGISTRY_DIR .harness/pids)"
 
 _warn_runaway() {
   ps -eo pid=,pcpu=,etimes=,comm= 2>/dev/null | awk -v cpu="$RUNAWAY_CPU_PCT" -v age="$RUNAWAY_MIN_AGE" \
@@ -84,27 +85,89 @@ status() {
 }
 
 reap() {
-  # Reap agent tooling leaks. NEVER ACTIVE dev servers.
+  # Ownership contract: launchers that want automatic cleanup create one
+  # `$PID_REGISTRY_DIR/<name>.pid` containing
+  # `<pid> <start_ticks> <reap_after_epoch>`, where start_ticks is field 22
+  # of /proc/<pid>/stat. The explicit lease is also required: registration
+  # proves ownership, not abandonment, so a still-valid lease must survive a
+  # Stop hook. A PID alone is insufficient because of reuse/cross-project risk.
   echo "dev-doctor reap:"
-  local n=0 pid ppid etimes cmd
-  # (a) orphaned agent tooling (PPID 1): serena/mcp/playwright-mcp.
-  while read -r pid cmd; do
-    ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
-    [ "$ppid" = "1" ] || continue
-    echo "  orphan tooling $pid: $(cut -c1-70 <<<"$cmd")"
-    kill "$pid" 2>/dev/null; n=$((n+1))
-  done < <(pgrep -af 'serena|mcp-server|chrome-devtools-mcp|playwright.*mcp' 2>/dev/null || true)
-  # (b) leaked HEADLESS chromium (chromium.launch() without teardown). Matches ONLY
-  #     headless (`--headless` in the args, ms-playwright path, headless_shell comm)
-  #     — the dev's REAL browser never runs this way. Kills orphan (PPID 1) OR lifetime >
-  #     HARNESS_REAP_CHROMIUM_MAX_AGE_SECONDS (an honest render lasts far less).
-  while read -r pid ppid etimes; do
-    { [ "$ppid" = "1" ] || [ "${etimes:-0}" -gt "$REAP_CHROMIUM_MAX_AGE" ]; } || continue
-    echo "  chromium headless leaked $pid (${etimes}s)"
-    kill -9 "$pid" 2>/dev/null; n=$((n+1))
-  done < <(ps -eo pid=,ppid=,etimes=,args= 2>/dev/null | awk 'index($0,"--headless")>0 || tolower($0) ~ /ms-playwright|headless_shell/ {print $1,$2,$3}')
+  local n=0 pid recorded_start reap_after now actual_start proc_cwd cmd registry_real root_real stat rest
+  root_real="$(cd "$ROOT" 2>/dev/null && pwd -P)" || {
+    echo "  WARN project root is not resolvable; no process reaped"
+    echo "  0 process(es) reaped"
+    exit 0
+  }
+  case "$PID_REGISTRY_DIR" in
+    /*) registry_real="$PID_REGISTRY_DIR" ;;
+    *) registry_real="$root_real/$PID_REGISTRY_DIR" ;;
+  esac
+  if [ ! -d "$registry_real" ]; then
+    echo "  WARN no project PID registry at $PID_REGISTRY_DIR; no process reaped"
+    echo "  0 process(es) reaped"
+    _warn_runaway
+    exit 0
+  fi
+  registry_real="$(cd "$registry_real" 2>/dev/null && pwd -P)" || registry_real=""
+  case "$registry_real/" in
+    "$root_real/"*) ;;
+    *)
+      echo "  WARN PID registry resolves outside the project; no process reaped"
+      echo "  0 process(es) reaped"
+      _warn_runaway
+      exit 0
+      ;;
+  esac
+
+  shopt -s nullglob
+  local entries=("$registry_real"/*.pid)
+  if [ "${#entries[@]}" -eq 0 ]; then
+    echo "  WARN PID registry is empty; no process reaped"
+  fi
+  local entry
+  for entry in "${entries[@]}"; do
+    if [ ! -f "$entry" ] || [ -L "$entry" ]; then
+      echo "  WARN unsafe PID registry entry: ${entry##*/}"
+      continue
+    fi
+    read -r pid recorded_start reap_after _ < "$entry" || true
+    if ! [[ "${pid:-}" =~ ^[0-9]+$ && "${recorded_start:-}" =~ ^[0-9]+$ && "${reap_after:-}" =~ ^[0-9]+$ ]]; then
+      echo "  WARN invalid PID registry entry: ${entry##*/}"
+      continue
+    fi
+    now="$(date +%s)"
+    if [ "$now" -lt "$reap_after" ]; then
+      echo "  WARN PID $pid ownership lease is still active; no process reaped"
+      continue
+    fi
+    [ -r "/proc/$pid/stat" ] || { echo "  WARN stale PID registry entry: ${entry##*/}"; continue; }
+    stat="$(<"/proc/$pid/stat")"
+    rest="${stat##*) }"
+    actual_start="$(awk '{print $20}' <<<"$rest")"
+    if [ "$actual_start" != "$recorded_start" ]; then
+      echo "  WARN PID start-time mismatch for $pid; no process reaped"
+      continue
+    fi
+    proc_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+    case "$proc_cwd/" in
+      "$root_real/"*) ;;
+      *) echo "  WARN PID $pid cwd is outside the project; no process reaped"; continue ;;
+    esac
+    cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+    if ! grep -Eiq 'serena|mcp-server|chrome-devtools-mcp|playwright.*mcp|--headless|ms-playwright|headless_shell' <<<"$cmd"; then
+      echo "  WARN PID $pid is not recognized agent tooling; no process reaped"
+      continue
+    fi
+    if kill "$pid" 2>/dev/null; then
+      echo "  owned tooling $pid reaped: $(cut -c1-70 <<<"$cmd")"
+      unlink -- "$entry" 2>/dev/null || true
+      n=$((n+1))
+    else
+      echo "  WARN failed to terminate owned PID $pid"
+    fi
+  done
   echo "  $n process(es) reaped"
-  # (c) runaway WARN (does NOT kill — it may be an active service, e.g. dev server with reload).
+  # Runaway WARN does NOT kill — it may be an active service/dev server.
   _warn_runaway
   exit 0
 }

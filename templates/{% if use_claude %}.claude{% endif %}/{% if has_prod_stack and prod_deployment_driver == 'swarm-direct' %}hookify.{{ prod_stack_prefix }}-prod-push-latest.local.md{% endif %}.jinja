@@ -1,6 +1,6 @@
 ---
 name: {{ prod_stack_prefix }}-prod-push-latest
-enabled: true
+enabled: true # generated only for deployment_driver=swarm-direct
 event: bash
 action: warn
 pattern: docker\s+push\s+{{ prod_registry_url }}/{{ prod_stack_prefix }}-[a-z]+:latest

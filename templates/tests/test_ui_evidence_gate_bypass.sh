@@ -73,6 +73,20 @@ git config user.email "test@example.com"
 git config user.name "Test"
 git add -A && git commit -qm "base fixture (harness instalado + wiring + 1 componente)" >/dev/null
 
+# A textual occurrence outside package.json.scripts must not activate a command
+# that npm cannot run.
+B0="$WORK/wiring-false-positive"
+cp -r "$BASE" "$B0"
+cat > "$B0/package.json" <<'EOF'
+{"name":"uiev-fixture","description":"mentions ui:evidence but has no script"}
+EOF
+echo 'export const Foo = () => <div>changed</div>' > "$B0/components/foo.tsx"
+echo '{}' | HARNESS_PROJECT_ROOT="$B0" CLAUDE_PROJECT_DIR="$B0" bash "$B0/.harness/hooks/ui-evidence-gate.sh" \
+  >"$WORK/b0.out" 2>"$WORK/b0.err"
+B0_EXIT=$?
+assert "wiring detection ignores ui:evidence outside package.json scripts" '[ "$B0_EXIT" -eq 0 ]'
+assert "missing real script is reported as inactive" 'grep -q "gate INACTIVE" "$WORK/b0.err"'
+
 # =============================================================================
 # BYPASS 1 — forged manifest (zero real PNGs)
 # =============================================================================
@@ -91,17 +105,62 @@ B1_EXIT=$?
 assert "bypass 1 (forged manifest without PNGs): gate BLOCKS (exit 2), no longer passes silently" \
   '[ "$B1_EXIT" -eq 2 ]'
 
-# proves that REAL evidence (existing PNG + consistent files/captures) still passes
-printf '\x89PNG\r\n\x1a\nfake' > .claude/evidence/after/home__default__desktop.png
-cat > .claude/evidence/after/manifest.json <<'EOF'
-{"label": "after", "captures": 1, "files": {"home__default__desktop.png": "abc123"}}
-EOF
+# proves that a structurally valid, decoded 1x1 PNG + consistent manifest passes
+VALID_PNG_B64='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=='
+printf '%s' "$VALID_PNG_B64" | base64 -d > .claude/evidence/after/home__default__desktop.png
+PNG_SHA="$(sha256sum .claude/evidence/after/home__default__desktop.png | cut -c1-16)"
+printf '{"label":"after","captures":1,"files":{"home__default__desktop.png":"%s"}}\n' "$PNG_SHA" \
+  > .claude/evidence/after/manifest.json
 touch .claude/evidence/after/manifest.json
 echo '{}' | HARNESS_PROJECT_ROOT="$B1" CLAUDE_PROJECT_DIR="$B1" bash "$B1/.harness/hooks/ui-evidence-gate.sh" \
   >"$WORK/b1ok.out" 2>"$WORK/b1ok.err"
 B1_OK_EXIT=$?
 assert "bypass 1 (positive control): manifest with a real PNG on disk passes (exit 0)" \
   '[ "$B1_OK_EXIT" -eq 0 ]'
+
+# absolute and traversal references must not escape the capture directory
+printf '{"captures":1,"files":{"../outside.png":"%s"}}\n' "$PNG_SHA" \
+  > .claude/evidence/after/manifest.json
+echo '{}' | HARNESS_PROJECT_ROOT="$B1" CLAUDE_PROJECT_DIR="$B1" bash "$B1/.harness/hooks/ui-evidence-gate.sh" \
+  >"$WORK/b1traversal.out" 2>"$WORK/b1traversal.err"
+B1_TRAVERSAL_EXIT=$?
+assert "bypass 1b (PNG traversal): gate rejects ../ reference" \
+  '[ "$B1_TRAVERSAL_EXIT" -eq 2 ]'
+
+printf 'not-a-png' > .claude/evidence/after/not-image.png
+BAD_FILE_SHA="$(sha256sum .claude/evidence/after/not-image.png | cut -c1-16)"
+printf '{"captures":1,"files":{"not-image.png":"%s"}}\n' "$BAD_FILE_SHA" \
+  > .claude/evidence/after/manifest.json
+echo '{}' | HARNESS_PROJECT_ROOT="$B1" CLAUDE_PROJECT_DIR="$B1" bash "$B1/.harness/hooks/ui-evidence-gate.sh" \
+  >"$WORK/b1signature.out" 2>"$WORK/b1signature.err"
+B1_SIGNATURE_EXIT=$?
+assert "bypass 1c (fake .png): gate requires the PNG signature" \
+  '[ "$B1_SIGNATURE_EXIT" -eq 2 ]'
+
+printf '\x89PNG\r\n\x1a\n' > .claude/evidence/after/truncated.png
+TRUNCATED_SHA="$(sha256sum .claude/evidence/after/truncated.png | cut -c1-16)"
+printf '{"captures":1,"files":{"truncated.png":"%s"}}\n' "$TRUNCATED_SHA" \
+  > .claude/evidence/after/manifest.json
+echo '{}' | HARNESS_PROJECT_ROOT="$B1" CLAUDE_PROJECT_DIR="$B1" bash "$B1/.harness/hooks/ui-evidence-gate.sh" \
+  >"$WORK/b1truncated.out" 2>"$WORK/b1truncated.err"
+B1_TRUNCATED_EXIT=$?
+assert "bypass 1d (8-byte PNG signature only): gate requires chunks and decoded pixels" \
+  '[ "$B1_TRUNCATED_EXIT" -eq 2 ]'
+
+printf '{"captures":1,"files":{"home__default__desktop.png":"0000000000000000"}}\n' \
+  > .claude/evidence/after/manifest.json
+echo '{}' | HARNESS_PROJECT_ROOT="$B1" CLAUDE_PROJECT_DIR="$B1" bash "$B1/.harness/hooks/ui-evidence-gate.sh" \
+  >"$WORK/b1sha.out" 2>"$WORK/b1sha.err"
+B1_SHA_EXIT=$?
+assert "bypass 1e (hash mismatch): gate verifies the recorded SHA-256" \
+  '[ "$B1_SHA_EXIT" -eq 2 ]'
+
+printf '\nHARNESS_EVIDENCE_DIR=../../outside-evidence\n' >> "$B1/.harness/harness.conf"
+echo '{}' | HARNESS_PROJECT_ROOT="$B1" CLAUDE_PROJECT_DIR="$B1" bash "$B1/.harness/hooks/ui-evidence-gate.sh" \
+  >"$WORK/b1dir.out" 2>"$WORK/b1dir.err"
+B1_DIR_EXIT=$?
+assert "bypass 1f (evidence-dir traversal): gate rejects invalid configured root" \
+  '[ "$B1_DIR_EXIT" -eq 2 ]'
 
 # =============================================================================
 # BYPASS 2 — deletion masks the UI change
@@ -127,8 +186,10 @@ assert "bypass 2 (.tsx deletion): gate BLOCKS (exit 2), does not exit early with
 # proves that evidence generated AFTER the deletion (manifest mtime >= parent-
 # directory mtime at the instant of deletion) passes
 mkdir -p .claude/evidence/after2
-printf '\x89PNG\r\n\x1a\nfake' > .claude/evidence/after2/home.png
-echo '{"captures":1,"files":{"home.png":"bbb"}}' > .claude/evidence/after2/manifest.json
+printf '%s' "$VALID_PNG_B64" | base64 -d > .claude/evidence/after2/home.png
+PNG_SHA="$(sha256sum .claude/evidence/after2/home.png | cut -c1-16)"
+printf '{"captures":1,"files":{"home.png":"%s"}}\n' "$PNG_SHA" \
+  > .claude/evidence/after2/manifest.json
 echo '{}' | HARNESS_PROJECT_ROOT="$B2" CLAUDE_PROJECT_DIR="$B2" bash "$B2/.harness/hooks/ui-evidence-gate.sh" \
   >"$WORK/b2ok.out" 2>"$WORK/b2ok.err"
 B2_OK_EXIT=$?

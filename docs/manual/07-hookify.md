@@ -41,7 +41,7 @@ Cinco regras de higiene de sessão/design são geradas incondicionalmente; as de
 | `relative-cd` | bash | warn | `cd` para path relativo (o cwd reseta entre chamadas Bash do agente — o `cd` não vale na chamada seguinte) | sempre |
 | `mass-sed` | bash | warn | `sed -i` sobre código em lote (regex mal ancorada corrompe substrings sem diff visível); injeta o protocolo contar-antes/1-arquivo/contar-depois | sempre |
 | `web-dev-port` | bash | warn | `npm run dev`/`next dev` sem a porta canônica — cita `HARNESS_DEV_WEB_PORT` e as `HARNESS_RESERVED_PORTS` (portas de outra ferramenta local que o dev não pode ocupar) | sempre |
-| `icones-lucide` | file | warn | import de biblioteca de ícones fora do cânon do projeto em arquivos de UI | só com `use_icon_guard` (default true; desligue em backend puro) |
+| `icones-lucide` | file | warn | import de biblioteca de ícones fora do cânon do projeto em arquivos de UI | só com `use_icon_guard` (default false; ative após confirmar frontend e biblioteca canônica) |
 | `no-scaley-dropdown` | file | warn | `scale-y-`/`scaleY(` em UI — anti-pattern de animação de overlay (distorce o texto); aponta o padrão canônico do projeto | sempre |
 | `db-port-<n>` | bash | warn | comando de banco apontando a porta INTERNA do container no host — cita o mapeamento `HARNESS_DEV_DB_PORT`→`HARNESS_DEV_DB_INTERNAL_PORT` | só se as duas portas diferem |
 | `<prefixo>-prod-destroy` | bash | **block** | `docker service rm`/`stack rm`/`scale ...=0` tocando os serviços protegidos | só com `has_prod_stack` |
