@@ -1,0 +1,119 @@
+---
+name: ui-component-playbook
+description: >
+  Per-component-type UI playbook (page shell, toolbar, card,
+  table, dropdown, modal, form, chart, sidebar, badge, input) — which
+  responsive axis to apply, what the project's design-system needs to solve, and the
+  anti-pattern to never commit. Use when building or refactoring any
+  UI component of {{ project_name }}.
+---
+
+# UI Component Playbook
+
+Origin: generalized from a real design-system playbook of a reference
+donor project — the per-component-type table and the responsive
+2026 pattern survived because they are tech-agnostic; the references to
+that project's files and hooks were removed (see `responsive-design`
+for the reason the "always inline style-object on the element" constraint
+of that project was NOT ported — it contradicts a W3C DTCG/CSS variables
+tokens pattern, which is the most common in this kind of stack).
+
+## The 2 orthogonal axes (never mix them)
+
+1. **Chromatic axis (color/theme)** — follow the color-token pattern ALREADY
+   canonical in this project (CSS custom properties + utility classes,
+   runtime theme via context, or whatever this repo's design-system has
+   adopted). Don't improvise a new mechanism — see "Deep skills"
+   below for where this project's real convention should be
+   documented.
+2. **Dimensional axis (size/layout/responsive)** — fluid + container-first.
+   Governed by the 2026 pattern below and by the `responsive-design` skill.
+
+Color and dimension are independent: fluid/`clamp()` governs one, the theme
+token governs the other.
+
+## The 2026 responsive pattern
+
+**Component-first + fluid + intrinsic.** The component adapts to the
+**container** (not the viewport).
+
+1. **Container queries** (`@container` + `container-type:inline-size` +
+   `cqi`) — Baseline Widely available since Aug/2025.
+2. **Fluid type/space** (`clamp(min,pref,max)`, Utopia methodology) — with
+   a legibility floor: `min`/`max` in **rem** (hard WCAG 1.4.4 rule —
+   zoom scales `rem`, not `px`). Additional recommendation (advisory, not
+   per-token): `max ≥ 2×min` in the base-text clamp.
+3. **Intrinsic layout** (grid `auto-fit/minmax`, `min/max`, flex-wrap,
+   Cluster/Switcher-type primitives) — reflows by algorithm, not by
+   breakpoint.
+4. Media query (`md:`/`lg:`) **only** for macro (page shell, device,
+   `prefers-*`).
+5. **`OVERFLOW > WRAP > SHRINK`** for "too many items on one line". Shrinking
+   below the content's size **cuts it off** — forbidden.
+6. **Content-aware shrink** (row of variable-width pills/chips):
+   `clamp(cqi)` is blind to content (number of items + label length).
+   Gate the shrink in the render logic (only the item that needs
+   to shrink) and derive the `clamp` floor from the character count — a short label
+   stays larger, a long one goes down; WRAP as the final fallback.
+
+## Per-component-type playbook
+
+Each row: the responsive axis/tool + what the project's design-system
+needs to solve + what to NEVER do. The "Design-system" column is
+DELIBERATELY a placeholder — it points to **your project's canonical
+component/rule**, not to a literal path of another repo.
+
+| Type | Responsive (axis + tool) | Design-system (what to solve) | NEVER |
+|------|--------------------------------|---------------------------------|-------|
+| **Page / route shell** | VIEWPORT — breakpoints/device hook; no new `transform:scale` on the shell | shell background/surface + project color token | scale the whole app with `transform`; breakpoint for micro-layout |
+| **Toolbar / control bar** | CONTENT — `@utility cluster` (flex-wrap); dense + scarce vertical space → list with overflow + "···" menu | project's canonical animated trigger/icon pattern | shrink font/width to force 1 line (cuts content) |
+| **Standalone card (KPI/metric)** | CONTAINER — `container-type:inline-size` + `clamp(rem+cqi)` for text/padding | design-system's card surface (layer, shadow, border) | ad-hoc `clamp` without a size token |
+| **Card grid / dashboard** | INTRINSIC — `grid repeat(auto-fit,minmax(...))` or fixed known columns; `h-full min-h-0` | grid-layout + card height-fill rule | `flex-1` on a block host (inert without a `display:flex` ancestor); `auto-fit` when N is already known |
+| **Data table** | CONTENT — `overflow-x-auto` + `min-w-0`; reveal via `grid 0fr/1fr` lazy | design-system's row-divider, pagination, lazy expand | `scaleY`/`height:auto` on the expand (does not animate); border directly on `<tr>` |
+| **Dropdown/combo/popover (portal)** | CONTENT/VERTICAL — position flip; height `dvh`+`overflow` | project's canonical reveal animation — **use your design-system's existing dropdown/menu component**, don't reinvent | `scaleY` on the reveal (distorts text); close without animation; dropdown behind a modal (without correct z-index) |
+| **Modal / drawer / dialog** | VERTICAL — `dvh` + `max-height` + `overflow-y` | design-system's opening blur/scale tokens | raw `vh` (use `dvh`); arbitrary blur outside the token; close without animation (state resets at the wrong moment) |
+| **Search / filter input** | CONTENT — **FIXED width** (`flex:0 0 auto`) that fits the whole placeholder; the ROW reflows (cluster) | project's canonical input size/token | `flex-shrink` on the field (cuts the placeholder) |
+| **Tabs / segmented toggle** | CONTENT — content slide-swap with its own transition | project's canonical transition animation | instant swap without transition; animate the whole tab body on each swap |
+| **Chart / data-viz** | CONTAINER — `cqi` + `ResizeObserver` only when the render tree changes | see the "Charts / data-viz" section below | implement a chart from scratch without checking a mature OSS library first; divergent color palettes per component |
+| **Sidebar / nav** | VIEWPORT/CONTAINER — fixed px width (not `max-content`); shadow + baseline z-index | design-system's active-item color token | `width:max-content` with a transition (does not interpolate smoothly) |
+| **Form / field group** | CONTENT — `min-w-0`, `flex-wrap`, fluid label sizing | project's canonical input border/state | 2px border at rest (the pattern is usually 1px); hardcoded hex outside a token |
+| **Badge / pill / chip** | CONTENT — intrinsic to content; variable pill row → gate by render + `clamp` floor by char count + WRAP fallback | design-system's badge/pill pattern | parenthesized count like `(N)`; literal `rgba()` opacity; global `clamp(cqi)` blind to content; `overflow-hidden`+`truncate` (cuts information) |
+| **Icon / icon button** | fixed scale per icon size | project's single canonical icon library | static icon on a filter/expand trigger when the project's pattern uses an animated icon in that context |
+
+## Charts / data-viz
+
+For a new chart, first consider **porting from a mature OSS library**
+before implementing from scratch (LEI ZERO). A public canonical reference
+in this space: **Bklit UI** (`github.com/bklit/bklit-ui`, MIT, shadcn
+copy-paste registry) — covers Sankey, Funnel, Radar, Scatter, Heatmap, Gauge and
+more; SVG render (stylable by theme token), animates with `motion`,
+Sankey uses `d3-sankey`. shadcn model: `npx shadcn@latest add @bklit/<chart>`
+copies the source into the repo — it becomes your code, re-skinnable with the
+project's tokens.
+
+- **Hard rule:** after adding a third-party chart component,
+  re-point every hardcoded color to the project's tokens before merging
+  — inheriting hex from an external registry breaks the dark/light theme.
+- **Caveat:** check whether an external registry's dependencies are in
+  pre-release/alpha before pinning the version in production.
+
+## Quick decision (which axis?)
+
+- Only adjust font/padding/gap by size → **pure CSS** `clamp()+cqi`, zero JS.
+- Component reusable at different widths → `@container` + `cqi`
+  (ensure `container-type` on an ancestor).
+- Row of controls → `cluster` (wrap) → list with overflow — never shrink.
+- Need the size in JS because it CHANGES the render tree → `ResizeObserver`
+  hook reading `offsetWidth` (careful with `getBoundingClientRect`
+  if some ancestor uses `transform:scale` — the value comes back scaled).
+- Shell changes mobile↔desktop → project's breakpoint hook.
+
+## Related skills (route, don't duplicate)
+
+| I need | Go to |
+|------------|---------|
+| Color tokens, button/badge variants, animation, design-system anti-patterns | **this project's** canonical design-system skill/doc, if it exists |
+| Chart/data-viz (Sankey, Funnel, Radar, Scatter, Heatmap, Gauge…) | this skill (the "Charts / data-viz" section above) |
+| Responsiveness decision-framework, container queries, fluid type, overflow, vertical-constraints | `responsive-design` skill |
+| Mine/cluster repeated className to decide if it becomes a token | `classname-token-workflow` skill |
+| The 2026 pattern + per-component-type playbook | this skill |

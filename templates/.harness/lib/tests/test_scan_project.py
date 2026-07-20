@@ -200,7 +200,7 @@ class ScanProjectNextjsFixtureTest(unittest.TestCase):
         self.assertFalse(surfaces["local"]["claude_md"])
         self.assertIn("global_claude_READONLY", surfaces)
         self.assertIn("global_codex_READONLY", surfaces)
-        self.assertIn("NUNCA", surfaces["policy"])
+        self.assertIn("NEVER", surfaces["policy"])
 
 
 class ScanProjectNoGitTest(unittest.TestCase):

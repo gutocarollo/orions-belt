@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
-"""ds-pair-eval — avalia se um PAR (cor de texto x cor de fundo) mantém
-contraste nos temas de produção configurados.
+"""ds-pair-eval — evaluates whether a PAIR (text color x background color)
+keeps contrast across the configured production themes.
 
-PORTADO de apps/web/scripts/ds-pair-eval.py (harness-doador de referência) —
-plano de resgate §R1a. Complementa ds-pairs-check.py (que valida os pares na DEFINIÇÃO
-do CSS); ESTE avalia o par no PONTO DE USO — ex.: "text-foreground sobre
-bg-white" ou "text-white/70 sobre bg-surface-selected" — julgando
-deterministicamente quando um par "se enquadra" (PASS em todos os temas) e
-quando não (FAIL, com os temas que falham).
+PORTED from apps/web/scripts/ds-pair-eval.py (reference donor harness) —
+rescue plan §R1a. Complements ds-pairs-check.py (which validates the pairs in
+the CSS DEFINITION); THIS one evaluates the pair at the POINT OF USE — e.g.
+"text-foreground over bg-white" or "text-white/70 over bg-surface-selected" —
+deterministically judging when a pair "fits" (PASS in all themes) and when it
+does not (FAIL, with the themes that fail).
 
-GENERICIDADE (vs. a versão-fonte): zero nome de marca hardcoded.
-  - Path do CSS: HARNESS_WEB_APP_DIR + DS_GATE_CSS_PATH (.harness/harness.conf).
-    Ausente = fail-open (todo par vira "não-resolvível", não crash).
-  - Temas: PROJECT_THEMES (CSV de valores de atributo data-theme). Cada tema
-    T gera duas entradas — "T" (variante clara, `[data-theme="T"] {`) e
-    "T-dark" (variante escura, `[data-theme="T"].dark`) — além das duas
-    entradas de base sempre presentes: "light" (:root) e "dark-base" (.dark
-    neutro). Vazio = avalia só light/dark-base (sem overlay de marca).
+GENERICITY (vs. the source version): zero hardcoded brand name.
+  - CSS path: HARNESS_WEB_APP_DIR + DS_GATE_CSS_PATH (.harness/harness.conf).
+    Missing = fail-open (every pair becomes "unresolvable", not a crash).
+  - Themes: PROJECT_THEMES (CSV of data-theme attribute values). Each theme
+    T generates two entries — "T" (light variant, `[data-theme="T"] {`) and
+    "T-dark" (dark variant, `[data-theme="T"].dark`) — plus the two base
+    entries always present: "light" (:root) and "dark-base" (neutral .dark).
+    Empty = evaluates only light/dark-base (no brand overlay).
 
 CLI:
   python3 .harness/lib/ds-pair-eval.py --text text-foreground --bg bg-white
   python3 .harness/lib/ds-pair-eval.py --text text-white/70 --bg bg-surface-selected --non-text
   echo '[{"text":"text-muted-foreground","bg":"bg-card"}]' | python3 .harness/lib/ds-pair-eval.py --batch
 
-Exit 1 se algum par FALHAR em algum tema (útil em gate).
+Exit 1 if any pair FAILS in any theme (useful in a gate).
 """
 from __future__ import annotations
 
@@ -42,13 +42,13 @@ CSS_REL = get_config("DS_GATE_CSS_PATH", "styles/globals.css") or "styles/global
 CSS = (ROOT if WEB_APP_DIR == "." else ROOT / WEB_APP_DIR) / CSS_REL
 
 if CSS.is_file():
-    SRC = re.sub(r'/\*.*?\*/', '', CSS.read_text(), flags=re.S)  # sem comentários
+    SRC = re.sub(r'/\*.*?\*/', '', CSS.read_text(), flags=re.S)  # without comments
 else:
-    print(f"ds-pair-eval: CSS de tokens não encontrado em {CSS} — pares ficam não-resolvíveis (fail-open).", file=sys.stderr)
+    print(f"ds-pair-eval: tokens CSS not found at {CSS} — pairs become unresolvable (fail-open).", file=sys.stderr)
     SRC = ''
 
-# ── temas: base (light=:root, dark-base=.dark neutro) sempre presentes; cada
-# tema de PROJECT_THEMES soma uma variante clara + escura via data-theme. ──
+# ── themes: base (light=:root, dark-base=neutral .dark) always present; each
+# PROJECT_THEMES theme adds a light + dark variant via data-theme. ──
 THEMES = get_config_csv('PROJECT_THEMES', [])
 THEME_SEL: dict[str, str] = {
     'light': r':root\s*\{',
@@ -83,13 +83,13 @@ BLOCKS = {k: _block(v) for k, v in THEME_SEL.items()}
 
 
 def _resolve_var(name, theme):
-    """valor hex do token --name no tema (com herança + var() chains)."""
+    """hex value of the --name token in the theme (with inheritance + var() chains)."""
     scopes = [BLOCKS.get(theme, '')]
     b = BASE_OF.get(theme)
     while b:
         scopes.append(BLOCKS.get(b, ''))
         b = BASE_OF.get(b)
-    scopes.append(SRC)  # último recurso: qualquer definição
+    scopes.append(SRC)  # last resort: any definition
     for scope in scopes:
         m = re.search(r'--' + re.escape(name) + r':\s*([^;]+);', scope)
         if not m:
@@ -101,12 +101,12 @@ def _resolve_var(name, theme):
         hm = re.match(r'#([0-9a-fA-F]{6})\b', val)
         if hm:
             return '#' + hm.group(1).lower()
-        return None  # rgb(...)/rgba(...) → não-hex, sinaliza não-resolvível
+        return None  # rgb(...)/rgba(...) → non-hex, signals unresolvable
     return None
 
 
-# ── paleta Tailwind (famílias neutras + branco/preto — genérico, não é
-# vocabulário de marca) ──
+# ── Tailwind palette (neutral families + white/black — generic, not brand
+# vocabulary) ──
 PALETTE = {
     'white': '#ffffff', 'black': '#000000', 'transparent': None,
 }
@@ -122,7 +122,7 @@ for fam, hexes in _RAMPS.items():
     for stop, h in zip(_STOPS, hexes):
         PALETTE[f'{fam}-{stop}'] = '#' + h
 
-# tokens semânticos válidos (nomes de --var que aparecem como classe bg-/text-)
+# valid semantic tokens (--var names that appear as a bg-/text- class)
 TOKENS = {'background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground',
           'primary', 'primary-foreground', 'secondary', 'secondary-foreground', 'muted', 'muted-foreground',
           'accent', 'accent-foreground', 'destructive', 'destructive-foreground', 'border', 'input', 'ring',
@@ -185,7 +185,7 @@ def _contrast(a, b):
 
 
 def evaluate(text_cls, bg_cls, non_text=False):
-    """Retorna {theme: {'text':hex,'bg':hex,'ratio':x,'pass':bool}} + 'ok' global + 'fails'."""
+    """Returns {theme: {'text':hex,'bg':hex,'ratio':x,'pass':bool}} + global 'ok' + 'fails'."""
     tname, ta = parse_class(text_cls)
     bname, ba = parse_class(bg_cls)
     thr = 3.0 if non_text else 4.5
@@ -196,9 +196,9 @@ def evaluate(text_cls, bg_cls, non_text=False):
         bhex = to_hex(bname, theme)
         if not thex or not bhex:
             out[theme] = {'text': thex, 'bg': bhex, 'ratio': None, 'pass': None,
-                          'note': 'não-resolvível (rgba/alias/desconhecido)'}
+                          'note': 'unresolvable (rgba/alias/unknown)'}
             continue
-        eff = _composite(thex, bhex, ta)  # texto com opacidade sobre o fundo
+        eff = _composite(thex, bhex, ta)  # text with opacity over the background
         r = _contrast(eff, bhex)
         ok = r >= thr
         out[theme] = {'text': eff, 'bg': bhex, 'ratio': r, 'pass': ok}
@@ -210,13 +210,13 @@ def evaluate(text_cls, bg_cls, non_text=False):
 
 
 def _print(res):
-    print(f"PAR: {res['text']}  x  {res['bg']}   (limiar {res['threshold']})")
+    print(f"PAIR: {res['text']}  x  {res['bg']}   (threshold {res['threshold']})")
     for t, d in res['themes'].items():
         if d['ratio'] is None:
             print(f"  {t:10} —      {d.get('note', '')}")
         else:
-            print(f"  {t:10} {d['ratio']:5}:1  {'PASS' if d['pass'] else 'FAIL'}   ({d['text']} sobre {d['bg']})")
-    v = 'OK (se enquadra)' if res['ok'] else f"NÃO se enquadra — FALHA em: {', '.join(res['fails']) or 'não-resolvível'}"
+            print(f"  {t:10} {d['ratio']:5}:1  {'PASS' if d['pass'] else 'FAIL'}   ({d['text']} over {d['bg']})")
+    v = 'OK (fits)' if res['ok'] else f"does NOT fit — FAILS in: {', '.join(res['fails']) or 'unresolvable'}"
     print(f"  -> {v}\n")
 
 
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     ap.add_argument('--text')
     ap.add_argument('--bg')
     ap.add_argument('--non-text', action='store_true')
-    ap.add_argument('--batch', action='store_true', help='lê JSON [{text,bg,non_text?}] do stdin')
+    ap.add_argument('--batch', action='store_true', help='reads JSON [{text,bg,non_text?}] from stdin')
     a = ap.parse_args()
     if a.batch:
         pairs = json.load(sys.stdin)
@@ -233,7 +233,7 @@ if __name__ == '__main__':
         print(json.dumps(results, ensure_ascii=False))
         sys.exit(1 if any(not r['ok'] for r in results) else 0)
     if not a.text or not a.bg:
-        ap.error('use --text e --bg (ou --batch)')
+        ap.error('use --text and --bg (or --batch)')
     res = evaluate(a.text, a.bg, a.non_text)
     _print(res)
     sys.exit(0 if res['ok'] else 1)

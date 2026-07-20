@@ -1,12 +1,12 @@
-# Banlist de jargão interno para documentos de CLIENTE (uma ERE por linha; # = comentário).
-# O hook deliverable-scrub-gate roda estes padrões contra Write/Edit em arquivos
-# cujo path casa um dos globs abaixo. Objetivo: nunca vazar processo interno /
-# nome de ferramenta / contexto de outra conta para um entregável do cliente.
-# Origem: auditoria de fricção do harness-doador de referência, cluster 7 ("NUNCA MENCIONA O NOME INTERNO DO
-# PROJETO", jargão interno em doc de cliente). Seed genérico — customize os
-# globs/termos abaixo para a convenção de nomes de doc-de-cliente deste projeto.
+# Banlist of internal jargon for CLIENT documents (one ERE per line; # = comment).
+# The deliverable-scrub-gate hook runs these patterns against Write/Edit on files
+# whose path matches one of the globs below. Goal: never leak internal process /
+# tool name / another account's context into a client deliverable.
+# Origin: friction audit of the reference donor harness, cluster 7 ("NEVER MENTIONS THE INTERNAL
+# PROJECT NAME", internal jargon in a client doc). Generic seed — customize the
+# globs/terms below to this project's client-doc naming convention.
 
-# --- globs de arquivos-alvo (prefixo 'glob:'; relativos à raiz do repo) ---
+# --- target-file globs (prefix 'glob:'; relative to the repo root) ---
 glob: docs/commercial/Proposta-*
 glob: docs/commercial/Orcamento-*
 glob: docs/commercial/Relatorio-*
@@ -15,7 +15,7 @@ glob: docs/commercial/Cronograma*
 glob: docs/commercial/Matriz-*
 glob: docs/commercial/manual-usuario/*
 
-# --- padrões banidos (ERE, case-insensitive) ---
+# --- banned patterns (ERE, case-insensitive) ---
 \bLEI ZERO\b
 CLAUDE\.md
 \bhookify\b
@@ -27,8 +27,8 @@ auditoria adversarial
 \bClaude Code\b
 vscode-webview://
 {%- if client_product_name %}
-# nome interno do projeto: o produto para o cliente é "{{ client_product_name }}"
+# internal project name: the product for the client is "{{ client_product_name }}"
 {%- else %}
-# nome interno do projeto (customize/adicione o nome comercial do produto entregue ao cliente):
+# internal project name (customize/add the commercial name of the product delivered to the client):
 {%- endif %}
 \b{{ project_name }}\b

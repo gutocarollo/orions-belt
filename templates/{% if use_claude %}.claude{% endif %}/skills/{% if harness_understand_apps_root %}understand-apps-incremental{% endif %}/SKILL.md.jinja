@@ -1,26 +1,26 @@
 ---
 name: understand-apps-incremental
 description: >-
-  Use sempre que a tarefa mencionar /understand, Understand Anything,
-  .understand-anything, knowledge-graph, grafo de codigo, compute-batches ou
-  atualizacao incremental do grafo de {{ project_name }}.
+  Use whenever the task mentions /understand, Understand Anything,
+  .understand-anything, knowledge-graph, code graph, compute-batches or
+  incremental update of the {{ project_name }} graph.
 ---
 
-{# Só gerada quando harness_understand_apps_root está setado — projeto usa um
-   subdiretório monorepo (ex.: "apps") como PROJECT_ROOT do Understand Anything,
-   diferente do git root. Ver copier.yml/harness_understand_apps_root e
-   docs/planning/notas-f1.6.md (regra do PROJECT_ROOT≠git-root herdada do
-   harness-doador de referência). #}
-# Understand Anything incremental em {{ harness_understand_apps_root }}/
+{# Only generated when harness_understand_apps_root is set — the project uses a
+   monorepo subdirectory (e.g. "apps") as the Understand Anything PROJECT_ROOT,
+   different from the git root. See copier.yml/harness_understand_apps_root and
+   docs/planning/notas-f1.6.md (the PROJECT_ROOT≠git-root rule inherited from
+   the reference donor harness). #}
+# Understand Anything incremental in {{ harness_understand_apps_root }}/
 
-Antes de qualquer acao com Understand Anything neste repo, leia:
+Before any action with Understand Anything in this repo, read:
 
-- `.claude/CLAUDE.md` (ou `AGENTS.md`)
-- a doc de arquitetura que documenta este mecanismo neste projeto (se houver)
+- `.claude/CLAUDE.md` (or `AGENTS.md`)
+- the architecture doc that documents this mechanism in this project (if any)
 
-## Regra bloqueante
+## Blocking rule
 
-O grafo principal do produto usa `PROJECT_ROOT={{ harness_understand_apps_root }}`, mas o Git root real é a raiz do repo. Portanto, a lista incremental de arquivos alterados deve ser relativa a `{{ harness_understand_apps_root }}/`.
+The product's main graph uses `PROJECT_ROOT={{ harness_understand_apps_root }}`, but the real Git root is the repo root. Therefore, the incremental list of changed files must be relative to `{{ harness_understand_apps_root }}/`.
 
 Use:
 
@@ -28,34 +28,34 @@ Use:
 bash .harness/lib/understand-apps-changed-files.sh
 ```
 
-ou, manualmente:
+or, manually:
 
 ```bash
 LAST=$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('{{ harness_understand_apps_root }}/.understand-anything/meta.json','utf8')); process.stdout.write(m.gitCommitHash)")
 git diff --relative={{ harness_understand_apps_root }} "$LAST"..HEAD --name-only -- {{ harness_understand_apps_root }} | rg -v '^\.understand-anything/'
 ```
 
-O hash de referência do grafo atual **não é uma constante** — leia-o sempre de
-`{{ harness_understand_apps_root }}/.understand-anything/meta.json` (campo `gitCommitHash`,
-comando `LAST=` acima). Não fixe um hash decorado no doc/skill: ele dessincroniza a
-cada `/understand` incremental (achado real do harness-doador — o hash citado num doc
-estático já driftou do grafo real mais de uma vez).
+The reference hash of the current graph **is not a constant** — always read it from
+`{{ harness_understand_apps_root }}/.understand-anything/meta.json` (field `gitCommitHash`,
+the `LAST=` command above). Do not hardcode a memorized hash in the doc/skill: it desyncs on
+every incremental `/understand` (a real finding from the donor harness — the hash cited in a
+static doc has already drifted from the real graph more than once).
 
-## Proibido
+## Forbidden
 
-Não usar:
+Do not use:
 
 ```bash
 git diff <lastCommitHash>..HEAD --name-only
 git -C {{ harness_understand_apps_root }} diff <lastCommitHash>..HEAD --name-only
 ```
 
-Esses comandos emitem `{{ harness_understand_apps_root }}/api/...`, mas `compute-batches` espera `api/...` quando o projeto analisado é `{{ harness_understand_apps_root }}/`.
+These commands emit `{{ harness_understand_apps_root }}/api/...`, but `compute-batches` expects `api/...` when the analyzed project is `{{ harness_understand_apps_root }}/`.
 
 ## Checklist
 
-1. Confirmar que `{{ harness_understand_apps_root }}/.understand-anything/meta.json` existe.
-2. Gerar changed files com `.harness/lib/understand-apps-changed-files.sh`.
-3. Validar que a lista não contém `{{ harness_understand_apps_root }}/`, `.claude/`, `.agents/`, `docs/`, `scripts/` ou outros paths da raiz.
-4. Rodar incremental sem `--full`.
-5. Se atualizar dashboard, lembrar que ele lê `{{ harness_understand_apps_root }}/.understand-anything/knowledge-graph.json`.
+1. Confirm that `{{ harness_understand_apps_root }}/.understand-anything/meta.json` exists.
+2. Generate changed files with `.harness/lib/understand-apps-changed-files.sh`.
+3. Validate that the list does not contain `{{ harness_understand_apps_root }}/`, `.claude/`, `.agents/`, `docs/`, `scripts/` or other root paths.
+4. Run incremental without `--full`.
+5. If updating the dashboard, remember it reads `{{ harness_understand_apps_root }}/.understand-anything/knowledge-graph.json`.

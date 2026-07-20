@@ -5,11 +5,11 @@ Claude hooks print stdout from UserPromptSubmit into the next model context. Thi
 hook is intentionally narrow: it only fires when the prompt mentions the
 Understand Anything workflow or its artifacts.
 
-MATERIALIZAÇÃO (F4, orions-belt): só é gerado quando
-`harness_understand_apps_root` está setado (ver copier.yml) — o projeto usa um
-subdiretório monorepo, não a raiz do git, como PROJECT_ROOT do grafo. O hash de
-grafo hardcoded do original do harness-doador foi REMOVIDO (dessincroniza a cada
-/understand incremental); a regra agora é sempre ler de meta.json.
+MATERIALIZATION (F4, orions-belt): generated only when
+`harness_understand_apps_root` is set (see copier.yml) — the project uses a
+monorepo subdirectory, not the git root, as the graph's PROJECT_ROOT. The
+hardcoded graph hash from the donor-harness original was REMOVED (it desyncs on
+every incremental /understand); the rule now always reads from meta.json.
 """
 import json
 import re
@@ -17,24 +17,24 @@ import sys
 
 TRIGGER_RE = re.compile(
     r"(?i)(/understand|understand[- ]anything|\.understand-anything|knowledge-graph|"
-    r"grafo\s+de\s+(codigo|c[oó]digo|conhecimento)|compute-batches|changed-files\.txt)"
+    r"grafo\s+de\s+(codigo|c[oó]digo|conhecimento)|code\s+graph|compute-batches|changed-files\.txt)"
 )
 
 MESSAGE = """<understand-apps-incremental-guard>
-REGRA BLOQUEANTE — Understand Anything em {{ project_name }}:
-- Escopo semantico do grafo do produto = {{ harness_understand_apps_root }}/.
-- Git root real = raiz do repo; {{ harness_understand_apps_root }}/ e subdiretorio.
-- Portanto o incremental de {{ harness_understand_apps_root }}/ NUNCA pode usar diff bruto:
+BLOCKING RULE — Understand Anything in {{ project_name }}:
+- Semantic scope of the product graph = {{ harness_understand_apps_root }}/.
+- Real git root = repo root; {{ harness_understand_apps_root }}/ is a subdirectory.
+- Therefore the incremental of {{ harness_understand_apps_root }}/ must NEVER use a raw diff:
   git diff <lastCommitHash>..HEAD --name-only
-- Use SEMPRE diff relativo a {{ harness_understand_apps_root }}:
+- ALWAYS use a diff relative to {{ harness_understand_apps_root }}:
   LAST=$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('{{ harness_understand_apps_root }}/.understand-anything/meta.json','utf8')); process.stdout.write(m.gitCommitHash)")
   git diff --relative={{ harness_understand_apps_root }} "$LAST"..HEAD --name-only -- {{ harness_understand_apps_root }} | rg -v '^\\.understand-anything/'
-- O hash de referência do grafo NAO e uma constante — leia sempre de
-  {{ harness_understand_apps_root }}/.understand-anything/meta.json (campo gitCommitHash, comando LAST= acima).
-- Preferir o script canônico:
+- The graph's reference hash is NOT a constant — always read it from
+  {{ harness_understand_apps_root }}/.understand-anything/meta.json (gitCommitHash field, the LAST= command above).
+- Prefer the canonical script:
   bash .harness/lib/understand-apps-changed-files.sh
-- changed-files para compute-batches deve conter api/..., web/..., cli/...; NUNCA {{ harness_understand_apps_root }}/api/... ou paths da raiz.
-- /understand --full NAO e incremental; --full força rebuild.
+- changed-files for compute-batches must contain api/..., web/..., cli/...; NEVER {{ harness_understand_apps_root }}/api/... or root paths.
+- /understand --full is NOT incremental; --full forces a rebuild.
 </understand-apps-incremental-guard>"""
 
 

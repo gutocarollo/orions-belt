@@ -20,7 +20,7 @@ of the RUN.md and end the pass.
 ## Checks of the pass
 
 - **Lessons pending promotion** — `{{ harness_lessons_file }}`: any lesson repeated 2×+
-  still without `[PROMOVIDA → destino]`? If so, promote it (permanent rule in the project's
+  still without `[PROMOTED → destination]`? If so, promote it (permanent rule in the project's
   instructions, or a hook via hookify) and mark it.
 - **Repo wiki/documentation integrity** — `python3 .harness/lib/docs_wiki_lint.py`. FAIL →
   fix `{{ harness_docs_dir }}/index.md`, `{{ harness_docs_dir }}/log.md` or the category

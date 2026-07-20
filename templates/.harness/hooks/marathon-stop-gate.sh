@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# marathon-stop-gate — Stop hook. Inerte sem maratona ativa.
-# Com $RUNS_DIR/ACTIVE + itens abertos no RUN.md: bloqueia a parada e
-# devolve a "Próxima ação". Anti-prisão: N bloqueios consecutivos SEM o RUN.md
-# mudar → libera com aviso (progresso real zera os strikes).
+# marathon-stop-gate — Stop hook. Inert when no marathon is active.
+# With $RUNS_DIR/ACTIVE + open items in RUN.md: blocks the stop and
+# returns the "Próxima ação". Anti-lockup: N consecutive blocks WITHOUT RUN.md
+# changing → releases with a warning (real progress resets the strikes).
 #
-# MATERIALIZAÇÃO (F9-fixes): diretório de runs (HARNESS_RUNS_DIR, default
-# .harness/runs) e o cap de strikes (HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS,
-# default 3) vêm de .harness/harness.conf via .harness/lib/_tooling_conf.py —
-# eram hardcoded (as 2 chaves existiam no schema desde F0 sem nenhum consumidor).
-# Default de HARNESS_RUNS_DIR mudou de ".claude/runs" para ".harness/runs"
-# em M-ALTA/H4 (auditoria adversarial pós-H3, gap simétrico) — o valor
-# antigo carregava "claude" mesmo em projetos codex-only; ".harness/" já é
-# o diretório neutro/runtime-agnóstico do resto do framework
-# (harness.conf, answers.yml, hooks, lib). Projetos JÁ instalados mantêm o
-# valor gravado no answers.yml deles (Copier não reescreve resposta já
-# dada — só o default para instalações NOVAS muda).
+# MATERIALIZATION (F9-fixes): the runs directory (HARNESS_RUNS_DIR, default
+# .harness/runs) and the strike cap (HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS,
+# default 3) come from .harness/harness.conf via .harness/lib/_tooling_conf.py —
+# they used to be hardcoded (the 2 keys existed in the schema since F0 with no consumer).
+# The default of HARNESS_RUNS_DIR changed from ".claude/runs" to ".harness/runs"
+# in M-ALTA/H4 (post-H3 adversarial audit, symmetric gap) — the old value
+# carried "claude" even in codex-only projects; ".harness/" is already
+# the neutral/runtime-agnostic directory of the rest of the framework
+# (harness.conf, answers.yml, hooks, lib). Projects ALREADY installed keep the
+# value recorded in their own answers.yml (Copier does not rewrite an answer
+# already given — only the default for NEW installs changes).
 set -uo pipefail
 IN=$(cat)
 command -v jq >/dev/null 2>&1 || exit 0
@@ -49,29 +49,31 @@ RUN="$ROOT/$RUNS_DIR/$SLUG/RUN.md"
 [ -f "$RUN" ] || exit 0
 
 OPEN=$(grep -c '^- \[ \]' "$RUN" || true)
-[ "$OPEN" -eq 0 ] && exit 0   # checklist zerado — parada legítima
+[ "$OPEN" -eq 0 ] && exit 0   # checklist empty — legitimate stop
 
-# AGUARDANDO decisão do usuário = parada legítima
-NEXT=$(awk '/^## Próxima ação/{getline; while($0 ~ /^\s*$/) getline; print; exit}' "$RUN")
-case "$NEXT" in AGUARDANDO:*) exit 0 ;; esac
+# WAITING/AGUARDANDO (user decision) = legitimate stop.
+# Bilingual: the marathon skill emits "## Next action" (en) or "## Próxima ação" (pt),
+# and "WAITING:" (en) or "AGUARDANDO:" (pt) — match both so the gate works in either mode.
+NEXT=$(awk '/^## (Next action|Próxima ação)/{getline; while($0 ~ /^\s*$/) getline; print; exit}' "$RUN")
+case "$NEXT" in WAITING:*|AGUARDANDO:*) exit 0 ;; esac
 
-# N strikes sem progresso → libera
+# N strikes without progress → release
 STRIKES="$ROOT/$RUNS_DIR/$SLUG/.stop-strikes"
 MTIME=$(stat -c %Y "$RUN" 2>/dev/null || echo 0)
 read -r COUNT LAST < <(cat "$STRIKES" 2>/dev/null || echo "0 0")
-[ "$MTIME" != "$LAST" ] && COUNT=0   # RUN.md mudou desde o último strike = progresso
+[ "$MTIME" != "$LAST" ] && COUNT=0   # RUN.md changed since the last strike = progress
 if [ "$COUNT" -ge "$MAX_STRIKES" ]; then
   rm -f "$STRIKES"
-  echo '{"systemMessage":"marathon-stop-gate: '"$MAX_STRIKES"' bloqueios sem progresso no RUN.md — liberando a parada. Maratona segue ATIVA ('"$SLUG"'); retome com a skill marathon ou encerre com rm '"$RUNS_DIR"'/ACTIVE."}'
+  echo '{"systemMessage":"marathon-stop-gate: '"$MAX_STRIKES"' blocks without progress in RUN.md — releasing the stop. Marathon still ACTIVE ('"$SLUG"'); resume with the marathon skill or end it with rm '"$RUNS_DIR"'/ACTIVE."}'
   exit 0
 fi
 echo "$((COUNT + 1)) $MTIME" > "$STRIKES"
 
 cat >&2 <<EOF
-MARATHON ATIVA ($SLUG): $OPEN item(ns) abertos no checklist — a parada foi bloqueada.
-Próxima ação registrada: ${NEXT:-"(vazia — atualize o RUN.md)"}
-Continue executando (skill marathon §2: fechar item → marcar [x] → atualizar Próxima ação).
-Se está genuinamente bloqueado em decisão do usuário: escreva "AGUARDANDO: <pergunta>" na seção Próxima ação e pare.
-Encerrar a maratona de vez: rm $RUNS_DIR/ACTIVE
+MARATHON ACTIVE ($SLUG): $OPEN open item(s) in the checklist — the stop was blocked.
+Recorded next action: ${NEXT:-"(empty — update RUN.md)"}
+Keep executing (marathon skill §2: close item → mark [x] → update the "Next action" section).
+If you are genuinely blocked on a user decision: write "WAITING: <question>" in the "Next action" section and stop.
+End the marathon for good: rm $RUNS_DIR/ACTIVE
 EOF
 exit 2

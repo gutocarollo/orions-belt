@@ -58,7 +58,7 @@ existing files stays clean.
 |---|---|---|
 | 🧭 | **Delivery council** | Orchestrates a task from `EXECUTION` / `PLANNING` / `PLAN_REVIEW` / `AUTO` with automatic trade-off decisions and adversarial loops. |
 | 🔬 | **Adversarial review** | Evidence-based verifier that must confirm or refute each gap with proof — runs in a subagent, never self-review. |
-| 🎯 | **grill-me** | Interviews you on a plan one decision at a time (behavior, ≥2 real good/bad examples, Option C) — before code is written. |
+| 🎯 | **Grill-me** | Interviews you on a plan one decision at a time (behavior, ≥2 real good/bad examples, Option C) — before code is written. |
 | ✅ | **Completion gate** | A Stop hook that **blocks any "done" claim** without a proof-of-completion block of this-session evidence (the `PROVA-DE-CONCLUSAO` sentinel). |
 | 🖼️ | **UI-evidence** | Playwright before/after full-page PNGs + console + manifest; a Stop hook blocks shipping UI changes seen only as a diff. |
 | 📚 | **Karpathy wiki** | Temporal doc indexing; a pre-commit lint fails on orphaned docs or dead references. |

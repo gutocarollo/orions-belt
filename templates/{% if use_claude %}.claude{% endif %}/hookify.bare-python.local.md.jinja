@@ -6,10 +6,10 @@ action: block
 pattern: (^|[;&|(]\s*)python(\s|$)
 ---
 
-BLOQUEADO: `python` (bare) não existe no PATH desta máquina — falha 127 recorrente.
+BLOCKED: bare `python` does not exist on this machine's PATH — recurring exit 127.
 
-Use conforme o caso:
-- Script avulso: `python3 script.py`
-- Código da API: `cd apps/api && UV_PROJECT_ENVIRONMENT=.venv-host uv run python ...`
-- Interpretador direto: `{{ project_root }}/apps/api/.venv-host/bin/python` (path absoluto — o cwd reseta entre comandos Bash)
-- NUNCA `apps/api/.venv` (owner root, criado pelo container worker).
+Use, depending on the case:
+- Standalone script: `python3 script.py`
+- API code: `cd apps/api && UV_PROJECT_ENVIRONMENT=.venv-host uv run python ...`
+- Direct interpreter: `{{ project_root }}/apps/api/.venv-host/bin/python` (absolute path — the cwd resets between Bash commands)
+- NEVER `apps/api/.venv` (owned by root, created by the worker container).

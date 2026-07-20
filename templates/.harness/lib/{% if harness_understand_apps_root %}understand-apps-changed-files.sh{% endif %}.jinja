@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 # Canonical changed-files generator for Understand Anything over {{ harness_understand_apps_root }}/.
 #
-# MATERIALIZAÇÃO (R2, orions-belt — plano de resgate §2 item "Distribuição de
-# lint"): porte genericizado do script canônico do harness-doador de
-# referência (que vivia em `scripts/understand-apps-changed-files.sh`, com
-# "apps" hardcoded no lugar de {{ harness_understand_apps_root }}). Só é
-# gerado quando `harness_understand_apps_root` está setado (ver copier.yml)
-# — projeto usa um subdiretório monorepo, não a raiz do git, como
-# PROJECT_ROOT do grafo Understand Anything (ver
-# docs/planning/notas-f1.6.md). Materializado em `.harness/lib/`, o MESMO
-# diretório onde `_tooling_conf.py`/`scan_project.py`/`ds-gate.sh` já são
-# instalados no projeto-alvo (F0/F5) — não um `scripts/` de topo separado,
-# para não colidir com scripts próprios do projeto-alvo e manter 1 único
-# namespace para tudo que o framework materializa. `AGENTS.md.jinja`, a
-# skill `understand-apps-incremental`, a skill `{{ project_name }}-delivery-council`
-# e os hooks `understand-apps-diff-guard.sh`/`understand-context-inject.py`
-# citavam este comando como `bash scripts/understand-apps-changed-files.sh`
-# antes de existir em qualquer lugar do projeto-alvo — path-fantasma
-# corrigido junto com esta materialização.
+# MATERIALIZATION (R2, orions-belt — rescue plan §2 item "Lint
+# distribution"): genericized port of the canonical script from the
+# reference donor harness (which lived in `scripts/understand-apps-changed-files.sh`,
+# with "apps" hardcoded in place of {{ harness_understand_apps_root }}). Only
+# generated when `harness_understand_apps_root` is set (see copier.yml)
+# — the project uses a monorepo subdirectory, not the git root, as the
+# PROJECT_ROOT of the Understand Anything graph (see
+# docs/planning/notas-f1.6.md). Materialized in `.harness/lib/`, the SAME
+# directory where `_tooling_conf.py`/`scan_project.py`/`ds-gate.sh` are already
+# installed into the target project (F0/F5) — not a separate top-level
+# `scripts/`, to avoid colliding with the target project's own scripts and to
+# keep a single namespace for everything the framework materializes. `AGENTS.md.jinja`,
+# the `understand-apps-incremental` skill, the `{{ project_name }}-delivery-council`
+# skill and the `understand-apps-diff-guard.sh`/`understand-context-inject.py`
+# hooks referenced this command as `bash scripts/understand-apps-changed-files.sh`
+# before it existed anywhere in the target project — a phantom path
+# fixed together with this materialization.
 #
 # Why this exists:
 # - The Git repo root may differ from the Understand Anything graph root.

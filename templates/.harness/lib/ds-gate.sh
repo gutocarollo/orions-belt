@@ -1,38 +1,37 @@
 #!/usr/bin/env bash
 # =============================================================================
-# ds-gate.sh — Gate genérico de tokenização de design system (motor).
+# ds-gate.sh — Generic design-system tokenization gate (engine).
 # -----------------------------------------------------------------------------
-# PORTADO de apps/web/scripts/ds-gate.sh (harness-doador de referência) —
-# plano de resgate §R1a. Prova "quanto do design está tokenizado" de forma
-# DETERMINÍSTICA: conta, por dimensão, cores/valores de design HARDCODED que
-# driblam os tokens Tailwind/CSS-vars. Modo RATCHET: compara com
-# .ds-baseline.txt (dentro do diretório do app web) e FALHA (exit 1) só se
-# alguma dimensão AUMENTAR. Sem baseline (1ª execução), roda em modo
-# report-only e nunca falha — o ratchet nasce do primeiro
-# `--update-baseline` explícito, não de um valor chutado.
+# PORTED from apps/web/scripts/ds-gate.sh (reference donor harness) — rescue
+# plan §R1a. Proves "how much of the design is tokenized" DETERMINISTICALLY:
+# counts, per dimension, HARDCODED design colors/values that bypass the
+# Tailwind/CSS-var tokens. RATCHET mode: compares against .ds-baseline.txt
+# (inside the web app directory) and FAILS (exit 1) only if some dimension
+# INCREASES. Without a baseline (1st run), it runs in report-only mode and
+# never fails — the ratchet is born from the first explicit
+# `--update-baseline`, not from a guessed value.
 #
-# GENERICIDADE (vs. a versão-fonte): nenhuma string de marca hardcoded. O
-# diretório do app web vem de HARNESS_WEB_APP_DIR (.harness/harness.conf,
-# lido em runtime via _tooling_conf.py — mesmo diretório deste script) ou de
-# `--dir <path>` explícito. Exclusões de marca (ex.: nome de escala de cor
-# customizada, path do arquivo de tokens) vêm de DS_BRAND_EXCLUDE_PATTERNS
-# (CSV de ERE) — default vazio, engine mais estrito quando não configurado
-# (nunca mais permissivo por omissão).
+# GENERICITY (vs. the source version): no hardcoded brand string. The web app
+# directory comes from HARNESS_WEB_APP_DIR (.harness/harness.conf, read at
+# runtime via _tooling_conf.py — same directory as this script) or from an
+# explicit `--dir <path>`. Brand exclusions (e.g. custom color-scale name,
+# tokens file path) come from DS_BRAND_EXCLUDE_PATTERNS (ERE CSV) — default
+# empty, engine stricter when unconfigured (never more permissive by omission).
 #
-# Uso:
+# Usage:
 #   bash .harness/lib/ds-gate.sh [--dir <web-app-dir>] [check|--report|--update-baseline]
 #
-# Allowlist (2 níveis, ambos versionados/auditáveis, DENTRO do diretório do
-# app web):
-#   - inline: comentar a linha com  // ds-allow: <motivo>   (ou /* ds-allow: */)
-#   - por caminho: globs em .ds-allowlist (um por linha; '#'=comentário)
+# Allowlist (2 levels, both versioned/auditable, INSIDE the web app
+# directory):
+#   - inline: comment the line with  // ds-allow: <reason>   (or /* ds-allow: */)
+#   - by path: globs in .ds-allowlist (one per line; '#'=comment)
 # =============================================================================
 set -uo pipefail
 
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${HARNESS_PROJECT_ROOT:-${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}}"
 if [ -z "$PROJECT_ROOT" ]; then
-  echo "ds-gate: não foi possível resolver a raiz do projeto (nem HARNESS_PROJECT_ROOT/CLAUDE_PROJECT_DIR nem git repo) — fail-open." >&2
+  echo "ds-gate: could not resolve the project root (neither HARNESS_PROJECT_ROOT/CLAUDE_PROJECT_DIR nor git repo) — fail-open." >&2
   exit 0
 fi
 
@@ -61,10 +60,10 @@ WEB_APP_DIR="${WEB_APP_DIR%/}"
 TARGET_DIR="$PROJECT_ROOT"
 [ "$WEB_APP_DIR" != "." ] && TARGET_DIR="$PROJECT_ROOT/$WEB_APP_DIR"
 if [ ! -d "$TARGET_DIR" ]; then
-  echo "ds-gate: diretório do app web ($TARGET_DIR) não existe — nada a checar (fail-open)."
+  echo "ds-gate: web app directory ($TARGET_DIR) does not exist — nothing to check (fail-open)."
   exit 0
 fi
-cd "$TARGET_DIR" || { echo "ds-gate: falha ao entrar em $TARGET_DIR — fail-open." >&2; exit 0; }
+cd "$TARGET_DIR" || { echo "ds-gate: failed to enter $TARGET_DIR — fail-open." >&2; exit 0; }
 
 DS_BRAND_EXCLUDE_ERE="$(_conf_getcsv DS_BRAND_EXCLUDE_PATTERNS | tr ',' '|')"
 _brand_filter() {
@@ -82,27 +81,27 @@ BASELINE=".ds-baseline.txt"
 ALLOWFILE=".ds-allowlist"
 MODE="${1:-check}"
 
-# allowlist por caminho: um GLOB real por linha (fnmatch), não substring.
+# by-path allowlist: one real GLOB per line (fnmatch), not substring.
 #
-# H2/A6.3 (auditoria adversarial pós-v1.0.0, bypass REPRODUZIDO): a versão
-# anterior lia `.ds-allowlist` e fazia `grep -vF` (substring LITERAL) contra
-# `$ROOT/<linha>` — um padrão como `legacy/**` nunca casava nenhum path real
-# porque a substring "**" não existe em nenhum caminho de verdade; a doc
-# prometia "glob" (comentário no topo deste arquivo e docs/manual/
-# 05-hooks-posttooluse.md) mas o allowlist era, na prática, inoperante para
-# qualquer entrada com wildcard. Fix: filtra via `.harness/lib/
-# ds_allowlist_filter.py` (fnmatch real, mesma dependência que
-# `_tooling_conf.py` já exige) — cada padrão casa contra o path relativo
-# (antes do primeiro ':' na saída do grep -n). `fnmatch` não trata `/` como
-# especial (`*`/`**` casam qualquer sufixo, incluindo subdiretórios) —
-# suficiente para "aceitar uma pasta/arquivo legado inteiro", documentado
-# aqui em vez de prometer semântica de `pathlib.Path.match`/glob de shell
-# (que PARARIA em `/` para um `*` único). Script SEPARADO de propósito (não
-# `python3 - <<HEREDOC` inline): `python3 -` lê o PRÓPRIO PROGRAMA de stdin
-# — um heredoc consome stdin pra carregar o source e `sys.stdin` chega
-# vazio ao programa, descartando toda a entrada do pipe do grep em
-# silêncio (bug real encontrado nesta rodada ao testar a 1ª versão do fix
-# — ver comentário no topo de ds_allowlist_filter.py).
+# H2/A6.3 (post-v1.0.0 adversarial audit, bypass REPRODUCED): the previous
+# version read `.ds-allowlist` and did `grep -vF` (LITERAL substring) against
+# `$ROOT/<line>` — a pattern like `legacy/**` never matched any real path
+# because the substring "**" does not exist in any real path; the docs
+# promised "glob" (comment at the top of this file and docs/manual/
+# 05-hooks-posttooluse.md) but in practice the allowlist was inoperative for
+# any entry with a wildcard. Fix: filter via `.harness/lib/
+# ds_allowlist_filter.py` (real fnmatch, same dependency `_tooling_conf.py`
+# already requires) — each pattern matches against the relative path (before
+# the first ':' in the grep -n output). `fnmatch` does not treat `/` as
+# special (`*`/`**` match any suffix, including subdirectories) — enough to
+# "accept a whole legacy folder/file", documented here instead of promising
+# `pathlib.Path.match`/shell-glob semantics (which would STOP at `/` for a
+# single `*`). SEPARATE script on purpose (not inline `python3 - <<HEREDOC`):
+# `python3 -` reads the PROGRAM ITSELF from stdin — a heredoc consumes stdin
+# to load the source and `sys.stdin` arrives empty to the program, silently
+# discarding the entire grep pipe input (real bug found this round while
+# testing the 1st version of the fix — see comment at the top of
+# ds_allowlist_filter.py).
 build_allow_patterns() {
   if [[ -f "$ALLOWFILE" ]]; then
     grep -vE '^\s*#|^\s*$' "$ALLOWFILE" 2>/dev/null
@@ -118,9 +117,9 @@ _allowlist_filter() {
   python3 "$LIB_DIR/ds_allowlist_filter.py" "${ALLOW_PATTERNS[@]}"
 }
 
-# conta ocorrências de um ERE em .ts/.tsx, excluindo dirs, `ds-allow:`,
-# paths allowlistados (glob real, ver _allowlist_filter) e o exclude de
-# marca configurado (DS_BRAND_EXCLUDE_PATTERNS)
+# counts occurrences of an ERE in .ts/.tsx, excluding dirs, `ds-allow:`,
+# allowlisted paths (real glob, see _allowlist_filter) and the configured
+# brand exclude (DS_BRAND_EXCLUDE_PATTERNS)
 count() {
   local ere="$1"; shift
   local extra_filter="${1:-cat}"
@@ -129,21 +128,21 @@ count() {
   printf '%s\n' "$out" | _allowlist_filter | eval "$extra_filter" | _brand_filter | grep -c .
 }
 
-# ---- Dimensões (ERE + filtro extra). Engine genérico Tailwind/shadcn. -------
+# ---- Dimensions (ERE + extra filter). Generic Tailwind/shadcn engine. -------
 declare -A DIMS
 declare -A FILT
 DIMS[color-gray]='(^|[^-a-z])(bg|text|border|ring|divide|from|via|to|fill|stroke)-gray-(50|100|200|300|400|500|600|700|800|900|950)'
 FILT[color-gray]='cat'
-# color-wb conta SÓ formas SÓLIDAS: white/black com alpha (/N ou /[..]) é o idioma
-# translúcido (glass/scrim/hairline sobre mídia ou superfície) — theme-independent
-# por definição. Sólido = dívida real (deveria ser token semântico).
+# color-wb counts ONLY SOLID forms: white/black with alpha (/N or /[..]) is the
+# translucent idiom (glass/scrim/hairline over media or surface) — theme-independent
+# by definition. Solid = real debt (should be a semantic token).
 DIMS[color-wb]='(bg|text|border|ring|from|via|to|fill|stroke)-(white|black)([^a-z0-9/[-]|$)'
 FILT[color-wb]='cat'
 DIMS[color-named]='(bg|text|border|ring|from|via|to|fill|stroke)-(red|green|blue|emerald|amber|yellow|orange|indigo|purple|violet|rose|sky|cyan|teal|pink|lime|fuchsia)-[0-9]{2,3}'
 FILT[color-named]='cat'
 DIMS[color-hex]='#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|rgba?\([0-9]'
-# alphas NEUTROS rgba(0,0,0,x)/rgba(255,255,255,x) = idioma sombra/scrim/glass
-# (theme-independent) — heurística GENÉRICA de CSS, não específica de marca.
+# NEUTRAL alphas rgba(0,0,0,x)/rgba(255,255,255,x) = shadow/scrim/glass idiom
+# (theme-independent) — GENERIC CSS heuristic, not brand-specific.
 FILT[color-hex]='grep -viE "rgba?\\(\\s*0\\s*,\\s*0\\s*,\\s*0|rgba?\\(\\s*255\\s*,\\s*255\\s*,\\s*255|rgb\\(\\s*0\\s+0\\s+0|rgb\\(\\s*255\\s+255\\s+255"'
 DIMS[typography-px]='text-\[[0-9.]+px\]'
 FILT[typography-px]='cat'
@@ -164,7 +163,7 @@ if [[ -f "$BASELINE" ]]; then
   while IFS='=' read -r k v; do [[ -n "$k" ]] && BASE[$k]="$v"; done < "$BASELINE"
 fi
 
-printf '%-16s %8s %10s   %s\n' "DIMENSÃO" "ATUAL" "BASELINE" "STATUS"
+printf '%-16s %8s %10s   %s\n' "DIMENSION" "CURRENT" "BASELINE" "STATUS"
 printf '%s\n' "------------------------------------------------------------"
 FAIL=0; TOTAL=0
 declare -A NOW
@@ -175,21 +174,21 @@ for d in "${ORDER[@]}"; do
   if [[ "$MODE" == "--report" || -z "$b" ]]; then
     printf '%-16s %8s %10s   %s\n' "$d" "$n" "${b:-—}" "report"
   elif (( n > b )); then
-    printf '%-16s %8s %10s   ✗ SUBIU (+%d)\n' "$d" "$n" "$b" "$((n-b))"; FAIL=1
+    printf '%-16s %8s %10s   ✗ INCREASED (+%d)\n' "$d" "$n" "$b" "$((n-b))"; FAIL=1
   elif (( n < b )); then
-    printf '%-16s %8s %10s   ✓ melhorou (-%d)\n' "$d" "$n" "$b" "$((b-n))"
+    printf '%-16s %8s %10s   ✓ improved (-%d)\n' "$d" "$n" "$b" "$((b-n))"
   else
     printf '%-16s %8s %10s   ✓ ok\n' "$d" "$n" "$b"
   fi
 done
 printf '%s\n' "------------------------------------------------------------"
 printf '%-16s %8s\n' "TOTAL" "$TOTAL"
-echo "(0 em todas = 100% tokenizado. Ratchet: baseline só encolhe. Sem baseline = report-only, nunca falha.)"
+echo "(0 across all = 100% tokenized. Ratchet: baseline only shrinks. No baseline = report-only, never fails.)"
 
 if [[ "$MODE" == "--update-baseline" ]]; then
   : > "$BASELINE"
   for d in "${ORDER[@]}"; do echo "$d=${NOW[$d]}" >> "$BASELINE"; done
-  echo ">> baseline atualizado em $TARGET_DIR/$BASELINE"
+  echo ">> baseline updated in $TARGET_DIR/$BASELINE"
   exit 0
 fi
 [[ "$MODE" == "--report" ]] && exit 0

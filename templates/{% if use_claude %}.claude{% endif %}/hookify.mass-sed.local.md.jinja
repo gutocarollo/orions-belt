@@ -12,11 +12,11 @@ conditions:
     pattern: apps/(web|api)|\*\.(tsx?|css|py)|xargs|find\s
 ---
 
-CUIDADO — `sed -i` em massa sobre código já corrompeu repos: um `sed hover:scale-105` capturou substring e corrompeu ocorrências de `group-hover:scale-105` (detectado pela queda na contagem e restaurado à mão).
+CAUTION — mass `sed -i` over code has already corrupted repos: a `sed hover:scale-105` captured a substring and corrupted occurrences of `group-hover:scale-105` (detected by the drop in count and restored by hand).
 
-Protocolo para substituição em massa (LEI ZERO §0.6 e §14 — sequencial, 1 por vez):
-1. CONTE antes: `grep -rc 'padrão' <escopo>` — anote o total.
-2. Regex com âncoras/lookaround para não pegar substring (`(?<![\w-])padrão`).
-3. Aplique em UM arquivo, confira o diff, depois expanda.
-4. CONTE depois e reconcilie os números; qualquer delta inesperado = reverter.
-Prefira Edit/MultiEdit (diff auditável) a sed quando forem <10 arquivos.
+Protocol for mass substitution (LEI ZERO §0.6 and §14 — sequential, one at a time):
+1. COUNT before: `grep -rc 'pattern' <scope>` — note the total.
+2. Regex with anchors/lookaround so you don't catch a substring (`(?<![\w-])pattern`).
+3. Apply to ONE file, check the diff, then expand.
+4. COUNT after and reconcile the numbers; any unexpected delta = revert.
+Prefer Edit/MultiEdit (auditable diff) over sed when it's <10 files.

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# subagent-release — PostToolUse/PostToolUseFailure (Task|Agent). Libera 1 slot
-# do throttle e registra 1 linha no journal de tasks.
+# subagent-release — PostToolUse/PostToolUseFailure (Task|Agent). Releases 1
+# throttle slot and records 1 line in the tasks journal.
 #
-# MATERIALIZAÇÃO (M-ALTA/H4, auditoria adversarial): $HARNESS_RUNS_DIR
-# (default ".harness/runs") em vez de ".claude/runs" hardcoded — precisa
-# apontar para o MESMO diretório que subagent-throttle.sh usa (o par
-# throttle/release compartilha os slots), e esse hook também roda no Codex
+# MATERIALIZATION (M-HIGH/H4, adversarial audit): $HARNESS_RUNS_DIR
+# (default ".harness/runs") instead of hardcoded ".claude/runs" — it must
+# point at the SAME directory that subagent-throttle.sh uses (the
+# throttle/release pair shares the slots), and this hook also runs on Codex
 # via .codex/hooks.json.
 set -uo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
@@ -30,5 +30,5 @@ flock 9
 OLDEST=$(find "$SLOTS" -type f -name '*.slot' | sort | head -1)
 [ -n "$OLDEST" ] && rm -f "$OLDEST"
 N=$(find "$SLOTS" -type f -name '*.slot' | wc -l)
-echo "$(date +%FT%T) task-done slots_em_voo=$N" >> "$ROOT/$RUNS_DIR/task-journal.log"
+echo "$(date +%FT%T) task-done slots_in_flight=$N" >> "$ROOT/$RUNS_DIR/task-journal.log"
 exit 0

@@ -1,63 +1,63 @@
 #!/usr/bin/env bash
 # ui-evidence-gate — Stop hook.
-# Bloqueia (1x por parada; stop_hook_active evita loop) quando há mudança de UI
-# no working tree (HARNESS_WEB_APP_DIR/{app,components,styles} *.tsx|*.css) SEM
-# evidência visual mais recente que a mudança (HARNESS_EVIDENCE_DIR/*/manifest.json).
-# Origem: auditoria de fricção 2026-07-03, cluster 2 (138 incidentes de UI
-# reportada por diff de código, nunca por pixel renderizado).
-# Escapes documentados:
-#   - rodar o motor de evidência do projeto (ex.: npm run ui:evidence -- after [--routes ...])
-#   - sem stack no ar / mudança não-visual: touch "$CLAUDE_PROJECT_DIR/<evidence-dir>/SKIP"
-#     (TTL configurável — HARNESS_UI_EVIDENCE_SKIP_TTL_SECONDS; o motivo vai no veredito do turno)
+# Blocks (once per stop; stop_hook_active prevents looping) when there is a UI
+# change in the working tree (HARNESS_WEB_APP_DIR/{app,components,styles} *.tsx|*.css)
+# WITHOUT visual evidence newer than the change (HARNESS_EVIDENCE_DIR/*/manifest.json).
+# Origin: friction audit 2026-07-03, cluster 2 (138 incidents of UI
+# reported via code diff, never via rendered pixel).
+# Documented escapes:
+#   - run the project's evidence engine (e.g.: npm run ui:evidence -- after [--routes ...])
+#   - no stack running / non-visual change: touch "$CLAUDE_PROJECT_DIR/<evidence-dir>/SKIP"
+#     (configurable TTL — HARNESS_UI_EVIDENCE_SKIP_TTL_SECONDS; the reason goes in the turn's verdict)
 #
-# MATERIALIZAÇÃO (F4, orions-belt): TTL do SKIP e o diretório de evidência
-# vêm de .harness/harness.conf (HARNESS_UI_EVIDENCE_SKIP_TTL_SECONDS,
-# HARNESS_EVIDENCE_DIR) via .harness/lib/_tooling_conf.py, mesmo padrão do
-# subagent-throttle.sh — o original tinha os dois hardcoded (14400 / .claude/evidence).
-# HARNESS_WEB_APP_DIR (F9-fixes, plano de resgate §1, item 2) substitui o
-# "apps/web" hardcoded — default "." (o projeto-alvo já É o app web).
+# MATERIALIZATION (F4, orions-belt): the SKIP TTL and the evidence directory
+# come from .harness/harness.conf (HARNESS_UI_EVIDENCE_SKIP_TTL_SECONDS,
+# HARNESS_EVIDENCE_DIR) via .harness/lib/_tooling_conf.py, same pattern as
+# subagent-throttle.sh — the original had both hardcoded (14400 / .claude/evidence).
+# HARNESS_WEB_APP_DIR (F9-fixes, rescue plan §1, item 2) replaces the
+# hardcoded "apps/web" — default "." (the target project IS the web app itself).
 #
-# REGRESSÃO CORRIGIDA (plano de resgate §1, item 2; RE-CORRIGIDA em G2 da
-# revisão adversarial pós-v1.0.0 — a "correção" original tinha um bug real,
-# provado por install real): `scripts/ui-evidence.sh` é materializado
-# INCONDICIONALMENTE por `use_ui_evidence: true` (é o MOTOR, sempre shipado) —
-# ele NÃO prova que o comando `npm run ui:evidence` existe, porque o Copier
-# nunca edita o `package.json` do projeto-alvo (conteúdo do projeto, fora do
-# que o harness templateia — ver skill `ui-evidence` §0.2). A versão anterior
-# deste hook fazia `ENGINE_WIRED=1` só de o `.sh` existir no disco — como ele
-# SEMPRE existe, o gate SEMPRE bloqueava (exit 2) mandando rodar `npm run
-# ui:evidence`, mesmo em instalação nova sem NENHUM wiring de package.json —
-# quebrando todo commit de UI, confirmado por install real (`copier copy`
-# default + `git commit`). Fix: ENGINE_WIRED exige que o comando REALMENTE
-# exista — só o script `"ui:evidence"` dentro de `package.json` conta (a
-# presença do `.sh` no disco não é suficiente). Sem wiring -> gate INATIVO
-# (exit 0, aviso em stderr). Com wiring -> volta a bloquear quando faltar
-# evidência.
+# REGRESSION FIXED (rescue plan §1, item 2; RE-FIXED in G2 of the
+# post-v1.0.0 adversarial review — the original "fix" had a real bug,
+# proven by a real install): `scripts/ui-evidence.sh` is materialized
+# UNCONDITIONALLY by `use_ui_evidence: true` (it is the ENGINE, always shipped) —
+# it does NOT prove that the `npm run ui:evidence` command exists, because Copier
+# never edits the target project's `package.json` (project content, outside
+# what the harness templates — see skill `ui-evidence` §0.2). The previous
+# version of this hook set `ENGINE_WIRED=1` just from the `.sh` existing on disk —
+# since it ALWAYS exists, the gate ALWAYS blocked (exit 2) telling you to run `npm run
+# ui:evidence`, even on a fresh install with NO package.json wiring at all —
+# breaking every UI commit, confirmed by a real install (`copier copy`
+# default + `git commit`). Fix: ENGINE_WIRED requires the command to ACTUALLY
+# exist — only the `"ui:evidence"` script inside `package.json` counts (the
+# presence of the `.sh` on disk is not enough). Without wiring -> gate INACTIVE
+# (exit 0, warning on stderr). With wiring -> blocks again when evidence is
+# missing.
 #
-# H2/A5 (auditoria adversarial pós-v1.0.0, 4 bypasses REPRODUZIDOS e
-# fechados nesta rodada — ver templates/tests/test_ui_evidence_gate_bypass.sh):
-#   1. Manifest forjado (`echo '{"captures":1}' > manifest.json`, zero PNGs
-#      no disco) satisfazia o gate porque só o campo "captures" era checado.
-#      Fix: `_manifest_has_real_captures()` abaixo abre o manifest com
-#      python3, exige "files" listando exatamente N ".png" == "captures" > 0
-#      E CONFERE QUE CADA PNG EXISTE NO MESMO DIRETÓRIO. Sem python3 (raro),
-#      cai num fallback mais fraco (só captures>0), documentado como tal.
-#   2. Deleção mascarava a mudança: apagar um .tsx fazia o path desaparecer
-#      do loop de mtime (`[ -e "$f" ] || continue`), NEWEST ficava 0 e o
-#      gate saía cedo (linha `[ "$NEWEST" -eq 0 ] && exit 0`) — git-diff
-#      via `git diff --name-only HEAD` já LISTA arquivos deletados, mas o
-#      mtime deles não existe mais no disco. Fix: quando o arquivo não
-#      existe mais, usa o mtime do DIRETÓRIO-PAI (POSIX: remover uma entrada
-#      atualiza o mtime do diretório que a continha) como proxy estável do
-#      instante da deleção — não "now" a cada execução (que criaria um
-#      alvo móvel impossível de satisfazer).
-#   3. Ver templates/{...}/tests/visual/evidence.spec.ts.jinja — HTTP 500
-#      agora falha o teste antes de gerar PNG/manifest (oráculo de status
-#      alinhado com baseline.spec.ts), então nunca chega a este hook como
-#      "captures:1" válido.
-#   4. Ver templates/{...}/scripts/ui-evidence.sh.jinja — preflight de host
-#      indisponível corrigido (curl produzia "000000" via output duplicado
-#      de `-w` + `|| echo 000`, não batia no branch `[ "$code" = "000" ]`).
+# H2/A5 (post-v1.0.0 adversarial audit, 4 bypasses REPRODUCED and
+# closed in this round — see templates/tests/test_ui_evidence_gate_bypass.sh):
+#   1. A forged manifest (`echo '{"captures":1}' > manifest.json`, zero PNGs
+#      on disk) satisfied the gate because only the "captures" field was checked.
+#      Fix: `_manifest_has_real_captures()` below opens the manifest with
+#      python3, requires "files" listing exactly N ".png" == "captures" > 0
+#      AND CONFIRMS THAT EACH PNG EXISTS IN THE SAME DIRECTORY. Without python3 (rare),
+#      it falls back to a weaker check (only captures>0), documented as such.
+#   2. Deletion masked the change: deleting a .tsx made the path disappear
+#      from the mtime loop (`[ -e "$f" ] || continue`), NEWEST stayed 0 and the
+#      gate exited early (line `[ "$NEWEST" -eq 0 ] && exit 0`) — git-diff
+#      via `git diff --name-only HEAD` already LISTS deleted files, but their
+#      mtime no longer exists on disk. Fix: when the file no longer
+#      exists, use the mtime of the PARENT DIRECTORY (POSIX: removing an entry
+#      updates the mtime of the directory that contained it) as a stable proxy for
+#      the instant of deletion — not "now" on every run (which would create a
+#      moving target impossible to satisfy).
+#   3. See templates/{...}/tests/visual/evidence.spec.ts.jinja — HTTP 500
+#      now fails the test before generating PNG/manifest (status oracle
+#      aligned with baseline.spec.ts), so it never reaches this hook as a
+#      valid "captures:1".
+#   4. See templates/{...}/scripts/ui-evidence.sh.jinja — preflight of an
+#      unavailable host fixed (curl produced "000000" via duplicated output
+#      from `-w` + `|| echo 000`, not matching the branch `[ "$code" = "000" ]`).
 set -uo pipefail
 IN=$(cat)
 command -v jq >/dev/null 2>&1 || exit 0
@@ -97,18 +97,18 @@ else
   UI_PATHS=("$WEB_APP_DIR/app" "$WEB_APP_DIR/components" "$WEB_APP_DIR/styles")
 fi
 
-# fail-open: motor de evidência (Playwright ou equivalente) ainda não
-# WIRED neste projeto -> gate inativo, nunca bloqueia sem meio de cumprir.
-# NÃO basta checar `scripts/ui-evidence.sh` no disco (ele é materializado
-# incondicionalmente por `use_ui_evidence: true` — sempre existe, mesmo sem
-# nenhum wiring de package.json); a única prova de que `npm run ui:evidence`
-# de fato roda é o script "ui:evidence" dentro do `package.json` do app.
+# fail-open: the evidence engine (Playwright or equivalent) is not yet
+# WIRED in this project -> gate inactive, never blocks without a means to comply.
+# It is NOT enough to check `scripts/ui-evidence.sh` on disk (it is materialized
+# unconditionally by `use_ui_evidence: true` — always exists, even without
+# any package.json wiring); the only proof that `npm run ui:evidence`
+# actually runs is the "ui:evidence" script inside the app's `package.json`.
 ENGINE_WIRED=0
 if [ -f "$WEB_DIR/package.json" ]; then
   grep -q '"ui:evidence"' "$WEB_DIR/package.json" 2>/dev/null && ENGINE_WIRED=1
 fi
 if [ "$ENGINE_WIRED" -eq 0 ]; then
-  echo "ui-evidence-gate: comando \"npm run ui:evidence\" não wired (falta script \"ui:evidence\" em $WEB_DIR/package.json — o Copier não edita package.json, ver skill ui-evidence §0.2) — gate INATIVO (fail-open)." >&2
+  echo "ui-evidence-gate: command \"npm run ui:evidence\" not wired (missing \"ui:evidence\" script in $WEB_DIR/package.json — Copier does not edit package.json, see skill ui-evidence §0.2) — gate INACTIVE (fail-open)." >&2
   exit 0
 fi
 
@@ -117,12 +117,12 @@ CHANGED=$( { git diff --name-only HEAD -- "${UI_PATHS[@]}" 2>/dev/null
            } | grep -E '\.(tsx|css)$' | sort -u)
 [ -z "$CHANGED" ] && exit 0
 
-# mtime mais novo entre os arquivos de UI alterados. Deleção (bypass A5.2):
-# o path segue listado por `git diff --name-only HEAD` mesmo depois de
-# apagado, mas `[ -e "$f" ]` falha — usar o mtime do diretório-pai (POSIX:
-# `rm` atualiza o mtime do diretório que continha o arquivo) como o
-# instante da mudança, em vez de pular a entrada (o que zerava NEWEST e
-# saía cedo do gate).
+# newest mtime among the changed UI files. Deletion (bypass A5.2):
+# the path stays listed by `git diff --name-only HEAD` even after being
+# deleted, but `[ -e "$f" ]` fails — use the mtime of the parent directory (POSIX:
+# `rm` updates the mtime of the directory that contained the file) as the
+# instant of the change, instead of skipping the entry (which zeroed NEWEST and
+# exited the gate early).
 NEWEST=0
 while IFS= read -r f; do
   [ -n "$f" ] || continue
@@ -133,28 +133,28 @@ while IFS= read -r f; do
     if [ -d "$d" ]; then
       m=$(stat -c %Y "$d" 2>/dev/null || echo 0)
     else
-      m=$(date +%s)  # diretório inteiro também sumiu: fallback conservador
+      m=$(date +%s)  # the whole directory is gone too: conservative fallback
     fi
   fi
   [ "$m" -gt "$NEWEST" ] && NEWEST=$m
 done <<<"$CHANGED"
 [ "$NEWEST" -eq 0 ] && exit 0
 
-# escape hatch SKIP (TTL configurável)
+# escape hatch SKIP (configurable TTL)
 SKIP="$ROOT/$EVIDENCE_DIR/SKIP"
 if [ -f "$SKIP" ]; then
   now=$(date +%s); sm=$(stat -c %Y "$SKIP" 2>/dev/null || echo 0)
   [ $((now - sm)) -lt "$SKIP_TTL" ] && exit 0
 fi
 
-# alguma evidência mais nova que a última mudança de UI, E com captura REAL
-# no disco? (G3, defesa em profundidade — mtime sozinho não basta; RE-REFORÇADO
-# em A5.1 da auditoria pós-v1.0.0: `grep captures>0` sozinho também não basta,
-# porque `echo '{"captures":1}' > manifest.json` (zero PNGs) já batia nesse
-# grep. `_manifest_has_real_captures` abre o manifest, exige "files" listando
-# exatamente N ".png" == "captures" > 0 E confere que cada PNG referenciado
-# EXISTE no mesmo diretório do manifest — forjar o JSON sem os PNGs reais
-# não basta mais.)
+# any evidence newer than the last UI change, AND with a REAL capture
+# on disk? (G3, defense in depth — mtime alone is not enough; RE-REINFORCED
+# in A5.1 of the post-v1.0.0 audit: `grep captures>0` alone is also not enough,
+# because `echo '{"captures":1}' > manifest.json` (zero PNGs) already matched that
+# grep. `_manifest_has_real_captures` opens the manifest, requires "files" listing
+# exactly N ".png" == "captures" > 0 AND confirms that each referenced PNG
+# EXISTS in the same directory as the manifest — forging the JSON without the real PNGs
+# is no longer enough.)
 _manifest_has_real_captures() {
   local mf="$1" dir
   dir="$(dirname "$mf")"
@@ -180,8 +180,8 @@ sys.exit(0)
 PYEOF
     return $?
   fi
-  # sem python3: fallback fraco, documentado (só confere o campo captures —
-  # não prova existência dos PNGs; instale python3 para a checagem forte).
+  # without python3: weak fallback, documented (only checks the captures field —
+  # does not prove the PNGs exist; install python3 for the strong check).
   grep -qE '"captures"[[:space:]]*:[[:space:]]*[1-9]' "$mf" 2>/dev/null
 }
 for mf in "$ROOT/$EVIDENCE_DIR"/*/manifest.json; do
@@ -193,16 +193,16 @@ done
 
 N=$(wc -l <<<"$CHANGED")
 if [ "$WEB_APP_DIR" = "." ]; then
-  RUN_HINT="npm run ui:evidence -- after --routes /rota1,/rota2"
+  RUN_HINT="npm run ui:evidence -- after --routes /route1,/route2"
 else
-  RUN_HINT="cd $WEB_APP_DIR && npm run ui:evidence -- after --routes /rota1,/rota2"
+  RUN_HINT="cd $WEB_APP_DIR && npm run ui:evidence -- after --routes /route1,/route2"
 fi
 cat >&2 <<EOF
-UI-EVIDENCE-GATE: $N arquivo(s) de UI alterados sem evidência visual posterior à mudança.
-Trabalho de UI só é "pronto" com pixel renderizado, não diff de código (contrato do AGENTS.md/CLAUDE.md).
-Opções:
-1. $RUN_HINT  (gera PNG+console+manifest em $EVIDENCE_DIR/after/)
-2. Mudança comprovadamente não-visual OU stack fora do ar: touch $EVIDENCE_DIR/SKIP e declare o motivo no veredito.
-Arquivos: $(head -5 <<<"$CHANGED" | tr '\n' ' ')
+UI-EVIDENCE-GATE: $N UI file(s) changed without visual evidence produced after the change.
+UI work is only "done" with a rendered pixel, not a code diff (contract of AGENTS.md/CLAUDE.md).
+Options:
+1. $RUN_HINT  (generates PNG+console+manifest in $EVIDENCE_DIR/after/)
+2. Provably non-visual change OR stack not running: touch $EVIDENCE_DIR/SKIP and declare the reason in the verdict.
+Files: $(head -5 <<<"$CHANGED" | tr '\n' ' ')
 EOF
 exit 2

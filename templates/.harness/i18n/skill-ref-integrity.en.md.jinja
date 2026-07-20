@@ -1,0 +1,78 @@
+---
+name: ref-integrity
+description: >-
+  Use to detect BROKEN REFERENCES to renamed or deleted files in the
+  {{ project_name }} repo — markdown links that don't resolve and live citations to old
+  names/paths in md/json/txt/py/sh/toml/css. Triggers when the task mentions:
+  I renamed/moved/deleted files and need to find orphan refs, check broken links,
+  validate integrity after mass curation/rename, or review a range of commits.
+  Single source `.harness/lib/ref_integrity.py`; also runs as pre-commit and in the loop.
+---
+
+# Ref Integrity
+
+Git-aware referential integrity. **Single source of logic:** `.harness/lib/ref_integrity.py` (SRP: one
+responsibility — no live reference points to a renamed/deleted path). Three thin adapters
+consume the same script (DRY):
+
+- **pre-commit** — `.githooks/pre-commit --staged`. The file is always materialized in this project; the
+  activation (`git config core.hooksPath .githooks`) runs on its own in a post-gen Copier task when the
+  destination was already a git repository at the time of `copy`/`update` (fail-open — it only warns, does not fail, if
+  it was not yet one). If this project has `use_pre_commit_framework=true`, the task is turned off on
+  purpose (it would collide with `pre-commit install`) — in that case the equivalent staged hook is the
+  `ref-integrity-staged` in `.pre-commit-config.yaml`.
+- **this skill** — `--range`, on demand.
+- **the maintenance loop** — `.claude/loop.md --since` (always installed alongside this skill, since
+  the two live under `.claude/`).
+
+See `docs/SCHEMA.md` §5 ("git is the archive").
+
+## When to use
+
+After renaming/moving/deleting files (curation, naming migration, prune), or when reviewing a PR/range,
+to ensure no md/json/txt/py/sh/toml/css still cites the old name.
+
+## How to run
+
+```bash
+# a range of commits (e.g. since before the curation)
+python3 .harness/lib/ref_integrity.py --range <BASE>..HEAD
+# since a ref (loop usage)
+python3 .harness/lib/ref_integrity.py --since <ref>
+# what is staged right now (the same thing the pre-commit runs)
+python3 .harness/lib/ref_integrity.py --staged
+# negative test of the detector itself (a real dead link MUST flag; inside a code fence it must NOT)
+python3 .harness/lib/ref_integrity.py --selftest
+# machine output
+python3 .harness/lib/ref_integrity.py --range <BASE>..HEAD --json
+```
+
+Exit 1 = there is a broken reference; 0 = clean. Two checks: `[link]` (markdown link that doesn't resolve) and
+`[stale]` (live citation to a name/path of a file renamed/deleted in the diff). A link/citation INSIDE a
+code fence (` ``` `) is an example — it does not flag (`blank_code_fences`); a link with a space/accent resolves via
+`%20`/unquote.
+{%- if use_github_ci %} CI (`.github/workflows/docs-integrity.yaml`, installed because
+`use_github_ci=true`) runs `--selftest` + the push/PR range as an additional backstop.
+{%- else %} This project has `use_github_ci=false` — there is no CI backstop; pre-commit + the maintenance
+loop are the only lines of defense.
+{%- endif %}
+
+## What to do with each finding
+
+- **clean rename** (finding shows `new: <path>`) → repoint the citation to the new path.
+- **delete with no new** (`new: —`) → disable the link (keep the text + a note "history in git") or remove
+  the pointer in a comment; NEVER repoint to a different doc (misleading link).
+- **known false positive** (generator auto-output, manual backup, historical stray) → add the term
+  in `.ref-integrity-allowlist` (1 per line) with a comment explaining why.
+
+## Exempt sources (by design, not reported)
+
+`docs/_arquivo/`, `docs/adr/`, `docs/auditorias/`, `docs/qa-evidence/` (snapshots/immutable), `**/log.md`
+(append-only), `.understand-anything/` (in any subdirectory{% if harness_understand_apps_root %} — includes
+`{{ harness_understand_apps_root }}/.understand-anything/`, this project's PROJECT_ROOT for Understand
+Anything{% endif %}) and `.trash-*` (scratch). They are a historical record: a citation to an old name there is legitimate.
+
+## Guardrail
+
+The pre-commit is fail-fast but bypassable (`--no-verify`); the `--since` loop is the backstop. It is not a substitute for
+review — it is the deterministic guard that stops a rename from letting an orphan ref enter the repo.

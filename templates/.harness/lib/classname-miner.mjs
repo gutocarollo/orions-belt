@@ -1,41 +1,41 @@
 #!/usr/bin/env node
 /**
- * Minerador determinístico de combos de className repetidos (candidatos a design token).
- * Variante v1 LITE: zero-dependência (sem `typescript`), regex-only, sem contexto
- * estrutural de JSX/clusters — fallback do miner v2 (classname-miner-v2.mjs) quando
- * o pacote `typescript` não está disponível no projeto-alvo.
+ * Deterministic miner of repeated className combos (design token candidates).
+ * v1 LITE variant: zero-dependency (no `typescript`), regex-only, without
+ * structural JSX/cluster context — fallback for the v2 miner (classname-miner-v2.mjs)
+ * when the `typescript` package is not available in the target project.
  *
- * Operacionaliza "algoritmo de busca por cadeias de caracteres repetidos" na granularidade
- * CORRETA para Tailwind: class-token n-grams (não char-level — char-level partiria `px-3`).
- * Método = mineração de n-gramas contíguos por frequência (padrão de mercado em NLP; mesma
- * família do BPE/suffix-array). Determinístico: Map + sort estável.
+ * Operationalizes "repeated character-string search algorithm" at the CORRECT
+ * granularity for Tailwind: class-token n-grams (not char-level — char-level would split `px-3`).
+ * Method = frequency-based mining of contiguous n-grams (industry standard in NLP; same
+ * family as BPE/suffix-array). Deterministic: Map + stable sort.
  *
- * Ranking = ECONOMIA BRUTA = ocorrências × (len_chars − OVERHEAD), espelhando o legal-substring-miner.
- * OVERHEAD = custo estimado de referenciar o token (nome curto ~10 chars). Substrings cuja
- * economia não paga o overhead não viram token.
+ * Ranking = GROSS SAVINGS = occurrences × (len_chars − OVERHEAD), mirroring the legal-substring-miner.
+ * OVERHEAD = estimated cost of referencing the token (short name ~10 chars). Substrings whose
+ * savings do not pay off the overhead do not become tokens.
  *
- * Filtra n-grams com len_chars >= MIN_CHARS (default 15 = len("px-3 py-2 gap-3")).
+ * Filters n-grams with len_chars >= MIN_CHARS (default 15 = len("px-3 py-2 gap-3")).
  *
- * Uso: node .harness/lib/classname-miner.mjs [--root <dir>] [--out <dir>]
- * Saída: <out>/classname-token-mining.md + .json (default <out> = docs/design-system)
+ * Usage: node .harness/lib/classname-miner.mjs [--root <dir>] [--out <dir>]
+ * Output: <out>/classname-token-mining.md + .json (default <out> = docs/design-system)
  */
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join, relative, resolve } from 'node:path'
 
-const HELP_TEXT = `classname-miner.mjs — minerador regex-only de className (v1 lite, zero-dependencia)
+const HELP_TEXT = `classname-miner.mjs — regex-only className miner (v1 lite, zero-dependency)
 
-Uso:
-  node .harness/lib/classname-miner.mjs [opcoes]
+Usage:
+  node .harness/lib/classname-miner.mjs [options]
 
-Opcoes:
-  --root <dir>   Raiz varrida em busca de .ts/.tsx (default: cwd; env HARNESS_MINER_ROOT)
-  --out <dir>    Diretorio de saida do relatorio .md/.json
+Options:
+  --root <dir>   Root scanned for .ts/.tsx (default: cwd; env HARNESS_MINER_ROOT)
+  --out <dir>    Output directory for the .md/.json report
                   (default: <repo-root>/docs/design-system; env HARNESS_MINER_OUT_DIR)
-  --help, -h      Mostra esta ajuda e sai
+  --help, -h      Show this help and exit
 
-Sem contexto estrutural de JSX/clusters — prefira classname-miner-v2.mjs quando
-o pacote 'typescript' estiver disponivel no projeto-alvo.
+Without structural JSX/cluster context — prefer classname-miner-v2.mjs when
+the 'typescript' package is available in the target project.
 `
 
 function argValue(flag) {
@@ -61,12 +61,12 @@ const REPO_ROOT = detectRepoRoot(WEB_ROOT)
 const SKIP = new Set(['node_modules', '.next', '.git', 'dist', 'build', 'coverage', 'test-results', 'playwright-report', '.turbo'])
 
 const MIN_CHARS = 15        // = len("px-3 py-2 gap-3")
-const MIN_TOKENS = 2        // combo precisa ≥2 classes
-const MAX_TOKENS = 8        // n-gram até 8 classes
-const MIN_OCCURRENCES = 3   // repetir ≥3× p/ ser candidato
-const OVERHEAD = 10         // custo de referenciar o token
+const MIN_TOKENS = 2        // combo needs ≥2 classes
+const MAX_TOKENS = 8        // n-gram up to 8 classes
+const MIN_OCCURRENCES = 3   // repeat ≥3× to be a candidate
+const OVERHEAD = 10         // cost of referencing the token
 
-// Heurística: a string é uma lista de classes Tailwind? (tem ≥2 tokens, e ao menos 1 com cara de utility)
+// Heuristic: is the string a list of Tailwind classes? (has ≥2 tokens, and at least 1 that looks like a utility)
 const UTIL = /^(?:-?(?:[a-z]+:)*)(?:flex|grid|items-|justify-|gap-|space-|p[xytrbl]?-|m[xytrbl]?-|w-|h-|min-|max-|text-|font-|bg-|border|rounded|shadow|ring|outline|absolute|relative|fixed|sticky|inline|block|hidden|overflow|transition|duration|ease-|opacity|cursor|z-|top-|left-|right-|bottom-|translate|rotate|scale|truncate|whitespace|leading|tracking|divide|backdrop|aspect|object-|self-|order-|col-|row-|basis-|grow|shrink|antialiased)/
 
 function walk(dir, acc = []) {
@@ -80,7 +80,7 @@ function walk(dir, acc = []) {
   return acc
 }
 
-// Extrai TODAS as string-literais (entre aspas " ' `) que parecem lista de classes.
+// Extracts ALL string literals (quoted with " ' `) that look like a class list.
 function extractClassStrings(src) {
   const out = []
   const re = /(["'`])((?:\\.|(?!\1)[^\\])*)\1/g
@@ -91,7 +91,7 @@ function extractClassStrings(src) {
     const toks = s.split(/\s+/).filter(Boolean)
     if (toks.length < MIN_TOKENS) continue
     const utilCount = toks.filter(t => UTIL.test(t)).length
-    if (utilCount < 2) continue           // precisa parecer classes, não prosa
+    if (utilCount < 2) continue           // needs to look like classes, not prose
     out.push(toks)
   }
   return out
@@ -104,7 +104,7 @@ for (const f of files) {
   const rel = relative(REPO_ROOT, f).split('\\').join('/')
   const src = readFileSync(f, 'utf8')
   for (const toks of extractClassStrings(src)) {
-    const seen = new Set() // n-gram por documento conta 1× por documento p/ não inflar
+    const seen = new Set() // n-gram per document counts 1× per document so it does not inflate
     for (let n = MIN_TOKENS; n <= Math.min(MAX_TOKENS, toks.length); n++) {
       for (let i = 0; i + n <= toks.length; i++) {
         const gram = toks.slice(i, i + n).join(' ')
@@ -120,7 +120,7 @@ for (const f of files) {
   }
 }
 
-// Filtra + ranqueia por economia bruta.
+// Filters + ranks by gross savings.
 let rows = []
 for (const [gram, g] of grams) {
   if (g.count < MIN_OCCURRENCES) continue
@@ -128,8 +128,8 @@ for (const [gram, g] of grams) {
   if (savings <= 0) continue
   rows.push({ gram, occurrences: g.count, files: g.files.size, chars: g.chars, tokens: g.tokens, savings })
 }
-// Remove n-grams DOMINADOS: se um n-gram maior tem a MESMA contagem de um menor contido nele,
-// fica só o maior (mais específico = melhor token). Determinístico.
+// Removes DOMINATED n-grams: if a longer n-gram has the SAME count as a shorter one contained in it,
+// only the longer one stays (more specific = better token). Deterministic.
 rows.sort((a, b) => b.chars - a.chars)
 const kept = []
 for (const r of rows) {
@@ -146,21 +146,21 @@ writeFileSync(join(outDir, 'classname-token-mining.json'), JSON.stringify({
 }, null, 2))
 
 const top = kept.slice(0, 60)
-const md = `# Mineração de combos de className → candidatos a design token
+const md = `# className combo mining → design token candidates
 
-> Determinístico. Método: n-gramas contíguos de class-tokens (granularidade Tailwind correta), ranqueado por **economia bruta = ocorrências × (chars − ${OVERHEAD})** (espelha o legal-substring-miner). Filtros: ≥${MIN_CHARS} chars, ≥${MIN_OCCURRENCES} ocorrências, n-grams dominados removidos. Arquivos varridos: ${files.length}. Candidatos: ${kept.length}.
+> Deterministic. Method: contiguous class-token n-grams (correct Tailwind granularity), ranked by **gross savings = occurrences × (chars − ${OVERHEAD})** (mirrors the legal-substring-miner). Filters: ≥${MIN_CHARS} chars, ≥${MIN_OCCURRENCES} occurrences, dominated n-grams removed. Files scanned: ${files.length}. Candidates: ${kept.length}.
 
-| # | combo (substring de className) | ocorr. | arq. | chars | economia |
+| # | combo (className substring) | occ. | files | chars | savings |
 |---|---|---:|---:|---:|---:|
 ${top.map((r, i) => `| ${i + 1} | \`${r.gram}\` | ${r.occurrences} | ${r.files} | ${r.chars} | ${r.savings} |`).join('\n')}
 
-> Dados completos: \`classname-token-mining.json\`. Economia = chars poupados ao extrair o combo para 1 token.
+> Full data: \`classname-token-mining.json\`. Savings = chars saved by extracting the combo into 1 token.
 `
 writeFileSync(join(outDir, 'classname-token-mining.md'), md)
 
 console.log('=== CLASSNAME TOKEN MINER (v1 lite) ===')
-console.log('Raiz varrida:', WEB_ROOT)
-console.log('Arquivos:', files.length, '| candidatos (≥%d ocorr, ≥%d chars):', MIN_OCCURRENCES, MIN_CHARS, kept.length)
-console.log('TOP 25 por economia bruta:')
-for (const r of top.slice(0, 25)) console.log(`  ${String(r.savings).padStart(5)}  ×${String(r.occurrences).padStart(3)}  ${r.files}arq  "${r.gram}"`)
-console.log('Saída:', `${relative(REPO_ROOT, outDir) || '.'}/classname-token-mining.md + .json`)
+console.log('Scanned root:', WEB_ROOT)
+console.log('Files:', files.length, '| candidates (≥%d occ, ≥%d chars):', MIN_OCCURRENCES, MIN_CHARS, kept.length)
+console.log('TOP 25 by gross savings:')
+for (const r of top.slice(0, 25)) console.log(`  ${String(r.savings).padStart(5)}  ×${String(r.occurrences).padStart(3)}  ${r.files}files  "${r.gram}"`)
+console.log('Output:', `${relative(REPO_ROOT, outDir) || '.'}/classname-token-mining.md + .json`)

@@ -1,21 +1,21 @@
-# .gitignore — seed mínimo do orions-belt (G10, revisão adversarial pós-v1.0.0).
-# Cobre só o que o PRÓPRIO harness gera em runtime e nunca deveria ser committado —
-# não tenta ser um .gitignore genérico de linguagem/stack (isso é conteúdo do
-# projeto). Primeira instalação: cria do zero. Se o projeto já tiver um
-# .gitignore, o Copier trata como qualquer outro arquivo pré-existente (prompt de
-# conflito/merge manual) — mesma mecânica de qualquer arquivo B do template.
+# .gitignore — minimal Orion's Belt seed (G10, post-v1.0.0 adversarial review).
+# Covers only what the harness ITSELF generates at runtime and should never be
+# committed — it does not try to be a generic language/stack .gitignore (that is
+# project content). First install: created from scratch. If the project already
+# has a .gitignore, Copier treats it like any other pre-existing file (conflict
+# prompt / manual merge) — same mechanics as any template file.
 
-# Evidência visual (PNG + manifest por rodada) — regenera a cada captura, não é
-# fonte de verdade committável (skill ui-evidence, capítulo 09 do manual).
+# Visual evidence (PNG + manifest per run) — regenerated on every capture, not a
+# committable source of truth (ui-evidence skill, manual chapter 09).
 {{ harness_evidence_dir }}/
 
-# Estado durável de execuções longas (marathon) — RUN.md por execução em
-# andamento; artefato de trabalho, não histórico a preservar (capítulo 08).
+# Durable state of long runs (marathon) — RUN.md per in-progress run; a work
+# artifact, not history to preserve (chapter 08).
 {{ harness_runs_dir }}/
 
-# Bytecode Python dos módulos shipados em .harness/lib/ — os hooks importam
-# _tooling_conf.py via `python3 .../script.py` a cada disparo (Edit/Write/Stop),
-# o que materializa __pycache__/ já no primeiro commit se este .gitignore não
-# existir antes do `git add -A`.
+# Python bytecode of the modules shipped under .harness/lib/ — the hooks import
+# _tooling_conf.py via `python3 .../script.py` on every fire (Edit/Write/Stop),
+# which materializes __pycache__/ on the very first commit if this .gitignore is
+# not in place before `git add -A`.
 __pycache__/
 *.py[cod]

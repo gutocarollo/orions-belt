@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# SessionStart hook — injeta o arquivo de lições no contexto (AGENTS.md/CLAUDE.md
-# §16, self-improvement loop). Saída em stdout vira contexto da sessão. Cap de
-# linhas para não inflar o prompt.
+# SessionStart hook — injects the lessons file into the context (AGENTS.md/CLAUDE.md
+# §16, self-improvement loop). Output on stdout becomes session context. Line cap
+# so the prompt is not inflated.
 #
-# MATERIALIZAÇÃO (F4, orions-belt): path do arquivo de lições
-# (HARNESS_LESSONS_FILE, default tasks/lessons.md) e o cap de linhas
-# (HARNESS_LESSONS_INJECT_MAX_LINES, default 80) vêm de .harness/harness.conf
-# via .harness/lib/_tooling_conf.py — mesmo padrão do subagent-throttle.sh
-# (F0). O original do harness-doador tinha os dois hardcoded (path e MAX_LINES=80).
+# MATERIALIZATION (F4, orions-belt): the lessons file path
+# (HARNESS_LESSONS_FILE, default tasks/lessons.md) and the line cap
+# (HARNESS_LESSONS_INJECT_MAX_LINES, default 80) come from .harness/harness.conf
+# via .harness/lib/_tooling_conf.py — same pattern as subagent-throttle.sh
+# (F0). The donor harness original had both hardcoded (path and MAX_LINES=80).
 set -euo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
@@ -35,6 +35,6 @@ MAX_LINES="$(_conf_int HARNESS_LESSONS_INJECT_MAX_LINES 80)"
 FILE="$ROOT/$LESSONS_FILE_REL"
 [ -f "$FILE" ] || exit 0
 echo "<lessons-learned source=\"$LESSONS_FILE_REL\">"
-echo "Lições de sessões anteriores (AGENTS.md/CLAUDE.md §16). Reler as do domínio da tarefa atual; após correção do usuário, fazer append imediato; 2ª recorrência → promover a regra/hook."
+echo "Lessons from previous sessions (AGENTS.md/CLAUDE.md §16). Re-read the ones for the current task's domain; after a user correction, append immediately; 2nd recurrence → promote to a rule/hook."
 tail -n "$MAX_LINES" "$FILE"
 echo "</lessons-learned>"

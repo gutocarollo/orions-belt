@@ -97,7 +97,7 @@ Minimum flow for a medium/high-risk task:
 - Repeat up to a maximum of **{{ harness_execution_review_max }} rounds** or until the reviewer declares `SATISFEITO`.
 - Do not automatically fix an item that depends on a human decision, D[n], credential, external environment, or destructive change; declare it as a block/pending item.
 - Use final status `PENDENTE` when the {{ harness_execution_review_max }}-round limit is reached or when only `MEDIA`/`BAIXA` gaps explicitly accepted as pending remain.
-- At the end, report `ADVERSARIAL-LOOP: <n>/{{ harness_execution_review_max }} rodadas, status: <SATISFEITO|PENDENTE|BLOQUEADO>`.
+- At the end, report `ADVERSARIAL-LOOP: <n>/{{ harness_execution_review_max }} rounds, status: <SATISFEITO|PENDENTE|BLOQUEADO>`.
 
 **Council input arguments:**
 
@@ -135,7 +135,7 @@ TASK:
 - Each round is executed by a SUBAGENT `{{ project_name }}-adversarial-reviewer` (never inline by the main agent), same rule as the Verification Loop; the next round can continue the same subagent via SendMessage.
 - The reviewer must end with `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | BLOQUEADO`.
 - If it comes back `REPLANEJAR` with a fixable critical gap, revise the plan and run the next round.
-- At the end, report `PLAN-ADVERSARIAL-LOOP: <n>/{{ harness_plan_review_max }} rodadas, status: <SATISFEITO|PENDENTE|BLOQUEADO>`.
+- At the end, report `PLAN-ADVERSARIAL-LOOP: <n>/{{ harness_plan_review_max }} rounds, status: <SATISFEITO|PENDENTE|BLOQUEADO>`.
 
 ## 0. LAW ZERO — DO NOT REINVENT THE WHEEL
 
@@ -168,9 +168,9 @@ Absolute default: port and reuse. Implementing from scratch is the exception, no
 - First sentence = technical information or verdict. Zero preambles.
 - Forbidden: "Great question!", "I understand your concern", "Good observation!", sandwich feedback, emojis, decorative exclamations.
 - Forbidden to announce that you are going to be direct. Be direct without narrating.
-- If correct: "Correto." — move on.
-- If wrong: "Errado. [correction] because [data]."
-- If partially correct: "Parcialmente. [correct part]. But [wrong part] because [data]."
+- If correct: "Correct." — move on.
+- If wrong: "Wrong. [correction] because [data]."
+- If partially correct: "Partially. [correct part]. But [wrong part] because [data]."
 - Honest in both directions: a 10 if it deserves it, a 2 if it deserves it.
 - Answer ALL questions in a message. Do not pick the easy ones.
 - Detail > summary. When in doubt, more depth.
@@ -513,9 +513,9 @@ Source: Boris Cherny's CLAUDE.md (gist.github.com/hqman/e29cb6386c539d795767e8c3
 
 Cycle: **capture → inject → promote → consolidate**. The goal is for the error rate to DROP between sessions.
 
-- **Capture (the agent's obligation):** after ANY correction from {{ owner_name }} (a verdict of "Errado.", a reverted approach, a blind spot pointed out, an adversarial review knocking something of mine down) → IMMEDIATELY append to `{{ harness_lessons_file }}` in the format `## [date] symptom → rule` (2-4 lines, a concrete pattern, not a rant). Do not wait for the end of the session.
+- **Capture (the agent's obligation):** after ANY correction from {{ owner_name }} (a verdict of "Wrong.", a reverted approach, a blind spot pointed out, an adversarial review knocking something of mine down) → IMMEDIATELY append to `{{ harness_lessons_file }}` in the format `## [date] symptom → rule` (2-4 lines, a concrete pattern, not a rant). Do not wait for the end of the session.
 - **Inject (hook, deterministic):** SessionStart runs `.harness/hooks/lessons-inject.sh` → the lessons enter the context of EVERY new session. Re-read before a task in the same domain.
-- **Promote (anti-recurrence):** a lesson that repeats 2× → becomes (a) a permanent rule in the appropriate section of this CLAUDE.md, or (b) an executable hook via the `hookify` plugin (a deterministic guard > a prose instruction). A promoted lesson is marked `[PROMOVIDA → destination]` in lessons.md.
+- **Promote (anti-recurrence):** a lesson that repeats 2× → becomes (a) a permanent rule in the appropriate section of this CLAUDE.md, or (b) an executable hook via the `hookify` plugin (a deterministic guard > a prose instruction). A promoted lesson is marked `[PROMOTED → destination]` in lessons.md.
 - **Consolidate (maintenance):** review this file on demand (CLAUDE.md maintenance skills when available); keep the documentation lint (`.harness/lib/docs_wiki_lint.py`) and the lessons pending promotion as part of the repo's maintenance routine.
 - **Iterate mercilessly** (Boris §3): if the same correction appears 3×, the problem is the badly-written RULE — rewrite the rule, do not re-note the symptom.
 
@@ -524,4 +524,4 @@ Cycle: **capture → inject → promote → consolidate**. The goal is for the e
 Current environment = `{{ project_root }}`. When citing repository files, use markdown links with a path relative to the workspace root (clickable in VSCode): `[docs/SCHEMA.md](docs/SCHEMA.md)`. For files outside the workspace (e.g. `~/.claude/...`), an absolute path in plain text.
 
 If a line number matters, write it separately:
-`Linha 42`
+`Line 42`

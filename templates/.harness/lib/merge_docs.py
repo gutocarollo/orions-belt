@@ -1,57 +1,57 @@
 #!/usr/bin/env python3
-"""merge_docs.py — merge ADITIVO (nunca overwrite) para superfícies LOCAIS do
-projeto-alvo (F5, docs/planning/00-plano-consolidado.md §5).
+"""merge_docs.py — ADDITIVE merge (never overwrite) for the LOCAL surfaces of
+the target project (F5, docs/planning/00-plano-consolidado.md §5).
 
-Lição real que motivou esta regra (capturada no lessons.md do harness-doador
-de referência): um `mv` que sobrescreveu
-um arquivo canônico sem checar se já existia. Este módulo garante que
-CLAUDE.md/AGENTS.md preexistentes NUNCA são substituídos inteiros, e que
-settings.json preexistente tem os hooks do harness UNIDOS (não sobrepostos)
-aos hooks que o usuário já tinha.
+Real lesson that motivated this rule (captured in the lessons.md of the
+reference donor harness): a `mv` that overwrote a canonical file without
+checking whether it already existed. This module guarantees that pre-existing
+CLAUDE.md/AGENTS.md are NEVER replaced whole, and that a pre-existing
+settings.json has the harness hooks MERGED (not overwritten) with the hooks
+the user already had.
 
-Três estratégias, por tipo de arquivo (B3, revisão adversarial pós-v1.0.0: os
-4 arquivos "sensíveis" do fluxo brownfield são AGENTS.md, .claude/CLAUDE.md,
-.claude/settings.json e .gitignore — os 3 primeiros usam as 2 estratégias
-abaixo, .gitignore usa a 3ª):
+Three strategies, by file type (B3, adversarial review post-v1.0.0: the
+4 "sensitive" files of the brownfield flow are AGENTS.md, .claude/CLAUDE.md,
+.claude/settings.json and .gitignore — the first 3 use the 2 strategies
+below, .gitignore uses the 3rd):
 
-  - Markdown (CLAUDE.md/AGENTS.md): bloco marcado
+  - Markdown (CLAUDE.md/AGENTS.md): marked block
     `<!-- orions-belt:begin (vX) -->` ... `<!-- orions-belt:end -->`.
-    Primeira instalação: bloco é ANEXADO ao fim do arquivo existente (o
-    conteúdo do usuário antes do bloco nunca é tocado). Reinstalação/update:
-    o CONTEÚDO DENTRO do bloco marcado é substituído (idempotente — não
-    duplica o bloco a cada rodada), o resto do arquivo continua intocado.
+    First install: the block is APPENDED to the end of the existing file (the
+    user's content before the block is never touched). Reinstall/update:
+    the CONTENT INSIDE the marked block is replaced (idempotent — it does not
+    duplicate the block each round), the rest of the file stays untouched.
 
-  - JSON (settings.json): merge estrutural por chave de evento de hook —
-    reconciliação por OWNERSHIP (A4, gap real: dedup por `command` sozinho
-    não bastava — mudança de matcher/timeout no MESMO hook nunca chegava,
-    hook removido upstream persistia, rename deixava as duas entradas
-    registradas). Toda entrada cujo `command` aponta para `.harness/hooks/`
-    é OWNED pelo harness: o lado NOVO (do template renderizado agora) é
-    sempre a fonte de verdade para o conjunto OWNED — update, remoção e
-    rename são resolvidos numa reconciliação completa a cada rodada. Toda
-    entrada cujo `command` NÃO aponta para `.harness/hooks/` é EXTERNA
-    (hook do próprio usuário) e é SEMPRE preservada. Chaves fora de `hooks`
-    (permissions, env, model, etc.) do arquivo existente são preservadas
+  - JSON (settings.json): structural merge per hook-event key —
+    reconciliation by OWNERSHIP (A4, real gap: dedup by `command` alone
+    was not enough — a matcher/timeout change on the SAME hook never landed,
+    a hook removed upstream persisted, a rename left both entries
+    registered). Every entry whose `command` points to `.harness/hooks/`
+    is OWNED by the harness: the NEW side (from the template rendered now) is
+    always the source of truth for the OWNED set — update, removal and
+    rename are resolved in a full reconciliation each round. Every
+    entry whose `command` does NOT point to `.harness/hooks/` is EXTERNAL
+    (the user's own hook) and is ALWAYS preserved. Keys outside `hooks`
+    (permissions, env, model, etc.) of the existing file are preserved
     verbatim.
 
-  - .gitignore: mesmo mecanismo de bloco marcado do Markdown, mas com
-    comentário `#` (não `<!-- -->`, que numa linha de .gitignore não é
-    comentário — vira um padrão de ignore literal começando com `<`).
+  - .gitignore: same marked-block mechanism as Markdown, but with a
+    `#` comment (not `<!-- -->`, which on a .gitignore line is not a
+    comment — it becomes a literal ignore pattern starting with `<`).
 
 CLI:
   merge_docs.py markdown --existing PATH --new PATH [--label TEXT]
-      -> escreve PATH com o merge aplicado (idempotente); imprime JSON
+      -> writes PATH with the merge applied (idempotent); prints JSON
          {"action": "created"|"appended"|"updated-block", "path": ...}
   merge_docs.py settings-json --existing PATH --new PATH
-      -> escreve PATH com o merge aplicado; imprime JSON
+      -> writes PATH with the merge applied; prints JSON
          {"action": "created"|"merged", "path": ..., "hooks_added": N,
           "hooks_kept": N, "hooks_removed_stale_owned": N}
   merge_docs.py gitignore --existing PATH --new PATH [--label TEXT]
-      -> escreve PATH com o merge aplicado (idempotente); imprime JSON
+      -> writes PATH with the merge applied (idempotent); prints JSON
          {"action": "created"|"appended"|"updated-block", "path": ...}
 
-Fail-open: se `--existing` não existir, o comportamento é "criar do zero"
-(copia `--new` verbatim) — não é um erro.
+Fail-open: if `--existing` does not exist, the behavior is "create from scratch"
+(copies `--new` verbatim) — it is not an error.
 """
 from __future__ import annotations
 
@@ -61,26 +61,26 @@ import re
 import sys
 from pathlib import Path
 
-# NOME DO MARCADOR (G7, revisão adversarial pós-v1.0.0): renomeado para
-# `orions-belt:begin/end` para acompanhar o rename do produto (ver README.md
-# raiz — o nome anterior do repo/produto virou histórico em docs/planning/);
-# o marcador antigo só existia até aqui em código/teste do PRÓPRIO framework,
-# nunca em nenhum projeto-alvo real (produto ainda não publicado) — renomear
-# não quebra idempotência de update de ninguém. Se este marcador algum dia
-# tiver sido escrito num projeto-alvo com o nome antigo antes desta rodada,
-# `merge_markdown` cai no ramo "sem bloco marcado ainda" (BEGIN_RE não casa)
-# e ANEXA um novo bloco em vez de atualizar o antigo in-place — não perde
-# conteúdo, mas duplica o bloco uma vez; documentado aqui por transparência.
+# MARKER NAME (G7, adversarial review post-v1.0.0): renamed to
+# `orions-belt:begin/end` to follow the product rename (see root README.md —
+# the previous repo/product name became history in docs/planning/);
+# the old marker only ever existed here in the framework's OWN code/tests,
+# never in any real target project (product not yet published) — renaming
+# does not break anyone's update idempotency. If this marker was ever
+# written into a target project with the old name before this round,
+# `merge_markdown` falls into the "no marked block yet" branch (BEGIN_RE does
+# not match) and APPENDS a new block instead of updating the old one in-place —
+# it loses no content, but duplicates the block once; documented here for transparency.
 BEGIN_RE = re.compile(r"<!-- orions-belt:begin.*?-->", re.S)
 END_MARK = "<!-- orions-belt:end -->"
 
 
 def _marker_block(new_content: str, label: str) -> str:
     return (
-        f"<!-- orions-belt:begin ({label}) — gerado por orions-belt; "
-        f"conteúdo entre os marcadores é reescrito em cada `harness-init`/`copier update`, "
-        f"NUNCA edite dentro deste bloco (a próxima rodada sobrescreve). "
-        f"Conteúdo ACIMA do bloco é do projeto e nunca é tocado. -->\n"
+        f"<!-- orions-belt:begin ({label}) — generated by orions-belt; "
+        f"content between the markers is rewritten on every `harness-init`/`copier update`, "
+        f"NEVER edit inside this block (the next round overwrites it). "
+        f"Content ABOVE the block belongs to the project and is never touched. -->\n"
         f"{new_content.rstrip()}\n"
         f"{END_MARK}\n"
     )
@@ -105,17 +105,17 @@ def merge_markdown(existing_path: Path, new_path: Path, label: str) -> dict:
         existing_path.write_text(merged, encoding="utf-8")
         return {"action": "updated-block", "path": str(existing_path)}
 
-    # sem bloco marcado ainda -> ANEXA ao fim, nunca sobrescreve o que já existe.
+    # no marked block yet -> APPEND to the end, never overwrite what already exists.
     merged = existing_text.rstrip() + "\n\n" + _marker_block(new_content, label)
     existing_path.write_text(merged, encoding="utf-8")
     return {"action": "appended", "path": str(existing_path)}
 
 
-# --- .gitignore (B3, 4º arquivo sensível — mesma mecânica de bloco marcado do
-# Markdown, mas com comentário `#` em vez de `<!-- -->` porque .gitignore não
-# é HTML/Markdown e um comentário `<!-- -->` cru viraria um PADRÃO de ignore
-# literal (uma linha começando com `<` não é comentário em .gitignore — só
-# linhas começando com `#` são). ---
+# --- .gitignore (B3, 4th sensitive file — same marked-block mechanics as
+# Markdown, but with a `#` comment instead of `<!-- -->` because .gitignore is
+# not HTML/Markdown and a raw `<!-- -->` comment would become a literal ignore
+# PATTERN (a line starting with `<` is not a comment in .gitignore — only
+# lines starting with `#` are). ---
 GITIGNORE_BEGIN_RE = re.compile(r"^# orions-belt:begin.*$", re.M)
 GITIGNORE_END_MARK = "# orions-belt:end"
 
@@ -123,9 +123,9 @@ GITIGNORE_END_MARK = "# orions-belt:end"
 def _gitignore_block(new_content: str, label: str) -> str:
     body = new_content.rstrip("\n")
     return (
-        f"# orions-belt:begin ({label}) — gerado por orions-belt; conteúdo entre\n"
-        f"# os marcadores é reescrito em cada harness-install/copier update, NÃO edite\n"
-        f"# dentro deste bloco. Linhas ACIMA do bloco são do projeto e nunca são tocadas.\n"
+        f"# orions-belt:begin ({label}) — generated by orions-belt; content between\n"
+        f"# the markers is rewritten on every harness-install/copier update, do NOT edit\n"
+        f"# inside this block. Lines ABOVE the block belong to the project and are never touched.\n"
         f"{body}\n"
         f"{GITIGNORE_END_MARK}\n"
     )
@@ -150,7 +150,7 @@ def merge_gitignore(existing_path: Path, new_path: Path, label: str) -> dict:
         existing_path.write_text(merged, encoding="utf-8")
         return {"action": "updated-block", "path": str(existing_path)}
 
-    # sem bloco marcado ainda -> ANEXA ao fim, nunca sobrescreve o que já existe.
+    # no marked block yet -> APPEND to the end, never overwrite what already exists.
     merged = existing_text.rstrip("\n") + "\n\n" + _gitignore_block(new_content, label)
     existing_path.write_text(merged, encoding="utf-8")
     return {"action": "appended", "path": str(existing_path)}
@@ -160,31 +160,31 @@ def _hook_command(entry: dict) -> str | None:
     return entry.get("command")
 
 
-# A4 (revisão adversarial pós-v1.0.0, gap real): a versão anterior deduplicava
-# só por string de `command` e SEMPRE preservava o hook antigo — 3 consequências
-# ruins: (1) mudança upstream de matcher/timeout/statusMessage do MESMO hook
-# nunca chegava (o command idêntico contava como "já registrado", a entrada
-# antiga ficava congelada); (2) hook removido no template novo (upstream
-# decidiu descontinuar) persistia para sempre no projeto-alvo; (3) rename de
-# script (ex.: `foo.sh` -> `foo-v2.sh`) deixava as DUAS entradas registradas
-# (double-fire — o hook antigo nunca é removido porque seu command não bate
-# com o novo).
+# A4 (adversarial review post-v1.0.0, real gap): the previous version deduped
+# only by `command` string and ALWAYS preserved the old hook — 3 bad
+# consequences: (1) an upstream matcher/timeout/statusMessage change on the SAME
+# hook never landed (the identical command counted as "already registered", the
+# old entry stayed frozen); (2) a hook removed in the new template (upstream
+# decided to discontinue it) persisted forever in the target project; (3) a
+# script rename (e.g. `foo.sh` -> `foo-v2.sh`) left BOTH entries registered
+# (double-fire — the old hook is never removed because its command does not match
+# the new one).
 #
-# Fix: reconciliação por OWNERSHIP, não por igualdade de string. Todo hook do
-# harness roda um script sob `.harness/hooks/` (fonte única, ver
-# `templates/{% if use_claude %}.claude{% endif %}/settings.json.jinja` — cada
-# `command` é sempre `bash/python3 "$CLAUDE_PROJECT_DIR/.harness/hooks/<script>"`).
-# Esse path é o sinal de "hook OWNED pelo harness". Numa reconciliação:
-#   - toda entrada EXISTENTE cujo command bate no padrão OWNED é DESCARTADA
-#     (o lado novo, vindo do template renderizado agora, é a fonte de verdade
-#     para tudo que o harness possui — reconcilia update, remoção E rename).
-#   - toda entrada EXISTENTE cujo command NÃO bate (hook do próprio usuário,
-#     ex. `npm run lint-staged`, hook custom dele) é SEMPRE preservada.
-#   - todas as entradas do lado NOVO (sempre OWNED, por construção) são
-#     inseridas por completo.
-# Resultado: cada rodada de merge é uma reconciliação completa do conjunto
-# OWNED (idempotente — rodar 2x não duplica, porque a rodada 2 descarta e
-# reinsere o mesmo conjunto), preservando o conjunto EXTERNO intocado.
+# Fix: reconciliation by OWNERSHIP, not by string equality. Every harness hook
+# runs a script under `.harness/hooks/` (single source, see
+# `templates/{% if use_claude %}.claude{% endif %}/settings.json.jinja` — each
+# `command` is always `bash/python3 "$CLAUDE_PROJECT_DIR/.harness/hooks/<script>"`).
+# That path is the "hook OWNED by the harness" signal. In a reconciliation:
+#   - every EXISTING entry whose command matches the OWNED pattern is DISCARDED
+#     (the new side, from the template rendered now, is the source of truth
+#     for everything the harness owns — reconciles update, removal AND rename).
+#   - every EXISTING entry whose command does NOT match (the user's own hook,
+#     e.g. `npm run lint-staged`, a custom hook of theirs) is ALWAYS preserved.
+#   - all entries from the NEW side (always OWNED, by construction) are
+#     inserted in full.
+# Result: each merge round is a full reconciliation of the OWNED set
+# (idempotent — running it twice does not duplicate, because round 2 discards and
+# reinserts the same set), preserving the EXTERNAL set untouched.
 _OWNED_HOOK_PATTERN = re.compile(r"\.harness/hooks/")
 
 
@@ -216,9 +216,9 @@ def merge_settings_json(existing_path: Path, new_path: Path) -> dict:
     for event in sorted(set(existing_hooks) | set(new_hooks)):
         survivor_groups: list = []
 
-        # 1) do lado EXISTENTE, mantém só as entradas EXTERNAS (não-owned);
-        #    entradas OWNED são descartadas aqui — o lado novo é quem decide
-        #    o conjunto OWNED final (update/remoção/rename resolvidos).
+        # 1) from the EXISTING side, keep only the EXTERNAL (non-owned) entries;
+        #    OWNED entries are discarded here — the new side is what decides
+        #    the final OWNED set (update/removal/rename resolved).
         for matcher_group in existing_hooks.get(event, []):
             group_hooks = matcher_group.get("hooks", [])
             external_entries = [h for h in group_hooks if not _is_owned_hook(h)]
@@ -229,8 +229,8 @@ def merge_settings_json(existing_path: Path, new_path: Path) -> dict:
                 merged_group["hooks"] = external_entries
                 survivor_groups.append(merged_group)
 
-        # 2) todas as entradas do lado NOVO (sempre owned, vindas do template
-        #    renderizado agora) entram por completo — fonte de verdade.
+        # 2) all entries from the NEW side (always owned, coming from the template
+        #    rendered now) go in in full — the source of truth.
         for matcher_group in new_hooks.get(event, []):
             new_entries = matcher_group.get("hooks", [])
             if new_entries:

@@ -12,6 +12,6 @@ conditions:
     pattern: scale-y-|scaleY\(
 ---
 
-ANTI-PATTERN DE ANIMAÇÃO (CLAUDE.md/AGENTS.md ⭐ dropdown canônico, se este projeto tiver um): `scaleY` distorce o texto durante a animação. Para dropdown/menu/flyout/popover o canônico costuma ser **clip-path inset + translateY + opacity**, aplicado via classes plain-CSS por `[data-state]`/`[data-side]`. Para expand-collapse inline: `grid grid-rows-[0fr→1fr]` + filho `overflow-hidden`.
+ANIMATION ANTI-PATTERN (CLAUDE.md/AGENTS.md ⭐ canonical dropdown, if this project has one): `scaleY` distorts the text during the animation. For dropdown/menu/flyout/popover the canonical approach is usually **clip-path inset + translateY + opacity**, applied via plain-CSS classes keyed on `[data-state]`/`[data-side]`. For inline expand-collapse: `grid grid-rows-[0fr→1fr]` + child `overflow-hidden`.
 
-Se este uso de scaleY NÃO é animação de overlay/expansão (ex.: transform estático legítimo), siga — mas declare isso no veredito.
+If this use of scaleY is NOT an overlay/expand animation (e.g. a legitimate static transform), proceed — but state that in the verdict.

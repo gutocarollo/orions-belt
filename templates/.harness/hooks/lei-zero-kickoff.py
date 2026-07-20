@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""lei-zero-kickoff — UserPromptSubmit hook.
+"""law-zero-kickoff — UserPromptSubmit hook.
 
-Quando o prompt parece kickoff de feature/refactor e NÃO menciona a LEI ZERO,
-injeta o protocolo compacto como contexto (stdout de UserPromptSubmit vira
-contexto do modelo). Automatiza o que o dono do harness-doador colava à mão
-toda sessão. Origem: auditoria de fricção do harness-doador, cluster 5.
-Fail-open: qualquer erro → exit 0 sem output.
+When the prompt looks like a feature/refactor kickoff and does NOT mention LAW
+ZERO, it injects the compact protocol as context (a UserPromptSubmit's stdout
+becomes model context). Automates what the donor-harness owner used to paste by
+hand every session. Origin: donor-harness friction audit, cluster 5.
+Fail-open: any error → exit 0 with no output.
 """
 import json
 import re
@@ -19,17 +19,17 @@ KICKOFF_RE = re.compile(
     r"|implement|build\s+a|add\s+(a\s+)?feature"
     r")\b"
 )
-# prompts curtos ("continue", "corrija", colas de auditoria) não são kickoff
+# short prompts ("continue", "fix it", pasted audits) are not a kickoff
 MIN_LEN = 25
 
-PROTOCOL = """<lei-zero-protocolo>
-LEI ZERO (AGENTS.md/CLAUDE.md §0) — antes de implementar qualquer feature não trivial:
-1. PESQUISAR soluções maduras existentes (GitHub/awesome-lists via plugin last30days quando disponível; docs oficiais via Context7). Cada feature investigada individualmente.
-2. Portar/copiar/reaproveitar libs, código e padrões validados. Implementar do zero SÓ se nada for reaproveitável — e declarar por quê.
-3. Verificar o que o REPO JÁ TEM antes de criar (grep no código, lockfile/manifest de dependências, blocos ⭐ REFERÊNCIA CANÔNICA do AGENTS.md/CLAUDE.md).
-4. Migrações/mudanças transversais: SEQUENCIAIS, 1 por vez, testadas (§0.6, §14).
-Se o plano final reinventa algo que existe, o plano está errado.
-</lei-zero-protocolo>"""
+PROTOCOL = """<law-zero-protocol>
+LAW ZERO (AGENTS.md/CLAUDE.md §0) — before implementing any non-trivial feature:
+1. SEARCH for existing mature solutions (GitHub/awesome-lists via the last30days plugin when available; official docs via Context7). Investigate each feature individually.
+2. Port/copy/reuse validated libs, code and patterns. Implement from scratch ONLY if nothing is reusable — and state why.
+3. Check what the REPO ALREADY HAS before creating (grep the code, the dependency lockfile/manifest, the ⭐ CANONICAL REFERENCE blocks of AGENTS.md/CLAUDE.md).
+4. Migrations/cross-cutting changes: SEQUENTIAL, one at a time, tested (§0.6, §14).
+If the final plan reinvents something that already exists, the plan is wrong.
+</law-zero-protocol>"""
 
 
 def main():
@@ -41,8 +41,8 @@ def main():
     if len(prompt) < MIN_LEN:
         return 0
     low = prompt.lower()
-    if "lei zero" in low or "lei-zero" in low:
-        return 0  # usuário já invocou a lei explicitamente
+    if "lei zero" in low or "lei-zero" in low or "law zero" in low or "law-zero" in low:
+        return 0  # the user already invoked the law explicitly
     if not KICKOFF_RE.search(prompt):
         return 0
     print(PROTOCOL)

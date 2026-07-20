@@ -1,34 +1,32 @@
 #!/usr/bin/env python3
-"""completion-gate — Stop hook (dual-runtime: Claude Code e Codex).
+"""completion-gate — Stop hook (dual-runtime: Claude Code and Codex).
 
-Bloqueia o fim de turno quando a ÚLTIMA mensagem do assistente contém um claim
-de conclusão de nível de plano (100%, "plano executado", "tudo corrigido",
-"all done", "task complete"...) sem o bloco de evidência da skill
-`prova-de-conclusao` (sentinel completo `PROVA-DE-CONCLUSAO: x/y PASS,
-gaps: [...]`). Origem: auditoria de fricção 2026-07-03, cluster 1 (42
-incidentes de overclaim em 12 sessões).
+Blocks turn-end when the assistant's LAST message contains a plan-level completion
+claim (100%, "plan executed", "all fixed", "all done", "task complete"...) without
+the `prova-de-conclusao` skill's evidence block (full sentinel
+`PROVA-DE-CONCLUSAO: x/y PASS, gaps: [...]`). Origin: friction audit 2026-07-03,
+cluster 1 (42 overclaim incidents across 12 sessions).
 
-Payload dual-runtime (confirmado via WebFetch learn.chatgpt.com/docs/hooks
-nesta sessão — H3/A1-2): o Claude Code manda `transcript_path` (JSONL) e NÃO
-manda `last_assistant_message`; o Codex manda os dois campos, mas
-`transcript_path` pode vir `null` — `last_assistant_message` (string) é a
-única fonte confiável de texto do turno nesse runtime. Por isso o campo
-`last_assistant_message`, quando presente e não-vazio, tem PRIORIDADE sobre
-o parsing de transcript (que é Claude-specific e não existe no payload
-Codex real); só cai para o parsing de transcript quando esse campo está
-ausente/vazio (caminho Claude, inalterado).
+Dual-runtime payload (confirmed via WebFetch learn.chatgpt.com/docs/hooks this
+session — H3/A1-2): Claude Code sends `transcript_path` (JSONL) and does NOT send
+`last_assistant_message`; Codex sends both fields, but `transcript_path` may be
+`null` — `last_assistant_message` (string) is the only reliable turn-text source
+in that runtime. So the `last_assistant_message` field, when present and non-empty,
+takes PRIORITY over transcript parsing (Claude-specific, absent from the real Codex
+payload); it only falls back to transcript parsing when that field is absent/empty
+(the Claude path, unchanged).
 
-Contrato: exit 0 = permite parar; exit 2 = bloqueia (stderr vai para o modelo).
-`stop_hook_active` true = já bloqueou uma vez neste turno → permite (evita loop).
-Fail-open: qualquer erro interno permite parar.
+Contract: exit 0 = allow stop; exit 2 = block (stderr goes to the model).
+`stop_hook_active` true = already blocked once this turn → allow (avoids a loop).
+Fail-open: any internal error allows the stop.
 """
 import json
 import re
 import sys
 
-# Claims de nível de PLANO apenas — claims de mudança única ("arquivo corrigido")
-# passam de propósito; para esses vale a skill `verify`. PT e EN (H3/A1-2:
-# payload Codex pode chegar em inglês; a regex só cobria português).
+# PLAN-level claims only — single-change claims ("file fixed") pass on purpose;
+# for those the `verify` skill applies. PT and EN (H3/A1-2: the Codex payload may
+# arrive in English; the regex used to cover only Portuguese).
 CLAIM_RE = re.compile(
     r"""(?ix)(
         \b100\s*\%
@@ -50,17 +48,17 @@ CLAIM_RE = re.compile(
       | \bimplementation\s+is\s+complete
     )"""
 )
-# Sentinel EXIGE o formato completo (não basta "x/y" cru): número/número,
-# literal PASS, vírgula, literal gaps: — H3/A1-2, achado real: a regex
-# anterior aceitava qualquer "0/999" como se fosse o bloco de evidência.
+# The sentinel REQUIRES the full format (raw "x/y" is not enough): number/number,
+# literal PASS, comma, literal gaps: — H3/A1-2, real finding: the previous regex
+# accepted any "0/999" as if it were the evidence block.
 SENTINEL_RE = re.compile(
     r"PROVA-DE-CONCLUSAO:\s*\d+\s*/\s*\d+\s*PASS\s*,\s*gaps\s*:", re.IGNORECASE
 )
-TAIL_BYTES = 2_000_000  # transcripts chegam a 45MB; só o final interessa
+TAIL_BYTES = 2_000_000  # transcripts reach 45MB; only the tail matters
 
 
 def assistant_texts_from_tail(path):
-    """Últimos textos do assistente (main loop, sem sidechains), mais recente por último."""
+    """Latest assistant texts (main loop, no sidechains), most recent last."""
     try:
         with open(path, "rb") as fh:
             fh.seek(0, 2)
@@ -76,7 +74,7 @@ def assistant_texts_from_tail(path):
         try:
             d = json.loads(line)
         except ValueError:
-            continue  # primeira linha do tail pode vir cortada
+            continue  # the first line of the tail may be truncated
         if d.get("type") != "assistant" or d.get("isSidechain"):
             continue
         content = (d.get("message") or {}).get("content")
@@ -97,13 +95,13 @@ def main():
     except ValueError:
         return 0
     if data.get("stop_hook_active"):
-        return 0  # já bloqueamos uma vez neste turno
+        return 0  # already blocked once this turn
 
     last_assistant_message = data.get("last_assistant_message")
     if isinstance(last_assistant_message, str) and last_assistant_message.strip():
-        # Codex: o payload já traz o texto final do turno; transcript_path
-        # pode vir null e, mesmo quando presente, não é o formato JSONL que
-        # assistant_texts_from_tail sabe parsear (esse é Claude-specific).
+        # Codex: the payload already carries the turn's final text; transcript_path
+        # may be null and, even when present, is not the JSONL format that
+        # assistant_texts_from_tail knows how to parse (that is Claude-specific).
         texts = [last_assistant_message]
     else:
         transcript = data.get("transcript_path")
@@ -115,18 +113,18 @@ def main():
     last = texts[-1]
     if not CLAIM_RE.search(last):
         return 0
-    # sentinel pode estar na própria mensagem ou logo antes (veredito em msg anterior)
+    # the sentinel may be in this message or just before it (verdict in a prior msg)
     if any(SENTINEL_RE.search(t) for t in texts[-3:]):
         return 0
     sys.stderr.write(
-        "COMPLETION-GATE: claim de conclusão de plano sem bloco de evidência.\n"
-        "Antes de declarar 100%/plano executado/tudo corrigido, rode a skill "
-        "`prova-de-conclusao`: para cada item declarado, evidência DESTA sessão "
-        "(comando + exit code, grep com path+Linha, contagem de testes, manifest "
-        "do ui-evidence, curl na URL de prod) numa tabela, terminando com a linha "
-        "literal `PROVA-DE-CONCLUSAO: <x>/<y> PASS, gaps: [ids ou 'nenhum']`.\n"
-        "Se não há evidência para um item, ele é gap — reformule o veredito sem o "
-        "claim de conclusão em vez de fabricar certeza.\n"
+        "COMPLETION-GATE: plan-level completion claim without an evidence block.\n"
+        "Before declaring 100%/plan executed/all fixed, run the `prova-de-conclusao` "
+        "skill: for each declared item, THIS-SESSION evidence (command + exit code, "
+        "grep with path+line, test counts, ui-evidence manifest, curl on the prod "
+        "URL) in a table, ending with the literal line "
+        "`PROVA-DE-CONCLUSAO: <x>/<y> PASS, gaps: [ids or 'none']`.\n"
+        "If there is no evidence for an item, it's a gap — reword the verdict without "
+        "the completion claim instead of fabricating certainty.\n"
     )
     return 2
 

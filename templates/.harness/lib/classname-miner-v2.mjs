@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
- * Minerador AST/JSX de className para reabstracao segura.
+ * AST/JSX className miner for safe re-abstraction.
  *
- * V2 mantem o miner v1 intacto e adiciona contexto estrutural: ocorrencias,
- * ancestrais JSX, raiz interativa, roles de siblings e clusters semanticos.
+ * V2 keeps the v1 miner intact and adds structural context: occurrences,
+ * JSX ancestors, interactive root, sibling roles and semantic clusters.
  *
- * Generico por design: nenhum path/DSN/alias de projeto especifico
- * hardcoded. Raiz varrida, diretorio de saida e tags interativas extras
- * sao configuraveis via flag ou env var (--help lista tudo); os
- * path-aliases (@components/*, @/* etc.) sao lidos do tsconfig.json/
- * jsconfig.json do projeto-alvo via TypeScript Compiler API, nunca de uma
- * lista fixa.
+ * Generic by design: no project-specific path/DSN/alias is hardcoded.
+ * Scanned root, output directory and extra interactive tags are
+ * configurable via flag or env var (--help lists everything); the
+ * path-aliases (@components/*, @/* etc.) are read from the target project's
+ * tsconfig.json/jsconfig.json via the TypeScript Compiler API, never from a
+ * fixed list.
  *
- * Uso: node .harness/lib/classname-miner-v2.mjs [--root <dir>] [--out <dir>]
+ * Usage: node .harness/lib/classname-miner-v2.mjs [--root <dir>] [--out <dir>]
  *      [--interactive-tags <csv>] [--emit-full <dir>] [--emit-json] [--self-test]
  */
 import { execFileSync } from 'node:child_process'
@@ -33,26 +33,26 @@ import {
 } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const HELP_TEXT = `classname-miner-v2.mjs — minerador AST/JSX de className (TypeScript Compiler API)
+const HELP_TEXT = `classname-miner-v2.mjs — AST/JSX className miner (TypeScript Compiler API)
 
-Uso:
-  node .harness/lib/classname-miner-v2.mjs [opcoes]
+Usage:
+  node .harness/lib/classname-miner-v2.mjs [options]
 
-Opcoes:
-  --root <dir>              Raiz varrida em busca de .ts/.tsx (default: cwd; env HARNESS_MINER_ROOT)
-  --out <dir>                Diretorio de saida do relatorio .md/.json
+Options:
+  --root <dir>              Root scanned for .ts/.tsx (default: cwd; env HARNESS_MINER_ROOT)
+  --out <dir>                Output directory for the .md/.json report
                               (default: <repo-root>/docs/design-system/sources; env HARNESS_MINER_OUT_DIR)
-  --interactive-tags <csv>   Tags JSX extras tratadas como raiz interativa, alem do
+  --interactive-tags <csv>   Extra JSX tags treated as an interactive root, besides the
                               default a,button,Link (env HARNESS_MINER_INTERACTIVE_TAGS)
-  --emit-full <dir>          Grava dataset NDJSON COMPLETO (run/occ/ent/ngram/cluster) em <dir>
-  --emit-json                Tambem grava o JSON truncado (arqueologia/backup manual)
-  --self-test                Valida a forma do schema de saida e sai
-  --help, -h                  Mostra esta ajuda e sai
+  --emit-full <dir>          Write the FULL NDJSON dataset (run/occ/ent/ngram/cluster) to <dir>
+  --emit-json                Also write the truncated JSON (archaeology/manual backup)
+  --self-test                Validate the output schema shape and exit
+  --help, -h                  Show this help and exit
 
-Path-aliases (@components/*, @/* etc.) sao lidos do tsconfig.json/jsconfig.json
-de --root — sem arquivo de config, resolucao de alias fica vazia (resolucao
-relativa continua funcionando). Nenhum DSN de banco de dados e usado por este
-script; a ingestao relacional opcional fica em ferramenta separada.
+Path-aliases (@components/*, @/* etc.) are read from --root's tsconfig.json/jsconfig.json
+— without a config file, alias resolution stays empty (relative resolution
+keeps working). No database DSN is used by this script; the optional
+relational ingestion lives in a separate tool.
 `
 
 function argValue(flag) {
@@ -76,15 +76,15 @@ function detectRepoRoot(root) {
 const WEB_ROOT = resolve(argValue('--root') || process.env.HARNESS_MINER_ROOT || process.cwd())
 const REPO_ROOT = detectRepoRoot(WEB_ROOT)
 
-// Import dinamico (nao estatico) de propósito, resolvido a partir de --root
-// (nao da localizacao deste arquivo): este script mora em .harness/lib/, um
-// IRMAO do app escaneado (nao um descendente) — um import bare estatico
-// 'typescript' resolveria node_modules a partir de .harness/lib/ para cima,
-// nunca encontrando o 'typescript' que vive em <root>/node_modules (comum em
-// monorepo, ex. apps/web/node_modules). createRequire ancorado em --root
-// replica o algoritmo real de resolucao do Node a partir do app-alvo. Isso
-// tambem adia a resolucao para depois do --help acima — projeto-alvo sem
-// 'typescript' instalado ainda consegue ver a ajuda.
+// Dynamic (not static) import on purpose, resolved from --root (not from this
+// file's location): this script lives in .harness/lib/, a SIBLING of the
+// scanned app (not a descendant) — a static bare import 'typescript' would
+// resolve node_modules from .harness/lib/ upwards, never finding the
+// 'typescript' that lives in <root>/node_modules (common in a monorepo, e.g.
+// apps/web/node_modules). createRequire anchored at --root replicates Node's
+// real resolution algorithm from the target app. This also defers resolution
+// until after the --help above — a target project without 'typescript'
+// installed can still see the help.
 async function loadTypeScript(root) {
   const req = createRequire(join(root, 'package.json'))
   const resolvedPath = req.resolve('typescript')
@@ -97,8 +97,8 @@ try {
   ts = await loadTypeScript(WEB_ROOT)
 } catch {
   console.error(
-    `ERRO: pacote 'typescript' nao encontrado a partir de --root (${WEB_ROOT}).\n` +
-    "Instale-o como devDependency nesse diretorio, ou use o fallback zero-dependencia:\n" +
+    `ERROR: 'typescript' package not found from --root (${WEB_ROOT}).\n` +
+    "Install it as a devDependency in that directory, or use the zero-dependency fallback:\n" +
     '  node .harness/lib/classname-miner.mjs --root <dir>'
   )
   process.exit(1)
@@ -140,9 +140,9 @@ const INTERACTIVE_TAGS = loadInteractiveTags()
 
 const ICON_SOURCES = new Set(['lucide-react', '@radix-ui/react-icons'])
 
-// Le @alias/* de tsconfig.json/jsconfig.json (com `extends`, via TS Compiler API)
-// em vez de uma lista fixa — fail-open: sem config, retorna [] (so resolucao
-// relativa funciona; nenhum crash).
+// Reads @alias/* from tsconfig.json/jsconfig.json (with `extends`, via TS Compiler API)
+// instead of a fixed list — fail-open: without config, returns [] (only relative
+// resolution works; no crash).
 function loadTsPathAliases(root) {
   const configNames = ['tsconfig.json', 'jsconfig.json']
   let configPath
@@ -167,8 +167,8 @@ function loadTsPathAliases(root) {
       const targetRel = targets[0].replace(/\*$/, '')
       aliases.push([prefix, join(baseUrl, targetRel)])
     }
-    // Prefixo mais longo (mais especifico) primeiro, senao "@/" (catch-all)
-    // casaria antes de "@components/" no primeiro .find().
+    // Longest (most specific) prefix first, otherwise "@/" (catch-all)
+    // would match before "@components/" on the first .find().
     return aliases.sort((a, b) => b[0].length - a[0].length)
   } catch {
     return []
@@ -1203,11 +1203,11 @@ const output = {
   semanticClusters,
 }
 
-// Modo dataset COMPLETO (nao-truncado) p/ ingestao relacional. Nao sobrescreve o JSON/MD canonico.
+// FULL dataset mode (non-truncated) for relational ingestion. Does not overwrite the canonical JSON/MD.
 const emitFullIdx = process.argv.indexOf('--emit-full')
 if (emitFullIdx !== -1) {
   const fullDir = process.argv[emitFullIdx + 1]
-  if (!fullDir) throw new Error('--emit-full exige um diretorio de saida')
+  if (!fullDir) throw new Error('--emit-full requires an output directory')
   const toNdjson = (list) => `${list.map((row) => JSON.stringify(row)).join('\n')}\n`
   mkdirSync(fullDir, { recursive: true })
   writeFileSync(join(fullDir, 'run.ndjson'), `${JSON.stringify({
@@ -1223,13 +1223,13 @@ if (emitFullIdx !== -1) {
   writeFileSync(join(fullDir, 'ent.ndjson'), toNdjson(entities))
   writeFileSync(join(fullDir, 'ngram.ndjson'), toNdjson(gramRows))
   writeFileSync(join(fullDir, 'cluster.ndjson'), toNdjson(semanticClusters))
-  console.log(`emit-full: dataset COMPLETO em ${fullDir} (occ=${occurrences.length} ent=${entities.length} ngram=${gramRows.length} cluster=${semanticClusters.length}); JSON/MD canonico NAO sobrescrito`)
+  console.log(`emit-full: FULL dataset in ${fullDir} (occ=${occurrences.length} ent=${entities.length} ngram=${gramRows.length} cluster=${semanticClusters.length}); canonical JSON/MD NOT overwritten`)
   process.exit(0)
 }
 
 mkdirSync(OUT_DIR, { recursive: true })
-// Para datasets grandes, prefira --emit-full (NDJSON) a --emit-json (JSON monolitico
-// truncado). --emit-json existe so para arqueologia/backup manual pontual.
+// For large datasets, prefer --emit-full (NDJSON) over --emit-json (truncated
+// monolithic JSON). --emit-json exists only for occasional archaeology/manual backup.
 if (process.argv.includes('--emit-json')) {
   writeFileSync(OUT_JSON, `${JSON.stringify(output, null, 2)}\n`)
 }
@@ -1245,44 +1245,44 @@ const highSignalClusters = semanticClusters
 const sidebarClusters = semanticClusters
   .filter((cluster) => cluster.surfaceRole === 'sidebar-nav-item' && cluster.roles.length > 0)
   .slice(0, 12)
-const markdown = `# Mineração AST/JSX de className v2
+const markdown = `# AST/JSX className mining v2
 
-> Gerado por \`.harness/lib/classname-miner-v2.mjs\`. Diferente do v1, este arquivo não é cânone: é dado enriquecido para triagem de reabstração. O v2 preserva ocorrências com path/linha, componente dono, elemento JSX, ancestralidade, raiz interativa, roles de siblings e clusters semânticos.
+> Generated by \`.harness/lib/classname-miner-v2.mjs\`. Unlike v1, this file is not canon: it is enriched data for re-abstraction triage. v2 preserves occurrences with path/line, owning component, JSX element, ancestry, interactive root, sibling roles and semantic clusters.
 
-## Resumo
+## Summary
 
-- Git HEAD dos sources escaneados: \`${output.gitHead}\`
-- Fingerprint dos sources escaneados: \`${output.sourceFingerprint}\`
-- Arquivos varridos: ${output.scanned}
-- Ocorrências de classes: ${output.counts.occurrences}
-- N-grams candidatos: ${output.counts.gramRows}
-- N-grams reportados no JSON: ${output.counts.reportedRows}
-- Ocorrências reportadas no JSON: ${output.counts.reportedOccurrences}
-- Entidades JSX/interativas: ${output.counts.entities}
-- Entidades reportadas no JSON: ${output.counts.reportedEntities}
-- Clusters semânticos: ${output.counts.semanticClusters}
+- Git HEAD of scanned sources: \`${output.gitHead}\`
+- Fingerprint of scanned sources: \`${output.sourceFingerprint}\`
+- Files scanned: ${output.scanned}
+- Class occurrences: ${output.counts.occurrences}
+- Candidate n-grams: ${output.counts.gramRows}
+- N-grams reported in JSON: ${output.counts.reportedRows}
+- Occurrences reported in JSON: ${output.counts.reportedOccurrences}
+- JSX/interactive entities: ${output.counts.entities}
+- Entities reported in JSON: ${output.counts.reportedEntities}
+- Semantic clusters: ${output.counts.semanticClusters}
 
-## Top n-grams por economia
+## Top n-grams by savings
 
-| # | gram | ocorr. | arq. | chars | economia |
+| # | gram | occ. | files | chars | savings |
 |---|---|---:|---:|---:|---:|
 ${topGrams.map((row, index) => `| ${index + 1} | \`${row.gram}\` | ${row.occurrences} | ${row.files} | ${row.chars} | ${row.savings} |`).join('\n')}
 
-## Top clusters semânticos
+## Top semantic clusters
 
-| # | cluster | surface | decisão | conf. | entidades | ocorr. | split | bloqueios |
+| # | cluster | surface | decision | conf. | entities | occ. | split | blockers |
 |---|---|---|---|---:|---:|---:|---|---|
 ${topClusters.map((cluster, index) => `| ${index + 1} | \`${cluster.clusterId}\` | \`${cluster.surfaceRole}\` | \`${cluster.decision}\` | ${cluster.confidenceScore} | ${cluster.entityCount} | ${cluster.occurrenceCount} | \`${cluster.recommendedSplitBy.join(', ') || '-'}\` | \`${cluster.blockingReasons.join(', ') || '-'}\` |`).join('\n')}
 
-## Clusters de alto sinal
+## High-signal clusters
 
-| # | cluster | surface | decisão | prioridade | conf. | entidades | ocorr. | tags | split |
+| # | cluster | surface | decision | priority | conf. | entities | occ. | tags | split |
 |---|---|---|---|---:|---:|---:|---:|---|---|
 ${highSignalClusters.map((cluster, index) => `| ${index + 1} | \`${cluster.clusterId}\` | \`${cluster.surfaceRole}\` | \`${cluster.decision}\` | ${cluster.priorityScore} | ${cluster.confidenceScore} | ${cluster.entityCount} | ${cluster.occurrenceCount} | \`${cluster.uniqueInteractiveTags.join(', ') || '-'}\` | \`${cluster.recommendedSplitBy.join(', ') || '-'}\` |`).join('\n')}
 
-## Evidência específica da sidebar
+## Sidebar-specific evidence
 
-| # | cluster | fingerprint | entidades | ocorr. | roles | icon sizes | amostra |
+| # | cluster | fingerprint | entities | occ. | roles | icon sizes | sample |
 |---|---|---|---:|---:|---|---|---|
 ${sidebarClusters.map((cluster, index) => {
   const sample = cluster.samples[0]
@@ -1290,24 +1290,24 @@ ${sidebarClusters.map((cluster, index) => {
   return `| ${index + 1} | \`${cluster.clusterId}\` | \`${cluster.fingerprint}\` | ${cluster.entityCount} | ${cluster.occurrenceCount} | \`${cluster.roles.join(', ') || '-'}\` | \`${cluster.iconSizes.join(', ') || '-'}\` | \`${sampleText}\` |`
 }).join('\n')}
 
-## Como interpretar
+## How to interpret
 
-- \`rows\`: repetição textual de class-tokens; ainda pode ser idioma Tailwind genérico.
-- \`occurrences\`: evidência local com JSX, ancestralidade e raiz interativa.
-- \`entities\`: agrupamento por raiz JSX/interativa.
-- \`semanticClusters\`: candidatos de reabstração. A decisão final exige contrato, migração sequencial e evidência visual.
-- \`blockingReasons\`, \`recommendedSplitBy\`, \`confidenceScore\` e \`priorityScore\`: inferência heurística de AST sintática, sem TypeChecker; bloqueiam migração automática quando houver heterogeneidade.
+- \`rows\`: textual repetition of class-tokens; may still be generic Tailwind idiom.
+- \`occurrences\`: local evidence with JSX, ancestry and interactive root.
+- \`entities\`: grouping by JSX/interactive root.
+- \`semanticClusters\`: re-abstraction candidates. The final decision requires a contract, sequential migration and visual evidence.
+- \`blockingReasons\`, \`recommendedSplitBy\`, \`confidenceScore\` and \`priorityScore\`: heuristic inference from syntactic AST, without TypeChecker; they block automatic migration when there is heterogeneity.
 
 ## Guardrail
 
-Não promover cluster para token/componente apenas por economia. Use \`surfaceRole\`, \`roles\`, \`routeArea\`, \`interactiveTag\`, \`antiMergeReasons\`, \`blockingReasons\`, \`recommendedSplitBy\` e amostras antes de alterar código.
+Do not promote a cluster to a token/component based on savings alone. Use \`surfaceRole\`, \`roles\`, \`routeArea\`, \`interactiveTag\`, \`antiMergeReasons\`, \`blockingReasons\`, \`recommendedSplitBy\` and samples before changing code.
 `
 writeFileSync(OUT_MD, markdown)
 
 if (process.argv.includes('--self-test')) {
-  // Generico: valida a FORMA do schema de saida, nao fixtures de um projeto
-  // especifico. Seguro rodar em qualquer arvore, inclusive com 0 arquivos
-  // .ts/.tsx (ex.: o proprio skeleton renderizado deste harness).
+  // Generic: validates the SHAPE of the output schema, not fixtures from a
+  // specific project. Safe to run on any tree, including one with 0 .ts/.tsx
+  // files (e.g. this harness's own rendered skeleton).
   const requiredKeys = ['schemaVersion', 'generator', 'gitHead', 'sourceFingerprint', 'counts', 'rows', 'occurrences', 'entities', 'semanticClusters']
   for (const key of requiredKeys) {
     if (!(key in output)) throw new Error(`self-test failed: missing ${key}`)
@@ -1325,10 +1325,10 @@ if (process.argv.includes('--self-test')) {
 }
 
 console.log('=== CLASSNAME TOKEN MINER V2 ===')
-console.log('Raiz varrida:', WEB_ROOT)
-console.log('Arquivos:', output.scanned)
-console.log('Ocorrencias:', output.counts.occurrences)
-console.log('N-grams candidatos:', output.counts.gramRows)
-console.log('Entidades:', output.counts.entities)
+console.log('Scanned root:', WEB_ROOT)
+console.log('Files:', output.scanned)
+console.log('Occurrences:', output.counts.occurrences)
+console.log('Candidate n-grams:', output.counts.gramRows)
+console.log('Entities:', output.counts.entities)
 console.log('Clusters:', output.counts.semanticClusters)
-console.log('Saida:', process.argv.includes('--emit-json') ? `${relPath(OUT_JSON)} + ${relPath(OUT_MD)}` : `${relPath(OUT_MD)} (JSON so com --emit-json; --emit-full <dir> p/ NDJSON completo)`)
+console.log('Output:', process.argv.includes('--emit-json') ? `${relPath(OUT_JSON)} + ${relPath(OUT_MD)}` : `${relPath(OUT_MD)} (JSON only with --emit-json; --emit-full <dir> for full NDJSON)`)

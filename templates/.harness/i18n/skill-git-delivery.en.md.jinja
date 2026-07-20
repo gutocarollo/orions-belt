@@ -1,0 +1,50 @@
+---
+name: git-delivery
+description: >
+  Git delivery in {{ project_name }} — commit to main (this repo's no-PR flow), push with
+  a credential-discovery ladder, and post-push verification. Use ALWAYS when about to
+  commit/push/merge/deliver, when a push fails with "Permission denied
+  (publickey)" or a credential error, and MANDATORILY before declaring a
+  push impossible. Triggers: "can you commit", "commit and push", "PUSH",
+  "merge", "publish", "deploy the code", "credential", "publickey".
+---
+
+# Git Delivery
+
+Origin: adapted from a protocol of the reference donor-harness (push turned into a negotiation;
+rotten rebase on SessionStart). Complements the git-doctor hook (detection).
+
+## 1. Commit contract (of this repo)
+
+- The flow is **commit directly to main** (no PR).{% if git_remote_url %} Confirmed: remote
+  `{{ git_remote_url }}`.{% endif %}
+- **PUSH is an outward-facing action{% if client_name %} (client repo){% endif %}: only with explicit authorization
+  from the project owner ({{ owner_name }}).** A local commit is fine; publishing requires the "you may push".
+- Commit scope: EXPLICIT staging of the task's files. NEVER a blind `git add -A`
+  — repos usually have pre-existing untracked files (deps, tool caches)
+  that are not part of the task.
+- Mandatory trailer: `Co-Authored-By: Claude <noreply@anthropic.com>` (adjust the
+  model name if this project uses a specific alias).
+- Skills/secrets: `.claude/` versions ONLY hooks/, settings.json and the non-sensitive
+  skills (see .gitignore). Client/business-specific skills stay out.
+
+## 2. Push credential ladder (stop at the first that works)
+
+1. **SSH BatchMode** (current rung — works today):
+   `ssh -T -o BatchMode=yes git@github.com` → "Hi {% if git_remote_owner %}{{ git_remote_owner }}{% else %}<user>{% endif %}!" = ok → `git push`.
+2. **gh CLI**: `gh auth status` ok → `git push` (gh becomes the credential helper). If
+   not installed/logged in: run `.harness/hooks/provision-push.sh` if this project has that script.
+3. **git credential fill** (HTTPS): `printf 'protocol=https\nhost=github.com\n\n' | git credential fill` returns a password → push over HTTPS.
+4. **flip SSH↔HTTPS**: if the SSH-remote fails but there is a PAT, switch the remote URL
+   to https and use the PAT; revert afterward.
+   Before saying "I can't push": ALL 4 rungs tried and reported.
+
+## 3. Post-push
+
+`git rev-list --count @{upstream}..HEAD` == 0 confirms it went up. Report the SHA.
+
+## 4. Rotten state (git-doctor covers this on SessionStart, if this project has that hook)
+
+A pending rebase/merge breaks resume. If git-doctor warned: resolve it
+(`git rebase --abort` / `git merge --abort`) BEFORE new work; the dirty working
+tree was already saved in `git stash` (recover it with `git stash pop`).

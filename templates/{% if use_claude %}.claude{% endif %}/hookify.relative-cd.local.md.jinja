@@ -9,6 +9,6 @@ conditions:
     pattern: (^|&&|;|\|\|)\s*cd\s+(?!["']?(/|\$|~|-\s*$))
 ---
 
-ATENÇÃO: `cd` relativo. Em várias sessões o cwd RESETA entre chamadas Bash ("Shell cwd was reset to ...") — `cd apps/web` numa call não vale na próxima, e já causou "cd: apps/web: No such file or directory".
+ATTENTION: relative `cd`. In many sessions the cwd RESETS between Bash calls ("Shell cwd was reset to ...") — `cd apps/web` in one call does not carry over to the next, and has already caused "cd: apps/web: No such file or directory".
 
-Use caminho ABSOLUTO — `cd {{ project_root }}/apps/web && ...` — ou melhor, embuta o caminho absoluto direto no comando (ex.: `bash {{ project_root }}/apps/web/scripts/ui-evidence.sh`) sem depender do cwd.
+Use an ABSOLUTE path — `cd {{ project_root }}/apps/web && ...` — or better, embed the absolute path directly in the command (e.g. `bash {{ project_root }}/apps/web/scripts/ui-evidence.sh`) without depending on the cwd.

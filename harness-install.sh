@@ -1,83 +1,85 @@
 #!/usr/bin/env bash
-# harness-install.sh — bootstrap BROWNFIELD-SAFE de instalação/atualização do
-# orions-belt num projeto-alvo (B3, gap BLOQUEANTE da revisão adversarial
-# pós-v1.0.0).
+# harness-install.sh — BROWNFIELD-SAFE bootstrap for installing/updating
+# orions-belt into a target project (B3, BLOCKING gap from the post-v1.0.0
+# adversarial review).
 #
-# O PROBLEMA QUE ISTO RESOLVE: `copier copy <orions-belt> <projeto-alvo>
-# --trust` rodado DIRETO contra um repo que já existe (o caso comum — você
-# quase sempre está adotando o harness num projeto vivo, não criando um do
-# zero) é circular e destrutivo:
-#   - sem `--overwrite`: qualquer colisão de nome (AGENTS.md, .claude/
-#     CLAUDE.md, .claude/settings.json, .gitignore) faz o Copier abortar com
-#     exit 1 e o projeto fica com instalação PARCIAL.
-#   - com `--overwrite`: os 4 arquivos acima (que quase sempre já têm
-#     conteúdo do usuário) são SOBRESCRITOS por inteiro.
-#   - com `--skip`: nada do harness entra nesses 4 arquivos — instalação
-#     manca (settings.json sem os hooks do harness, por exemplo).
-# `copier update` NÃO resolve isso: ele assume que o projeto-alvo NASCEU de
-# um `copier copy` anterior do MESMO template (precisa de `.harness/
-# answers.yml` já existente e de um histórico coerente) — não serve para
-# "adotar" um repo que já tinha vida própria antes do harness. Por isso este
-# bootstrap existe como uma 3ª via, específica para a PRIMEIRA adoção
-# brownfield (updates subsequentes usam `copier update` normalmente — ver
+# THE PROBLEM THIS SOLVES: `copier copy <orions-belt> <target-project>
+# --trust` run DIRECTLY against a repo that already exists (the common case —
+# you are almost always adopting the harness into a live project, not creating
+# one from scratch) is circular and destructive:
+#   - without `--overwrite`: any name collision (AGENTS.md, .claude/
+#     CLAUDE.md, .claude/settings.json, .gitignore) makes Copier abort with
+#     exit 1 and the project is left with a PARTIAL install.
+#   - with `--overwrite`: the 4 files above (which almost always already
+#     have user content) are OVERWRITTEN entirely.
+#   - with `--skip`: none of the harness lands in those 4 files — a lame
+#     install (settings.json without the harness hooks, for example).
+# `copier update` does NOT solve this: it assumes the target project was BORN
+# from a previous `copier copy` of the SAME template (it needs an existing
+# `.harness/answers.yml` and a coherent history) — it is not meant to "adopt"
+# a repo that already had a life of its own before the harness. That is why
+# this bootstrap exists as a 3rd path, specific to the FIRST brownfield
+# adoption (subsequent updates use `copier update` normally — see
 # docs/manual/14-instalacao-e-update.md).
 #
-# O FLUXO (nunca escreve no projeto-alvo via `copier copy` direto):
-#   1. Renderiza o framework INTEIRO num diretório SCRATCH temporário via
-#      `copier copy` (a raiz deste repo — nunca o projeto-alvo).
-#   2. Aplica no projeto-alvo, arquivo por arquivo:
-#        - não existe no alvo            -> copia direto.
-#        - é um dos 4 arquivos SENSÍVEIS (AGENTS.md, .claude/CLAUDE.md,
-#          .claude/settings.json, .gitignore) E já existe no alvo -> merge
-#          ADITIVO via `.harness/lib/merge_docs.py` (o binário RENDERIZADO no
-#          scratch — a versão certa da tag/HEAD que está sendo instalada,
-#          não a do checkout local deste script).
-#        - qualquer outro arquivo framework-owned que já existe (reinstalação
-#          /update manual) -> overwrite direto (é dono do harness, não do
-#          usuário; ver Gap conhecido na skill harness-init).
-#   3. `.harness/answers.yml` chega ao projeto-alvo pelo passo 2 (é só mais
-#      um arquivo "que não existe" na 1ª instalação) — pré-requisito de
-#      `copier update --answers-file .harness/answers.yml` no futuro.
-#   4. Ativa `core.hooksPath` (A2) chamando `.harness/lib/set_hooks_path.sh`
-#      EXPLICITAMENTE contra o TARGET. O `_task` equivalente do copier.yml
-#      roda dentro do SCRATCH neste fluxo (cwd = scratch durante o `copier
-#      copy` do passo 1, que nem é repo git) — não configura nada no
-#      projeto-alvo sozinho, por isso o passo 4 é necessário aqui. O script
-#      nunca sobrescreve um hooksPath já customizado (Husky/lefthook/etc.) —
-#      mesma fonte única usada pelo `_task`, ver comentário em set_hooks_path.sh.
+# THE FLOW (never writes to the target project via a direct `copier copy`):
+#   1. Renders the ENTIRE framework into a temporary SCRATCH directory via
+#      `copier copy` (this repo's root — never the target project).
+#   2. Applies it to the target project, file by file:
+#        - does not exist in the target      -> copy directly.
+#        - is one of the 4 SENSITIVE files (AGENTS.md, .claude/CLAUDE.md,
+#          .claude/settings.json, .gitignore) AND already exists in the target
+#          -> ADDITIVE merge via `.harness/lib/merge_docs.py` (the binary
+#          RENDERED in scratch — the correct version of the tag/HEAD being
+#          installed, not the one from this script's local checkout).
+#        - any other framework-owned file that already exists (reinstall
+#          /manual update) -> direct overwrite (it is harness-owned, not
+#          user-owned; see Known gap in the harness-init skill).
+#   3. `.harness/answers.yml` reaches the target project via step 2 (it is
+#      just one more "file that does not exist" on the 1st install) — a
+#      prerequisite for `copier update --answers-file .harness/answers.yml`
+#      in the future.
+#   4. Activates `core.hooksPath` (A2) by calling `.harness/lib/set_hooks_path.sh`
+#      EXPLICITLY against the TARGET. The equivalent `_task` in copier.yml
+#      runs inside the SCRATCH in this flow (cwd = scratch during the `copier
+#      copy` of step 1, which is not even a git repo) — it does not configure
+#      anything in the target project on its own, which is why step 4 is
+#      needed here. The script never overwrites an already-customized hooksPath
+#      (Husky/lefthook/etc.) — same single source used by `_task`, see the
+#      comment in set_hooks_path.sh.
 #
-# Uso:
-#   ./harness-install.sh <target-dir> [-- ] [args do copier copy...]
+# Usage:
+#   ./harness-install.sh <target-dir> [-- ] [copier copy args...]
 #
-# Exemplos:
-#   ./harness-install.sh ../meu-projeto \
-#     --data project_name=meu-projeto --data owner_name=Fulano --defaults
-#   ./harness-install.sh ../meu-projeto --vcs-ref v1.0.0 \
-#     --data project_name=meu-projeto --data owner_name=Fulano --defaults
+# Examples:
+#   ./harness-install.sh ../my-project \
+#     --data project_name=my-project --data owner_name=Someone --defaults
+#   ./harness-install.sh ../my-project --vcs-ref v1.0.0 \
+#     --data project_name=my-project --data owner_name=Someone --defaults
 #
-# `--trust` é sempre adicionado por este script (mesma exigência de qualquer
-# `copier copy`/`update` deste repo — ver README.md). Args extras são
-# repassados verbatim para `copier copy` (ex.: `--data`, `--vcs-ref`,
+# `--trust` is always added by this script (same requirement as any
+# `copier copy`/`update` in this repo — see README.md). Extra args are
+# forwarded verbatim to `copier copy` (e.g. `--data`, `--vcs-ref`,
 # `--defaults`).
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-uso: harness-install.sh <target-dir> [args do copier copy...]
+usage: harness-install.sh <target-dir> [copier copy args...]
 
-Instala/adota o orions-belt num projeto-alvo (greenfield OU brownfield) sem
-sobrescrever AGENTS.md / .claude/CLAUDE.md / .claude/settings.json /
-.gitignore pré-existentes e sem clobber de core.hooksPath já customizado.
-Ver comentário no topo deste arquivo para o fluxo completo (B3).
+Installs/adopts orions-belt into a target project (greenfield OR brownfield)
+without overwriting pre-existing AGENTS.md / .claude/CLAUDE.md /
+.claude/settings.json / .gitignore and without clobbering an already-customized
+core.hooksPath. See the comment at the top of this file for the full flow (B3).
 
-exemplos:
-  ./harness-install.sh ../meu-projeto \
-    --data project_name=meu-projeto --data owner_name=Fulano --defaults
-  ./harness-install.sh ../meu-projeto --vcs-ref v1.0.0 \
-    --data project_name=meu-projeto --data owner_name=Fulano --defaults
+examples:
+  ./harness-install.sh ../my-project \
+    --data project_name=my-project --data owner_name=Someone --defaults
+  ./harness-install.sh ../my-project --vcs-ref v1.0.0 \
+    --data project_name=my-project --data owner_name=Someone --defaults
 
-'--trust' e adicionado automaticamente. Demais args sao repassados verbatim
-para 'copier copy' (--data, --vcs-ref, --defaults, etc.).
+'--trust' is added automatically. Other args are forwarded verbatim to
+'copier copy' (--data, --vcs-ref, --defaults, etc.).
 EOF
 }
 
@@ -93,23 +95,23 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$HERE"
 
 if ! command -v uvx >/dev/null 2>&1; then
-  echo "harness-install.sh: 'uvx' nao encontrado no PATH -- instale uv (https://docs.astral.sh/uv/) para rodar o copier." >&2
+  echo "harness-install.sh: 'uvx' not found on PATH -- install uv (https://docs.astral.sh/uv/) to run copier." >&2
   exit 1
 fi
 
-# M3/H4 (auditoria adversarial): preflight de PLATAFORMA -- "portátil" não
-# era declarado em lugar nenhum, e os hooks/scripts (.harness/hooks|lib/)
-# exigem Bash>=4 + GNU coreutils + flock + python3 (ver check-platform.sh
-# para o detalhe de CADA dependência e o comando de fix). Roda ANTES do
-# render para avisar CEDO, mas nunca bloqueia sozinho o `copier copy` em si
-# (que é agnóstico de plataforma) -- só o comportamento dos hooks depois de
-# instalado é que degrada. Se check-platform.sh não existir ainda neste
-# checkout (versão antiga do repo antes de M3), segue sem preflight
-# (fail-open -- não é um requisito NOVO bloquear instalações antigas).
+# M3/H4 (adversarial review): PLATFORM preflight -- "portable" was not
+# declared anywhere, and the hooks/scripts (.harness/hooks|lib/) require
+# Bash>=4 + GNU coreutils + flock + python3 (see check-platform.sh for the
+# detail of EACH dependency and its fix command). Runs BEFORE the render to
+# warn EARLY, but never blocks `copier copy` itself on its own (that is
+# platform-agnostic) -- only the behavior of the hooks after install degrades.
+# If check-platform.sh does not exist yet in this checkout (old repo version
+# before M3), it proceeds without the preflight (fail-open -- it is not a NEW
+# requirement to block old installs).
 if [ -f "$REPO_ROOT/templates/.harness/lib/check-platform.sh" ]; then
-  echo "harness-install.sh: preflight de plataforma (.harness/lib/check-platform.sh) ..." >&2
+  echo "harness-install.sh: platform preflight (.harness/lib/check-platform.sh) ..." >&2
   if ! bash "$REPO_ROOT/templates/.harness/lib/check-platform.sh"; then
-    echo "harness-install.sh: AVISO -- este ambiente não atende a todas as dependências obrigatórias dos hooks (ver acima). A instalação PROSSEGUE, mas hooks podem falhar/virar no-op depois -- ver docs/manual/15-limitacoes-conhecidas.md." >&2
+    echo "harness-install.sh: WARNING -- this environment does not meet all the hooks' required dependencies (see above). The install PROCEEDS, but hooks may fail/become no-ops later -- see docs/manual/15-limitacoes-conhecidas.md." >&2
   fi
   echo >&2
 fi
@@ -121,17 +123,17 @@ SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/harness-install.XXXXXX")"
 cleanup() { rm -rf "$SCRATCH"; }
 trap cleanup EXIT
 
-echo "harness-install.sh: renderizando $REPO_ROOT -> scratch $SCRATCH ..." >&2
+echo "harness-install.sh: rendering $REPO_ROOT -> scratch $SCRATCH ..." >&2
 uvx copier copy "$REPO_ROOT" "$SCRATCH" "${COPIER_ARGS[@]}" --trust -q
 
 LIB="$SCRATCH/.harness/lib"
 if [ ! -f "$LIB/merge_docs.py" ]; then
-  echo "harness-install.sh: render nao produziu .harness/lib/merge_docs.py -- template quebrado ou --data incompleto (veja stderr acima)." >&2
+  echo "harness-install.sh: render did not produce .harness/lib/merge_docs.py -- broken template or incomplete --data (see stderr above)." >&2
   exit 1
 fi
 
-# Os 4 arquivos SENSÍVEIS (B3): podem ter conteúdo do usuário, NUNCA overwrite
-# direto se já existirem no alvo.
+# The 4 SENSITIVE files (B3): may have user content, NEVER a direct overwrite
+# if they already exist in the target.
 SENSITIVE_PATHS=(
   "AGENTS.md"
   ".claude/CLAUDE.md"
@@ -188,28 +190,28 @@ while IFS= read -r -d '' f; do
   fi
 done < <(find "$SCRATCH" -type f -print0)
 
-# A2: ativa core.hooksPath sem clobber, explicitamente contra o TARGET (ver
-# nota no cabeçalho — o _task do copier.yml não alcança o projeto-alvo neste
-# fluxo porque rodou dentro do SCRATCH no passo 1).
+# A2: activates core.hooksPath without clobbering, explicitly against the
+# TARGET (see the note in the header — the _task in copier.yml does not reach
+# the target project in this flow because it ran inside the SCRATCH in step 1).
 if [ -f "$LIB/set_hooks_path.sh" ]; then
   bash "$LIB/set_hooks_path.sh" "$TARGET"
 fi
 
-# H2/A6.2 (auditoria adversarial pós-v1.0.0): ds-gate.sh é um RATCHET —
-# `MODE=check` sem `.ds-baseline.txt` roda sempre em report-only (nunca
-# falha; ver comentário no topo de ds-gate.sh) porque não existe um número
-# contra o qual comparar. Nenhum passo de instalação anterior gerava essa
-# baseline — o gate ficava permanentemente inerte em TODO projeto instalado
-# via harness-install.sh, mesmo com `ds-gate-posttool` ativo (use_ds_gate).
-# Fix: 1ª instalação gera `.ds-baseline.txt` automaticamente (contagem ATUAL
-# do projeto-alvo vira o piso do ratchet — só piora daqui pra frente).
-# Sinal de "use_ds_gate estava ativo": presença do hook materializado
-# `.harness/hooks/ds-gate-posttool.sh` (é gated-no-nome-do-arquivo pelo
-# Jinja; ds-gate.sh em si é sempre shipado incondicionalmente, então não
-# serve de sinal sozinho). Não roda de novo se a baseline já existir
-# (reinstalação/update não deve resetar um ratchet já em andamento) —
-# regenerar é ação explícita do usuário: `bash .harness/lib/ds-gate.sh
-# --update-baseline` (documentado em docs/manual/05-hooks-posttooluse.md).
+# H2/A6.2 (post-v1.0.0 adversarial review): ds-gate.sh is a RATCHET —
+# `MODE=check` without `.ds-baseline.txt` always runs report-only (never
+# fails; see the comment at the top of ds-gate.sh) because there is no number
+# to compare against. No prior install step generated that baseline — the gate
+# stayed permanently inert in EVERY project installed via harness-install.sh,
+# even with `ds-gate-posttool` active (use_ds_gate). Fix: the 1st install
+# generates `.ds-baseline.txt` automatically (the target project's CURRENT
+# count becomes the ratchet floor — it can only get better from here on).
+# Signal that "use_ds_gate was active": the presence of the materialized hook
+# `.harness/hooks/ds-gate-posttool.sh` (it is gated by filename via Jinja;
+# ds-gate.sh itself is always shipped unconditionally, so it is not a signal on
+# its own). Does not run again if the baseline already exists (a reinstall
+# /update must not reset a ratchet already in progress) — regenerating is an
+# explicit user action: `bash .harness/lib/ds-gate.sh --update-baseline`
+# (documented in docs/manual/05-hooks-posttooluse.md).
 if [ -f "$TARGET/.harness/hooks/ds-gate-posttool.sh" ] && [ -f "$TARGET/.harness/lib/ds-gate.sh" ]; then
   DS_WEB_APP_DIR="."
   if command -v python3 >/dev/null 2>&1 && [ -f "$TARGET/.harness/lib/_tooling_conf.py" ]; then
@@ -221,18 +223,18 @@ if [ -f "$TARGET/.harness/hooks/ds-gate-posttool.sh" ] && [ -f "$TARGET/.harness
   [ "$DS_WEB_APP_DIR" != "." ] && DS_BASELINE_DIR="$TARGET/$DS_WEB_APP_DIR"
   if [ -d "$DS_BASELINE_DIR" ] && [ ! -f "$DS_BASELINE_DIR/.ds-baseline.txt" ]; then
     echo
-    echo "harness-install.sh: gerando .ds-baseline.txt inicial do ds-gate (ratchet anti-hardcode)..."
+    echo "harness-install.sh: generating initial ds-gate .ds-baseline.txt (anti-hardcode ratchet)..."
     if HARNESS_PROJECT_ROOT="$TARGET" bash "$TARGET/.harness/lib/ds-gate.sh" --update-baseline >/dev/null; then
-      echo "  baseline gravada em $DS_BASELINE_DIR/.ds-baseline.txt -- commite este arquivo."
+      echo "  baseline written to $DS_BASELINE_DIR/.ds-baseline.txt -- commit this file."
     else
-      echo "  aviso: ds-gate.sh --update-baseline falhou (nao bloqueante) -- rode manualmente depois: bash .harness/lib/ds-gate.sh --update-baseline" >&2
+      echo "  warning: ds-gate.sh --update-baseline failed (non-blocking) -- run it manually later: bash .harness/lib/ds-gate.sh --update-baseline" >&2
     fi
   fi
 fi
 
 echo
-echo "harness-install.sh: concluido."
-echo "  arquivos novos criados:            $N_CREATED"
-echo "  framework-owned sobrescritos:       $N_OVERWRITTEN"
-echo "  arquivos sensiveis merged (aditivo): $N_MERGED"
-echo "  .harness/answers.yml gravado em:    $TARGET/.harness/answers.yml (necessario p/ 'copier update' futuro)"
+echo "harness-install.sh: done."
+echo "  new files created:                   $N_CREATED"
+echo "  framework-owned overwritten:         $N_OVERWRITTEN"
+echo "  sensitive files merged (additive):   $N_MERGED"
+echo "  .harness/answers.yml written to:     $TARGET/.harness/answers.yml (needed for a future 'copier update')"

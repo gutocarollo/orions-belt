@@ -7,7 +7,7 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/dev-doctor.sh\" status 2>/dev/null || true",
             "timeout": 10,
-            "statusMessage": "dev-doctor: snapshot da stack dev"
+            "statusMessage": "dev-doctor: dev stack snapshot"
           }
         ]
       },
@@ -27,7 +27,7 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/git-doctor.sh\"",
             "timeout": 15,
-            "statusMessage": "git-doctor: checando estado do repo"
+            "statusMessage": "git-doctor: checking repo state"
           }
         ]
       },
@@ -37,7 +37,7 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/lessons-inject.sh\"",
             "timeout": 10,
-            "statusMessage": "lessons: injetando lições de sessões anteriores"
+            "statusMessage": "lessons: injecting lessons from prior sessions"
           }
         ]
       }
@@ -58,7 +58,7 @@
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-context-inject.py\"",
             "timeout": 10,
-            "statusMessage": "understand: injetando regra de diff relativo {{ harness_understand_apps_root }}"
+            "statusMessage": "understand: injecting relative-diff rule for {{ harness_understand_apps_root }}"
           }
         ]
       }
@@ -73,7 +73,7 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-apps-diff-guard.sh\"",
             "timeout": 10,
-            "statusMessage": "understand: checando diff relativo {{ harness_understand_apps_root }}"
+            "statusMessage": "understand: checking relative diff for {{ harness_understand_apps_root }}"
           }
         ]
       },
@@ -85,7 +85,7 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-throttle.sh\"",
             "timeout": 10,
-            "statusMessage": "throttle: checando slots de subagents (cap {{ harness_subagent_max_concurrent }})"
+            "statusMessage": "throttle: checking subagent slots (cap {{ harness_subagent_max_concurrent }})"
           }
         ]
       }
@@ -99,7 +99,7 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/ds-gate-posttool.sh\"",
             "timeout": 30,
-            "statusMessage": "ds-gate: checando tokenização do design system"
+            "statusMessage": "ds-gate: checking design-system tokenization"
           }
         ]
       },
@@ -121,7 +121,7 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/deliverable-scrub-gate.sh\"",
             "timeout": 15,
-            "statusMessage": "scrub: checando jargão interno em doc de cliente"
+            "statusMessage": "scrub: checking internal jargon in client doc"
           }
         ]
       }
@@ -156,27 +156,27 @@
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate.py\"",
             "timeout": 15,
-            "statusMessage": "completion-gate: checando claim de conclusão vs evidência"
+            "statusMessage": "completion-gate: checking completion claim vs evidence"
           },
           {%- if use_ui_evidence %}
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/ui-evidence-gate.sh\"",
             "timeout": 15,
-            "statusMessage": "ui-evidence-gate: checando mudança de UI vs evidência visual"
+            "statusMessage": "ui-evidence-gate: checking UI change vs visual evidence"
           },
           {%- endif %}
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-stop-gate.sh\"",
             "timeout": 10,
-            "statusMessage": "marathon: checando maratona ativa vs checklist"
+            "statusMessage": "marathon: checking active marathon vs checklist"
           },
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/reap-leaks.sh\"",
             "timeout": 10,
-            "statusMessage": "reap-leaks: reapando chromium/orfaos vazados"
+            "statusMessage": "reap-leaks: reaping leaked chromium/orphans"
           }
         ]
       }

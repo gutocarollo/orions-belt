@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# set_hooks_path.sh — ativa core.hooksPath=.githooks SEM clobber (A2, gap real
-# da auditoria adversarial pós-v1.0.0: o `_task` do copier.yml rodava
-# `git config core.hooksPath .githooks` INCONDICIONAL — em brownfield com
-# Husky (ou qualquer outro hooksPath já configurado) isso desativava o hook
-# manager do usuário silenciosamente).
+# set_hooks_path.sh — activates core.hooksPath=.githooks WITHOUT clobbering
+# (A2, a real gap from the post-v1.0.0 adversarial review: the `_task` in
+# copier.yml ran `git config core.hooksPath .githooks` UNCONDITIONALLY — in a
+# brownfield project with Husky (or any other already-configured hooksPath)
+# that silently disabled the user's hook manager).
 #
-# Fonte única: chamado tanto pelo `_task` do copier.yml (roda dentro do dst
-# ao fim de `copier copy`/`update`, cwd = raiz do projeto renderizado) quanto
-# por `harness-install.sh` (chama explicitamente contra o TARGET depois do
-# merge, porque em brownfield o `_task` roda só dentro do SCRATCH — ver
-# comentário no topo de harness-install.sh).
+# Single source: called both by the `_task` in copier.yml (runs inside the dst
+# at the end of `copier copy`/`update`, cwd = root of the rendered project) and
+# by `harness-install.sh` (calls it explicitly against the TARGET after the
+# merge, because in brownfield the `_task` runs only inside the SCRATCH — see
+# the comment at the top of harness-install.sh).
 #
-# Uso: set_hooks_path.sh [target-dir]   (default: cwd)
-# Fail-open: nunca retorna != 0 (nunca deve derrubar a instalação/task do Copier).
+# Usage: set_hooks_path.sh [target-dir]   (default: cwd)
+# Fail-open: never returns != 0 (must never bring down the Copier install/task).
 set -uo pipefail
 
 TARGET="${1:-.}"
-cd "$TARGET" 2>/dev/null || { echo "orions-belt: set_hooks_path.sh: diretório '$TARGET' inexistente -- nada a fazer" >&2; exit 0; }
+cd "$TARGET" 2>/dev/null || { echo "orions-belt: set_hooks_path.sh: directory '$TARGET' does not exist -- nothing to do" >&2; exit 0; }
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "orions-belt: '$TARGET' ainda nao e repo git -- rode 'git init && git config core.hooksPath .githooks' manualmente para ativar o pre-commit de ref-integrity" >&2
+  echo "orions-belt: '$TARGET' is not a git repo yet -- run 'git init && git config core.hooksPath .githooks' manually to activate the ref-integrity pre-commit" >&2
   exit 0
 fi
 
@@ -29,12 +29,12 @@ if [ -z "$CURRENT_HP" ]; then
   git config core.hooksPath .githooks
   echo "orions-belt: core.hooksPath -> .githooks"
 elif [ "$CURRENT_HP" = ".githooks" ]; then
-  echo "orions-belt: core.hooksPath ja e .githooks (idempotente, nada a fazer)"
+  echo "orions-belt: core.hooksPath is already .githooks (idempotent, nothing to do)"
 else
-  # GATE A2: nunca sobrescrever um hooksPath já customizado (Husky, lefthook,
-  # husky.sh, qualquer outro gerenciador). Avisa e ensina o encadeamento
-  # compatível em vez de clobber silencioso.
-  echo "orions-belt: core.hooksPath ja aponta para '$CURRENT_HP' (ex.: Husky/outro hook manager) -- NAO sobrescrito (A2, anti-clobber). Para ativar o ref-integrity do harness sem substituir seu hook manager, encadeie manualmente: adicione ao final do seu hook em '$CURRENT_HP/pre-commit' uma chamada a 'bash \"\$(git rev-parse --show-toplevel)/.githooks/pre-commit\"' deste projeto. Se preferir substituir por completo em vez de encadear, rode 'git config core.hooksPath .githooks' você mesmo. Ver docs/manual/14-instalacao-e-update.md." >&2
+  # GATE A2: never overwrite an already-customized hooksPath (Husky, lefthook,
+  # husky.sh, any other manager). Warn and teach the compatible chaining
+  # instead of a silent clobber.
+  echo "orions-belt: core.hooksPath already points to '$CURRENT_HP' (e.g. Husky/another hook manager) -- NOT overwritten (A2, anti-clobber). To activate the harness ref-integrity without replacing your hook manager, chain it manually: append to the end of your hook at '$CURRENT_HP/pre-commit' a call to this project's 'bash \"\$(git rev-parse --show-toplevel)/.githooks/pre-commit\"'. If you prefer to replace it entirely instead of chaining, run 'git config core.hooksPath .githooks' yourself. See docs/manual/14-instalacao-e-update.md." >&2
 fi
 
 exit 0

@@ -1,33 +1,33 @@
 #!/usr/bin/env bash
-# subagent-throttle — PreToolUse (Task|Agent). Cap CONFIGURÁVEL de subagents
-# simultâneos.
+# subagent-throttle — PreToolUse (Task|Agent). CONFIGURABLE cap on concurrent
+# subagents.
 #
-# MATERIALIZAÇÃO (F3, orions-belt): cópia adaptada de
-# engine/hooks/subagent-throttle.sh (a fonte de autoria/teste dentro do repo
-# orions-belt) para o projeto-alvo — hooks do Claude Code rodam como
-# comando shell local (`$CLAUDE_PROJECT_DIR/.claude/hooks/...`), não há como
-# referenciar um path fora do repo de forma portátil entre máquinas. ÚNICA
-# diferença funcional da fonte: `CONF_PY` aponta para
-# `$ROOT/.harness/lib/_tooling_conf.py` (materializado também via Copier —
-# ver esse arquivo) em vez de um path relativo a `engine/`, que não existe
-# mais uma vez instalado no projeto-alvo.
+# MATERIALIZATION (F3, orions-belt): an adapted copy of
+# engine/hooks/subagent-throttle.sh (the authoring/testing source inside the
+# orions-belt repo) for the target project — Claude Code hooks run as a local
+# shell command (`$CLAUDE_PROJECT_DIR/.claude/hooks/...`), and there is no way
+# to reference a path outside the repo portably across machines. The ONLY
+# functional difference from the source: `CONF_PY` points at
+# `$ROOT/.harness/lib/_tooling_conf.py` (also materialized via Copier —
+# see that file) instead of a path relative to `engine/`, which no longer
+# exists once installed in the target project.
 #
-# Versão PARAMETRIZADA do hook original do harness-doador de referência
-# (CAP=6 hardcoded na origem). Aqui o cap e o TTL
-# de stale-slot vêm de HARNESS_SUBAGENT_MAX_CONCURRENT /
-# HARNESS_SUBAGENT_SLOT_STALE_MINUTES em .harness/harness.conf, lidos via
-# .harness/lib/_tooling_conf.py — o parser ÚNICO do framework (não duplica
-# um parser bash paralelo).
+# PARAMETERIZED version of the original hook from the reference donor harness
+# (CAP=6 hardcoded at the source). Here the cap and the stale-slot TTL
+# come from HARNESS_SUBAGENT_MAX_CONCURRENT /
+# HARNESS_SUBAGENT_SLOT_STALE_MINUTES in .harness/harness.conf, read via
+# .harness/lib/_tooling_conf.py — the framework's SINGLE parser (it does not
+# duplicate a parallel bash parser).
 #
-# Fail-open: se python3 ou _tooling_conf.py estiverem indisponíveis, ou o
-# projeto não tiver .harness/harness.conf, cai nos defaults originais
-# (CAP=6 / STALE=45min) — o comportamento nunca regride para "sem throttle".
+# Fail-open: if python3 or _tooling_conf.py are unavailable, or the project
+# has no .harness/harness.conf, it falls back to the original defaults
+# (CAP=6 / STALE=45min) — the behavior never regresses to "no throttle".
 #
-# Slots = arquivos em $HARNESS_RUNS_DIR/.slots (default ".harness/runs" —
-# M-ALTA/H4, auditoria adversarial: era hardcoded ".claude/runs" mesmo este
-# hook rodando também no Codex via .codex/hooks.json (H3/A1), o que
-# instruiria um projeto codex-only a criar uma pasta ".claude" que não faz
-# sentido nele. Passou a ler HARNESS_RUNS_DIR como CAP/STALE_MIN já liam.
+# Slots = files in $HARNESS_RUNS_DIR/.slots (default ".harness/runs" —
+# M-HIGH/H4, adversarial audit: it was hardcoded ".claude/runs" even though this
+# hook also runs on Codex via .codex/hooks.json (H3/A1), which would
+# instruct a codex-only project to create a ".claude" folder that makes no
+# sense there. It now reads HARNESS_RUNS_DIR just as CAP/STALE_MIN already did.
 set -uo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -n "$ROOT" ] || exit 0
@@ -68,8 +68,8 @@ find "$SLOTS" -type f -name '*.slot' -mmin "+$STALE_MIN" -delete 2>/dev/null
 COUNT=$(find "$SLOTS" -type f -name '*.slot' | wc -l)
 if [ "$COUNT" -ge "$CAP" ]; then
   cat >&2 <<EOF
-THROTTLE: $COUNT/$CAP subagents já em voo — não lance mais agora (cap configurado via HARNESS_SUBAGENT_MAX_CONCURRENT em .harness/harness.conf).
-Aguarde os ativos terminarem (as conclusões chegam como notificação) e relance em lotes de até $CAP. Se um subagent morreu sem liberar slot, ele expira sozinho em ${STALE_MIN}min.
+THROTTLE: $COUNT/$CAP subagents already in flight — do not launch more right now (cap configured via HARNESS_SUBAGENT_MAX_CONCURRENT in .harness/harness.conf).
+Wait for the active ones to finish (completions arrive as notifications) and relaunch in batches of up to $CAP. If a subagent died without releasing its slot, it expires on its own in ${STALE_MIN}min.
 EOF
   exit 2
 fi

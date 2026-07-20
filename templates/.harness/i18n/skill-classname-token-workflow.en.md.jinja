@@ -1,0 +1,149 @@
+---
+name: classname-token-workflow
+description: >
+  Use to mine, cluster, audit, and migrate repeated className/utility-class
+  in {{ project_name }} without over-abstraction. Runs the AST/JSX miner
+  in `.harness/lib/`, interprets semantic clusters, defines the
+  token/component/hook contract, and requires sequential migration with visual evidence.
+---
+
+# Classname Token Workflow
+
+Origin: generalized from a real className mining workflow of a
+reference donor project — the classification contract and the AST/JSX
+miner via the TypeScript Compiler API survived because they are tech-agnostic
+within any React+Tailwind stack (or equivalent utility-CSS). What
+was removed: the donor project's hardcoded paths, the donor project's
+Postgres DSN, and the 13-table relational layer built specifically
+for the data volume of that repo (see "Relational layer (optional,
+advanced)" at the end — documented in prose, not ported as an executable
+script; it is a candidate for a future rescue round if this project
+also has data volume large enough to overflow the LLM context).
+
+## When to use
+
+Use when the task mentions className mining, repetition of
+`className`/utility-class, class tokenization, DRY UI abstraction,
+decentralized icons/sizes, or the risk of merging different entities
+into the same token.
+
+## Contract
+
+1. Never promote textual repetition directly into a token.
+2. Common utility classes (`flex items-center`, `gap-*`, `text-sm` and
+   similar) are idioms of the utility-CSS framework until proven semantically
+   otherwise.
+3. The unit of analysis is the JSX/interactive entity: root, ancestors,
+   siblings, props, route, roles, and icons.
+4. Possible output types:
+   - `style_token`: same visual, different entities.
+   - `component_contract`: same visual/interactive entity.
+   - `hook`: same behavior, different UI.
+   - `registry`: shared enumeration/actions.
+   - `no_abstraction`: textual savings without semantics.
+5. Do not mix different product entities when side effects, routes,
+   states, or operations diverge.
+
+## Procedure
+
+### 1. Run the miner
+
+```bash
+node .harness/lib/classname-miner-v2.mjs --root {{ harness_web_app_dir }}
+```
+
+Flags/env vars (all optional — `--help` lists the complete contract):
+
+| Flag | Env var | Default | What it controls |
+|------|---------|---------|-----------------|
+| `--root <dir>` | `HARNESS_MINER_ROOT` | cwd | root scanned for `.ts`/`.tsx` |
+| `--out <dir>` | `HARNESS_MINER_OUT_DIR` | `docs/design-system/sources` (relative to the git repo root) | where the `.md`/`.json` report is written |
+| `--interactive-tags <csv>` | `HARNESS_MINER_INTERACTIVE_TAGS` | `a,button,Link` | extra tags treated as an interactive root (e.g., `Button,MenuItem` if your design-system uses those names) |
+| `--emit-full <dir>` | — | — | full NDJSON dataset (non-truncated), for optional external ingestion |
+| `--emit-json` | — | off | also writes the truncated JSON (archaeology/manual backup) |
+| `--self-test` | — | off | validates the shape of the output schema |
+
+The miner automatically resolves path-aliases (`@components/*`, `@/*`
+etc.) by reading the `tsconfig.json`/`jsconfig.json` of the `--root` — there is no
+hardcoded alias; a project without those files still works (fallback: without
+alias resolution, relative resolution still works).
+
+Zero-dependency variant (no `typescript` in `node_modules`, regex-only,
+no structural JSX/cluster context): `node .harness/lib/classname-miner.mjs
+--root {{ harness_web_app_dir }}` — same root/out flags; uses only text
+n-grams, not semantic entities/clusters. Prefer the v2 above whenever
+`typescript` is available — v1 is the fallback.
+
+### 2. Read the report first
+
+```bash
+sed -n '1,180p' docs/design-system/sources/classname-token-mining-v2.md
+```
+
+The report has: top n-grams by raw savings, top semantic clusters,
+high-signal clusters and (if applicable to the project) sidebar evidence —
+each cluster already comes with `decision`, `confidenceScore`, `blockingReasons` and
+`recommendedSplitBy` computed heuristically by the miner.
+
+For large datasets (the full JSON can overflow the LLM context):
+use `--emit-full <dir>` to generate NDJSON and query by line/grep instead
+of loading everything — or see "Relational layer (optional, advanced)" below.
+
+### 3. Classify the cluster before editing
+
+- Reject if `antiMergeReasons` has `generic-structural-classes` and there is
+  no semantic role.
+- Review manually if there is `multiple-route-areas`,
+  `multiple-interactive-tags` or `no-semantic-child-roles`.
+- Propose a contract if `surfaceRole`, `roles`, `interactiveTag` and the
+  samples point to the same entity.
+
+### 4. Write the contract before migration
+
+- name;
+- single source;
+- scope;
+- anti-scope;
+- visual invariants;
+- proof routes/themes.
+
+### 5. Migrate sequentially
+
+One entity at a time. After each slice:
+
+- `git diff --check`;
+- typecheck or relevant test;
+{%- if use_ui_evidence %}
+- `cd {{ harness_web_app_dir }} && npm run ui:evidence -- after-<label> --routes <routes> --themes {{ harness_ui_evidence_themes }}`
+  when there is a visual change (skill `ui-evidence` — full before/after protocol
+  there).
+{%- else %}
+- before/after visual evidence capture, if this project has a renderable
+  frontend (`use_ui_evidence` is off in this project — with no engine
+  installed, visual proof is manual).
+{%- endif %}
+
+### 6. If you change the design system truth, update the Karpathy wiki
+
+- `docs/design-system/wiki/*.md` for the current truth;
+- `docs/design-system/index.md`;
+- `docs/design-system/log.md`;
+- `python3 .harness/lib/docs_wiki_lint.py --scope design-system`.
+
+## Relational layer (optional, advanced)
+
+If the miner dataset is too large for the LLM context even via
+NDJSON, the origin pattern ingested the `--emit-full` into a dedicated
+Postgres schema (13 tables: `entity`, `occurrence`, `semantic_cluster`,
+`edge_cluster_entity` etc.) for relational querying instead of a file. This
+was NOT ported as an executable script in this round — it is a candidate for
+future rescue if this project has the same scale problem. If you choose to
+recreate this pattern here: use a DSN from an environment variable of this
+project's own (never hardcode host/port/credential from another project), and
+treat the Postgres schema as a derivable cache — 100% regenerable from
+`--emit-full`, never the source of truth.
+
+## Final guardrail
+
+A cluster is evidence, not authorization. Authorization comes from contract +
+migration + rendered proof.

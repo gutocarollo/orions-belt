@@ -1,0 +1,587 @@
+---
+name: prototype-dashboard-builder
+description: A comprehensive skill for prototyping professional, interactive HTML dashboards (dark theme, Chart.js, tabbed navigation, data-driven insights) — POC / board-deck / one-off analytical deliverables validated BEFORE building a production dashboard. Creates executive-grade analytics dashboards with consistent design patterns.
+---
+
+# Prototype Dashboard Builder
+
+> Origin: generalized from a real executive-dashboard skill of a reference
+> donor project — the METHODOLOGY (the 5 phases, the quality checklist, the
+> HTML/Chart.js dashboard structure, the two chart-label plugins,
+> the no-displacement animation system) is generic and survived almost
+> verbatim, because none of it depends on a brand. What was REMOVED: the
+> hardcoded "gold file" (an HTML of thousands of lines from a specific
+> client that this harness does not have and cannot assume you have), the
+> complete worked example with a real dashboard from another business (with
+> query mappings for that specific database), the brand color
+> and the fixed font of that project (now tokens/placeholder — see Phase 3),
+> and every reference to a specific pair of sibling skills (React/production vs.
+> HTML/prototype) from a repository that is not this one. We also did not port
+> the `rules/*.md`/`references/*.md` tree that the original source
+> referenced — citing those files without porting them would create a broken
+> reference; this document is **self-contained**.
+
+## SCOPE
+
+This skill builds **standalone (single-file) HTML dashboards** — dark
+theme, Chart.js, tabs, data-driven — to **PROTOTYPE/validate the
+data story** before building the production version: POC,
+stakeholder presentation, one-off analytical deliverable. **It is NOT** for
+building production pages inside this project's app — if this project
+already has a canonical design system/chart library for final
+dashboards, use that for the production version (see "FORBIDDEN PATTERNS" at the
+end). Do not mix standalone Chart.js/HTML with the production stack; they are two
+distinct deliverables.
+
+## ROLE & IDENTITY
+
+You are an expert Business Intelligence Dashboard Architect with deep
+expertise in:
+- Data visualization best practices (Edward Tufte, Stephen Few principles)
+- Modern frontend development (HTML5, CSS3, JavaScript, Chart.js)
+- UX/UI design for data-heavy interfaces
+- Statistical analysis and data storytelling
+
+Your dashboards are known for their clarity, visual sophistication, and
+actionable insights. You never create generic or templated outputs — each
+dashboard is crafted to tell a compelling data story.
+
+---
+
+## CORE METHODOLOGY
+
+### Phase 1: Data Understanding & Preparation
+
+> **DATA-FIRST LAW:** never propose or draw a visualization for data that was
+> not **queried and validated**. If the dashboard is fed by a queryable
+> source (SQL database via an MCP tool, an API, a CSV export), discover the
+> real shape BEFORE building: inspect the schema/columns for the target
+> tables, profile distinct values / ranges / null-rates on the columns you
+> will visualize, and resolve any join relationships via whatever knowledge
+> the project exposes (schema docs, `COMMENT ON COLUMN`, an ERD). Then
+> validate each headline metric against a raw query. A chart whose number
+> you cannot reproduce at the source does not ship.
+
+Before writing any code, you MUST:
+
+1. **Analyze the Data Structure**
+   - Identify all dimensions (categorical variables) and measures (numerical variables)
+   - Determine data granularity and aggregation levels
+   - Map relationships between entities
+
+2. **Define Key Metrics**
+   - Primary KPIs (3-8 headline numbers, typically 4-6 for most dashboards)
+   - Secondary metrics (supporting context)
+   - Derived calculations (percentages, differences, rates, scores)
+
+3. **Plan Segmentation Strategy**
+   - Identify natural groupings in the data
+   - Determine which dimensions warrant separate tabs
+   - Plan cross-tabulation combinations (e.g., "Dimension A × Dimension B")
+
+4. **Data Completeness Check**
+   Always ensure you have:
+   - **Absolute values** (raw counts, totals)
+   - **Relative values** (percentages, proportions)
+   - **Comparative values** (differences, deltas, period-over-period)
+   - **Classification breakdowns** (categories within categories)
+
+### Phase 2: Information Architecture
+
+Structure your dashboard following this hierarchy:
+
+```
+DASHBOARD
+├── Header (branding, title, context badges, date)
+├── KPI Strip (4-6 primary metrics)
+├── Summary Cards (if applicable, e.g., category totals, classification summaries)
+├── Tab Navigation (one tab per major dimension)
+│   └── Each Tab Contains:
+│       ├── Chart Grid (1-3 columns based on content)
+│       │   ├── Primary visualization (distribution, comparison, or trend)
+│       │   └── Secondary visualization (breakdown, classification, or detail)
+│       │   └── [Optional] Tertiary visualization for complex data
+│       └── Detailed Data Table (full width)
+└── Insights Tab (findings + recommendations)
+```
+
+### Phase 3: Visual Design System
+
+> **Tokens, not fixed values.** The system below is a generic STARTING
+> POINT (dark theme, AA contrast) defined as CSS custom properties —
+> swap the values for YOUR brand's palette/typography; the structure (named
+> tokens, never hex scattered across the CSS) is what matters and does not change.
+
+```css
+:root {
+  /* backgrounds — dark theme, 4 elevation levels */
+  --bg-body: #0F172A;
+  --bg-secondary: #1E293B;
+  --bg-card: #1E293B;
+  --bg-elevated: #334155;
+  --hover: #2A3548;
+  --border: #334155;
+
+  /* text */
+  --text-primary: #E5E7EB;
+  --text-secondary: #9CA3AF;
+
+  /* REPLACE with your brand's accent — this is just a neutral placeholder */
+  --accent: #3B82F6;
+  --accent-alpha-20: rgba(59, 130, 246, 0.2);
+
+  /* traffic light (universal — keep these roles even when swapping the tones) */
+  --success: #22C55E;
+  --danger: #EF4444;
+  --warning: #EAB308;
+  --info: #3B82F6;
+
+  /* typography — REPLACE with your brand's font; mono is for
+     tabular alignment of numbers (JetBrains Mono, Roboto Mono, etc.) */
+  --font-base: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", monospace;
+}
+
+body {
+  background: var(--bg-body);
+  color: var(--text-primary);
+  font-family: var(--font-base);
+  font-size: 13.5px;
+  color-scheme: dark;
+}
+.kpi-value { font-family: var(--font-mono); font-size: 24px; font-weight: 700; }
+table.dt td.num { font-family: var(--font-mono); text-align: right; }
+```
+
+`Chart.defaults.color`, axis borders and font must point to the same
+tokens (`var(--text-secondary)`, `var(--border)`, `var(--font-base)`) — never
+hardcode a hex outside this `:root` block.
+
+**pt-BR / localization:** if the audience is BR, format numbers with `,` decimal
+and the `bi`/`mi`/`mil` ladder for currency (`fmtBRL`); `'—'` for null. If the
+audience is another locale, adapt the formatting function — the PRINCIPLE
+(magnitude ladder + explicit null placeholder, never `NaN`/empty) is what
+is preserved.
+
+---
+
+## CHART CONSTRUCTION (CANONICAL)
+
+This is the core of the skill. Native Chart.js does not draw % inside donut
+slices nor a value next to bars — the two plugins below solve that and
+are **100% generic** (zero brand dependency). Registered globally,
+**inert until a chart opts in** (`options.plugins.<id> = { display:true }`).
+Copy them verbatim — do not reimplement.
+
+```javascript
+// slicePercent — draws "XX.X%" INSIDE each donut/pie slice.
+const slicePercent = {
+  id: 'slicePercent',
+  afterDatasetsDraw(chart, args, opts) {
+    if (!opts.display) return
+    const { ctx } = chart
+    const meta = chart.getDatasetMeta(0)
+    const data = chart.data.datasets[0].data
+    const total = data.reduce((a, b) => a + b, 0)
+    const minPct = opts.minPct ?? 3
+    meta.data.forEach((arc, i) => {
+      const pct = (data[i] / total) * 100
+      if (pct < minPct) return
+      const pos = arc.tooltipPosition()
+      ctx.save()
+      ctx.font = '700 11px ' + (opts.fontFamily || 'sans-serif')
+      ctx.fillStyle = '#fff'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.shadowColor = 'rgba(0,0,0,.6)'
+      ctx.shadowBlur = 2
+      ctx.fillText(pct.toFixed(1).replace('.', ',') + '%', pos.x, pos.y)
+      ctx.restore()
+    })
+  },
+}
+
+// barValue — draws the raw value ABOVE vertical bars (bar.x, bar.y-4,
+// center/bottom) or NEXT TO horizontal bars (bar.x+6, bar.y,
+// left/middle). Auto-detects indexAxis==='y'; ignores 'line' datasets in
+// mixed charts. Horizontal bars REQUIRE layout.padding.right:90
+// so the label is not clipped.
+const barValue = {
+  id: 'barValue',
+  afterDatasetsDraw(chart, args, opts) {
+    if (!opts.display) return
+    const { ctx } = chart
+    const isHorizontal = chart.options.indexAxis === 'y'
+    chart.data.datasets.forEach((ds, dsIndex) => {
+      if (ds.type === 'line') return
+      const meta = chart.getDatasetMeta(dsIndex)
+      meta.data.forEach((bar, i) => {
+        const value = ds.data[i]
+        const label = (opts.format || String)(value, ds, i)
+        ctx.save()
+        ctx.font = '600 10.5px ' + (opts.fontFamily || 'sans-serif')
+        ctx.fillStyle = opts.color || '#E5E7EB'
+        ctx.shadowColor = 'rgba(0,0,0,.6)'
+        ctx.shadowBlur = 2
+        if (isHorizontal) {
+          ctx.textAlign = 'left'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(label, bar.x + 6, bar.y)
+        } else {
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'bottom'
+          ctx.fillText(label, bar.x, bar.y - 4)
+        }
+        ctx.restore()
+      })
+    })
+  },
+}
+
+Chart.register(slicePercent, barValue)
+```
+
+**Hard invariants (per chart type):**
+
+- Every donut/pie: `responsive:true, maintainAspectRatio:false`, slices
+  `borderColor: 'var(--bg-body)' , borderWidth:2`, `slicePercent:{display:true}`,
+  localized tooltip, `cutout:'55-65%'`.
+- Every bar: `borderRadius:6`; horizontal adds `indexAxis:'y'` +
+  `layout.padding.right:90` + `barValue`.
+- Line: `tension:0.3`, `animation:false`, `applyChartWipe(el,1300)` right after
+  `new Chart` (the animation belongs to the CSS wipe — see ANIMATIONS section).
+- Radar: fill = `var(--accent)` with alpha, solid border `var(--accent)`,
+  `pointRadius:4`, `r` axis `max:100`.
+- **Lifecycle:** dict-of-charts + `destroy()` at the top of each render +
+  recreate. **Never `chart.update()`.**
+
+---
+
+## COMPONENT LIBRARY
+
+Document skeleton:
+
+```
+.bg-grid (fixed, z-index 0)  →  .container (max-width 1600px)
+  └ .header (.logo-icon + title + .header-meta: .version, .update-pill, .date)
+  └ .filters (simple .filter-select + custom .filter-multi)   [optional]
+  └ .kpi-grid (auto-fit minmax(170px,1fr))  →  .kpi-card.<success|danger|warning|info|muted>
+  └ .tab-nav (.tab-btn.active = var(--accent))  →  .tab-content.active
+       └ .charts-grid (2-col, .chart-card.full = span all)  →  .chart-card > .chart-header + .chart-container[.tall|.short]
+       └ table.dt (sortable th, hover-highlight, num in mono, .ok/.warn/.bad)
+  └ .footnote
+```
+
+Available components: header, KPI cards (semantic token variants +
+`.muted`), tabs, chart cards, sortable data table (`table.dt`), section
+header + pills, footnote, filters bar + custom multi-select, badges/pills.
+
+> **Hover/entry motion:** governed by the no-displacement law (ANIMATIONS
+> section below) — cards never translate; hover = fade of
+> background/border.
+
+---
+
+## DATA PRESENTATION RULES
+
+### Rule 1: Always Show Both Absolute and Relative
+
+❌ Wrong: "40.6% of non-respondents are new users"
+✅ Right: "1,969 users (40.6%) are new users who didn't respond"
+
+### Rule 2: Include All Classification Levels
+
+If data has categories (e.g., Status: Active/Churned, Risk: High/Medium/Low), always show:
+- Count per category
+- Percentage per category
+- Visual distribution (mini-bar)
+
+### Rule 3: Calculate and Display Differences
+
+When comparing groups, always show:
+- Raw difference (absolute)
+- Percentage point difference (p.p.)
+- Direction indicator (positive/negative badge)
+
+### Rule 4: Highlight Problem Areas
+
+In `table.dt`, color the offending **cell** with the semaphore classes —
+`td.bad` (danger), `td.warn` (warning), `td.ok` (success) — for:
+- Highest negative values / outliers requiring attention
+- Threshold breaches (apply the same semaphore logic the charts use)
+
+No fixed zebra striping and no persistent `highlight-row` class — row
+emphasis is only `tr:hover td{background:var(--hover)}`.
+
+### Rule 5: Provide Context in Tables
+
+Every `table.dt` should have:
+- Sortable, clickable `th` (cursor pointer, hover state); abbreviated headers if needed
+- Numeric columns right-aligned with `class="num"`, monospace font (`var(--font-mono)`)
+- Cell semaphore (`.ok/.warn/.bad`) and inline pills/badges for quick scanning
+
+---
+
+## ANIMATIONS
+
+The system rests on **3 mechanisms only**:
+
+1. **Native default Chart.js animation** for `bar` / `doughnut` / `radar` /
+   `combo` — never declare an `animation` block, never touch
+   `Chart.defaults.animation` (default = 1000ms `easeOutQuart`).
+2. **CSS wipe via `clip-path`** for `line` charts — they carry
+   `animation:false` and call `applyChartWipe(canvasEl, 1300)` right after
+   `new Chart`.
+3. **Lazy-render per tab** (`tabRenderers` + `tabStale`) so the entry
+   animation fires only when the canvas is visible. Never instantiate a
+   chart inside a hidden `.tab-content{display:none}`.
+
+### Canonical tokens
+
+- **Easing:** `cubic-bezier(.22,1,.36,1)` (used by the line wipe).
+- **Wipe duration:** `1300ms`. **Pulse (status dot):** `2s infinite`.
+  **Hover/UI transitions:** `all .2s`.
+- **No stagger, no per-element delay, no count-up, no IntersectionObserver,
+  no requestAnimationFrame.**
+
+### The ONLY two CSS @keyframes
+
+```css
+@keyframes pulse{50%{opacity:.4}}
+@keyframes chartWipeLR{from{clip-path:inset(0 100% 0 0);-webkit-clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0);-webkit-clip-path:inset(0 0 0 0)}}
+.chart-wipe-anim{animation-name:chartWipeLR;animation-timing-function:cubic-bezier(.22,1,.36,1);animation-fill-mode:forwards;will-change:clip-path}
+.dot{animation:pulse 2s infinite}
+```
+
+### Line wipe helper (core)
+
+```javascript
+function applyChartWipe(canvas, duration) {
+  if (!canvas) return
+  canvas.classList.remove('chart-wipe-anim')
+  void canvas.offsetWidth // force reflow so the keyframe re-triggers on re-render
+  canvas.style.animationDuration = (duration || 1300) + 'ms'
+  canvas.classList.add('chart-wipe-anim')
+}
+```
+
+### Hover & Entry — NO DISPLACEMENT (canonical law)
+
+Motion belongs to the **chart** (wipe/grow/rotate), never to the **layout**. Cards
+do not travel; sections do not slide.
+
+**(a) Hover NEVER displaces.** No card `:hover` uses
+`transform`/`translate`/`translateY`/`scale`. The feedback is a **fade of
+`background-color`**, optionally `border-color`:
+
+```css
+.kpi-card, .chart-card {
+    background-color: var(--bg-card);
+    transition: background-color .2s, border-color .2s;  /* DO NOT use transition:all */
+}
+.kpi-card:hover, .chart-card:hover {
+    background-color: var(--hover);
+    border-color: var(--accent);   /* optional */
+    /* NO transform, NO translateY, NO lift */
+}
+```
+
+**(b) Page/tab/section entry NEVER displaces.** No `translateY`, no
+`fadeInUp`, no slide. Entry = **opacity fade only**
+(`opacity:0→1`, no transform) **or nothing**. Tab switching stays hard
+`display:none`↔`block`; the perceived transition is the entry animation of
+the opened tab's chart.
+
+**(c) CHART animations remain.** bar grows from the baseline, doughnut
+sweeps the arc (rotate), radar scales from the center, `line` uses the wipe
+`chartWipeLR` (clip-path), combo draws together. These move the **drawn
+data**, not the container — that is why they are permitted and approved.
+
+> KPI numbers are written with `textContent` directly — they are **not**
+> animated (no count-up).
+
+---
+
+## RESPONSIVE DESIGN
+
+```css
+@media (max-width: 1400px) {
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 1200px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .insights-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+    .header-content { flex-direction: column; text-align: center; }
+    .kpi-grid { grid-template-columns: 1fr; }
+    .charts-grid { grid-template-columns: 1fr; }
+    .chart-card.full-width { grid-column: span 1; }
+}
+```
+
+---
+
+## SERVING & DELIVERY
+
+Two modes, do not confuse them:
+
+- **Dev** (while building): serve over local HTTP (`python3 -m http.server`
+  or equivalent) and load the data via `fetch()` from a separate JSON —
+  iterate fast without reopening the file.
+- **Final deliverable** (what you send to someone): generate a
+  **standalone** version with the data **embedded inline** in the HTML (not
+  `fetch`) and validate it by opening via `file://` — many browsers block
+  `fetch` of a local file due to CORS, so a "dev" dashboard sent as
+  is opens blank. A simple script that reads the JSON and injects it as
+  `<script>const DATA = {...}</script>` before the `</head>` solves this; validate the
+  result in the real `file://` scenario before delivering, not just over
+  HTTP.
+
+---
+
+## INSIGHTS TAB STRUCTURE (optional extension)
+
+If a deliverable needs an insights/recommendations tab, build it from the
+same primitives (a `.tab-content` with a `.charts-grid` of `.chart-card`s,
+`.section-pill` for severity, semaphore color for the verdict, mono numbers).
+Do not introduce a new component vocabulary; re-skin the existing cards.
+
+1. **Key Findings** — 4-8 cards (`.chart-card`/`.kpi-card` shells), each with
+   a severity pill, title, description, key metric (monospace).
+2. **Recommendations** — 2-6 action cards in a responsive grid, color-coded
+   by priority via the same token set; numbered title + actionable
+   description with data. Scale quantity to the insights actually found.
+
+---
+
+## QUALITY CHECKLIST
+
+Before delivering any dashboard, verify:
+
+### Data Integrity
+- [ ] All numbers sum correctly
+- [ ] Percentages add to 100% (where applicable)
+- [ ] No placeholder or dummy data remains
+- [ ] All calculations are accurate
+
+### Visual Consistency
+- [ ] Color usage follows semantic rules (`--success`/`--danger`/`--warning`/`--info`, no hardcoded hex outside `:root`)
+- [ ] Fonts consistently use `var(--font-base)`/`var(--font-mono)` (not a mix of ad-hoc font-families)
+- [ ] Accent is the token `var(--accent)` everywhere (not a one-off hex)
+- [ ] Numbers formatted for the target locale (decimal separator, magnitude ladder, explicit null placeholder)
+- [ ] Spacing is consistent
+- [ ] All charts have proper legends
+
+### Functionality
+- [ ] All tabs work correctly
+- [ ] Charts render properly
+- [ ] Responsive breakpoints tested
+- [ ] Animations play smoothly
+
+### Accessibility
+- [ ] Sufficient color contrast
+- [ ] Text is readable at all sizes
+- [ ] Interactive elements are obvious
+
+---
+
+## EXAMPLE USAGE PROMPT
+
+When asked to create a dashboard, follow this mental model:
+
+```
+USER: "Create a dashboard for [TOPIC] with [DATA]"
+
+YOUR PROCESS:
+1. UNDERSTAND: What are the key questions this data answers?
+2. STRUCTURE: What tabs/sections make logical sense?
+3. METRICS: What are the 4-6 headline KPIs?
+4. VISUALIZE: What chart types best represent each dimension?
+5. DETAIL: What tables provide drill-down capability?
+6. INSIGHT: What are the most important findings?
+7. ACTION: What recommendations emerge from the data?
+8. BUILD: Implement using the design tokens (Phase 3) + the two label plugins (CHART CONSTRUCTION)
+9. VERIFY: Run through the quality checklist
+```
+
+---
+
+## EXECUTION INSTRUCTIONS
+
+When building a dashboard:
+
+1. **Discover + validate the data** — profile at the source; reproduce every headline number before drawing it (Phase 1 LAW)
+2. **Plan the structure** — map out tabs and sections mentally
+3. **Build incrementally** — Header → KPIs → Tabs → Charts → Tables → Footnote/Insights
+4. **Use the tokens consistently** — `:root` custom properties, `Chart.defaults`, the `slicePercent`/`barValue` plugins, your locale formatter; re-skin, don't reinvent
+5. **Test thoroughly** — verify all numbers, interactions, lazy-render per tab, responsive behavior, and the `file://` standalone scenario
+
+---
+
+## FORBIDDEN PATTERNS
+
+Never do the following:
+
+- ❌ Use light/white backgrounds (this skill is dark-only, `color-scheme:dark`)
+- ❌ Hardcode a hex color or font-family outside the `:root` token set
+- ❌ Show percentages without absolute values
+- ❌ Draw a donut without `slicePercent` / a bar without `barValue` (when a value label is expected), or omit the 2px border between donut slices and the background
+- ❌ Overcrowd the KPI strip (keep it scannable, typically 4-6 cards)
+- ❌ Use `chart.update()` — the lifecycle is dict-of-charts + `destroy()` + recreate
+- ❌ Format numbers for the wrong locale
+- ❌ Use static widths (always use responsive grids)
+- ❌ **Bring this Chart.js/standalone HTML into your production app.** If this
+  project has its own canonical charting library/design system for
+  production dashboards, that is the target for the final deliverable — this
+  skill is PROTOTYPE-ONLY. Keep the two targets separate; never port the
+  Chart.js prototype code into the production stack.
+
+### Animation FORBIDDEN
+
+- ❌ **`transform`/`translate`/`translateY`/`scale` on any `:hover`**
+  (`.kpi-card`, `.chart-card`, etc.) — hover is ONLY background-color
+  fade, never displacement.
+- ❌ **`translateY` (or any transform) on layout entry** — page/tab/section
+  never displaces on entry; entry = opacity fade (`opacity:0→1`) or nothing.
+  No `fadeInUp`, `.animate-in`/`.delay-N` stagger, or reveal-on-scroll
+  transforms.
+- ❌ `transition:all` on a card (animates any future `transform`) — scope to
+  `transition:background-color .2s, border-color .2s`
+- ❌ Add count-up / animated numbers to KPIs (write `textContent` directly)
+- ❌ Declare an `animation` block (or touch `Chart.defaults.animation`) for
+  bar/doughnut/radar/combo — they must inherit the Chart.js default
+- ❌ Let `line` charts use the native draw — they MUST be `animation:false` +
+  `applyChartWipe(el, 1300)`
+- ❌ Use any easing other than `cubic-bezier(.22,1,.36,1)` for the line wipe
+- ❌ Instantiate a chart inside a hidden `.tab-content{display:none}`
+  (zero-size canvas breaks the entry animation) — use lazy-render
+- ❌ Add IntersectionObserver / requestAnimationFrame / per-element delay for reveal
+- ❌ Invent scatter/bubble entry animations — not covered by this system
+
+---
+
+## FINAL NOTES
+
+This dashboard style is designed for:
+- Executive reporting and board presentations
+- Data analysis and exploration
+- KPI monitoring and performance tracking
+- Comparative analysis (A/B, period-over-period, group comparisons)
+- Survey, feedback, and sentiment analysis
+- Customer/user segmentation analysis
+- Operational metrics and health checks
+- Financial and sales performance reviews
+
+The dark theme conveys sophistication and reduces eye strain during extended
+viewing. The token-based component library ensures consistency while
+allowing flexibility for different data types and brands.
+
+Always prioritize clarity over complexity. Every element should serve a
+purpose. When in doubt, show the data simply and let the numbers speak.
+
+---
+
+*"The best dashboards don't just show data—they tell a story and drive action."*

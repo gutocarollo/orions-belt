@@ -1,24 +1,24 @@
 #!/usr/bin/env python3
-"""ds-pairs-check — guarda genérica do CONTRATO DOS PARES COLORIDOS (globals.css).
+"""ds-pairs-check — generic guard of the COLORED PAIRS CONTRACT (globals.css).
 
-PORTADO de apps/web/scripts/ds-pairs-check.py (harness-doador de referência) —
-plano de resgate §R1a. Regra estrutural (contrato de design system shadcn-style):
-  - Pares coloridos de ação/status (primary, destructive, success, info, premium):
-    `X-foreground` DEVE ser branco (família #fff) e contrastar >= 4,5:1 com `X`.
-    O rótulo contrasta com o PAI (container), nunca com a página.
-  - Exceção:
-    - warning (âmbar + rótulo escuro é o par canônico; exige >= 4,5:1 idem).
-  - surface-selected é NEUTRO invertido (par inverte junto) — checa só o contraste.
+PORTED from apps/web/scripts/ds-pairs-check.py (reference donor harness) —
+rescue plan §R1a. Structural rule (shadcn-style design-system contract):
+  - Action/status colored pairs (primary, destructive, success, info, premium):
+    `X-foreground` MUST be white (#fff family) and contrast >= 4.5:1 with `X`.
+    The label contrasts with its PARENT (container), never with the page.
+  - Exception:
+    - warning (amber + dark label is the canonical pair; requires >= 4.5:1 too).
+  - surface-selected is inverted NEUTRAL (the pair inverts together) — checks contrast only.
 
-GENERICIDADE (vs. a versão-fonte): zero string de marca hardcoded.
-  - Path do CSS: HARNESS_WEB_APP_DIR + DS_GATE_CSS_PATH (.harness/harness.conf),
-    default "styles/globals.css" relativo ao app web. Ausente = fail-open
-    (nada a checar, exit 0), não crash.
-  - Blocos de tema: PROJECT_THEMES (CSV de valores de atributo data-theme).
-    Vazio = só avalia a base :root/.dark (sem overlay de marca) — nenhum nome
-    de marca fica hardcoded no engine.
+GENERICITY (vs. the source version): zero hardcoded brand string.
+  - CSS path: HARNESS_WEB_APP_DIR + DS_GATE_CSS_PATH (.harness/harness.conf),
+    default "styles/globals.css" relative to the web app. Missing = fail-open
+    (nothing to check, exit 0), not a crash.
+  - Theme blocks: PROJECT_THEMES (CSV of data-theme attribute values).
+    Empty = only evaluates the base :root/.dark (no brand overlay) — no brand
+    name stays hardcoded in the engine.
 
-Uso: python3 .harness/lib/ds-pairs-check.py   (exit 1 se qualquer par violar)
+Usage: python3 .harness/lib/ds-pairs-check.py   (exit 1 if any pair violates)
 """
 from __future__ import annotations
 
@@ -36,14 +36,14 @@ CSS_REL = get_config("DS_GATE_CSS_PATH", "styles/globals.css") or "styles/global
 CSS = (ROOT if WEB_APP_DIR == "." else ROOT / WEB_APP_DIR) / CSS_REL
 
 if not CSS.is_file():
-    print(f"ds-pairs-check: CSS de tokens não encontrado em {CSS} — nada a checar (fail-open).")
+    print(f"ds-pairs-check: tokens CSS not found at {CSS} — nothing to check (fail-open).")
     sys.exit(0)
 
 PAIRS = ['primary', 'destructive', 'success', 'info', 'premium', 'warning', 'surface-selected']
 WHITE_REQUIRED = {'primary', 'destructive', 'success', 'info', 'premium'}
 
 src = CSS.read_text()
-# remove comentários /* */ (o regex de par pegava exemplos dentro de comentário)
+# strip /* */ comments (the pair regex was catching examples inside comments)
 src_nc = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
 
 
@@ -86,11 +86,11 @@ OKLCH_RE = re.compile(
 
 
 def oklch_to_hex(l, c, h):
-    """OKLCH -> sRGB hex. Fórmulas determinísticas de Björn Ottosson
-    (OKLab -> LMS linear -> sRGB linear -> sRGB gamma), a mesma base que
-    TweakCN/oklch.com usam para gerar os tokens que o AGENTS.md recomenda.
-    Alpha (`/ N`) é ignorado — resolve como opaco; par com alpha < 1
-    realmente depende do backdrop e não é tentado aqui (ver `resolve`)."""
+    """OKLCH -> sRGB hex. Deterministic formulas by Björn Ottosson
+    (OKLab -> linear LMS -> linear sRGB -> sRGB gamma), the same base that
+    TweakCN/oklch.com use to generate the tokens AGENTS.md recommends.
+    Alpha (`/ N`) is ignored — resolves as opaque; a pair with alpha < 1
+    truly depends on the backdrop and is not attempted here (see `resolve`)."""
     hr = math.radians(h)
     a = c * math.cos(hr)
     b = c * math.sin(hr)
@@ -120,14 +120,13 @@ def resolve(val, scope):
     m = re.match(r'#([0-9a-fA-F]{6})\b', val)
     if m:
         return m.group(0).lower()
-    # H2/A6.1 (auditoria adversarial pós-v1.0.0): a versão anterior só
-    # resolvia var()/hex — um par definido em OKLCH (o formato que o
-    # AGENTS.md deste mesmo repo recomenda via TweakCN) virava SKIP
-    # silencioso e o resumo dizia "CONTRATO OK em todos os pares", mesmo
-    # com um par de contraste ~zero não avaliado. Fix: parseia
-    # `oklch(L C H)` (L em [0,1] ou "L%", H em graus, alpha ignorado) e
-    # converte para hex via `oklch_to_hex` para entrar no mesmo pipeline de
-    # contraste que hex/var() já usam.
+    # H2/A6.1 (post-v1.0.0 adversarial audit): the previous version only
+    # resolved var()/hex — a pair defined in OKLCH (the format this same
+    # repo's AGENTS.md recommends via TweakCN) became a silent SKIP and the
+    # summary said "CONTRACT OK in all pairs", even with a ~zero-contrast pair
+    # left unevaluated. Fix: parse `oklch(L C H)` (L in [0,1] or "L%", H in
+    # degrees, alpha ignored) and convert to hex via `oklch_to_hex` to enter
+    # the same contrast pipeline that hex/var() already use.
     m = OKLCH_RE.match(val)
     if m:
         l = float(m.group(1))
@@ -158,30 +157,31 @@ def contrast(a, b):
 SOFT_PAIRS = ['success-soft', 'info-soft', 'warning-soft', 'destructive-soft', 'premium-soft']
 FILLS = ['success-fill', 'warning-fill', 'destructive-fill', 'info-fill', 'premium-fill']
 
-# ── blocos de tema: genéricos via PROJECT_THEMES (CSV de data-theme). Vazio =
-# só a base :root/.dark (sem overlay de marca) — sem nenhum nome de marca
-# hardcoded no engine (o contrário da versão-fonte, que citava o nome da
-# marca do harness-doador literalmente). ──
+# ── theme blocks: generic via PROJECT_THEMES (CSV of data-theme). Empty =
+# only the base :root/.dark (no brand overlay) — no brand name hardcoded in
+# the engine (the opposite of the source version, which cited the donor
+# harness's brand name literally). ──
 THEMES = get_config_csv('PROJECT_THEMES', [])
 BLOCKS: dict[str, str] = {}
 if THEMES:
     for t in THEMES:
         t_re = re.escape(t)
-        BLOCKS[f'{t} (claro)'] = rf'\[data-theme="{t_re}"\]\s*\{{'
+        BLOCKS[f'{t} (light)'] = rf'\[data-theme="{t_re}"\]\s*\{{'
         BLOCKS[f'{t}.dark'] = rf'\[data-theme="{t_re}"\]\.dark'
 else:
-    BLOCKS['base (claro, :root)'] = r':root\s*\{'
+    BLOCKS['base (light, :root)'] = r':root\s*\{'
     BLOCKS['base.dark'] = r'(?<![\]"])\.dark\s*\{'
 
-BLOCKS = {k: v for k, v in BLOCKS.items()}  # (materializa; block_body chamado abaixo por nome)
+BLOCKS = {k: v for k, v in BLOCKS.items()}  # (materializes; block_body called below by name)
 
-# Herança da cascata: os blocos de marca sobrescrevem :root/.dark; tokens não
-# declarados localmente herdam da base. Sem folding, o guarda pula
-# silenciosamente o token herdado e dá falso "OK". Simplificação genérica: usa
-# o PRIMEIRO :root/.dark encontrado como base (a versão-fonte fingerprintava
-# por `--background: #ffffff` para desambiguar múltiplos :root — não
-# preservado aqui: caso raro, e exigiria hardcodar o nome do token
-# `--background`; se o projeto tiver múltiplos :root reais, ajuste manual).
+# Cascade inheritance: the brand blocks override :root/.dark; tokens not
+# declared locally inherit from the base. Without folding, the guard silently
+# skips the inherited token and gives a false "OK". Generic simplification:
+# uses the FIRST :root/.dark found as the base (the source version
+# fingerprinted by `--background: #ffffff` to disambiguate multiple :root —
+# not preserved here: rare case, and it would require hardcoding the
+# `--background` token name; if the project has real multiple :root, adjust
+# manually).
 _all_root = all_bodies(r':root\s*\{')
 _all_dark = all_bodies(r'(?<![\]"])\.dark\s*\{')
 BASE_LIGHT = _all_root[0] if _all_root else ''
@@ -190,7 +190,7 @@ BASE = {name: (BASE_DARK if name.endswith('.dark') else BASE_LIGHT) for name in 
 
 
 def eff(name, body, base):
-    """valor efetivo (cascata): bloco próprio vence; senão herda da base."""
+    """effective value (cascade): the own block wins; otherwise inherits from the base."""
     m = re.search(rf'--{name}:\s*([^;]+);', body)
     if not m and base:
         m = re.search(rf'--{name}:\s*([^;]+);', base)
@@ -198,16 +198,16 @@ def eff(name, body, base):
 
 
 fails = 0
-skips = 0  # H2/A6.1: pares que existem no CSS mas não puderam ser resolvidos
-           # para uma cor avaliável (nem var()/hex/oklch) — NÃO contam como "OK".
-print(f'{"BLOCO":24} {"PAR":18} {"tom":9} {"rótulo":9} {"ratio":>6}  veredicto')
+skips = 0  # H2/A6.1: pairs that exist in the CSS but could not be resolved to
+           # an evaluable color (neither var()/hex/oklch) — do NOT count as "OK".
+print(f'{"BLOCK":24} {"PAIR":18} {"tone":9} {"label":9} {"ratio":>6}  verdict')
 print('-' * 82)
 for bname, bpat in BLOCKS.items():
     body = block_body(bpat)
     if not body:
         continue
     base = BASE.get(bname, '')
-    scope = body + '\n' + base  # var() herdado resolve na base
+    scope = body + '\n' + base  # inherited var() resolves in the base
     for p in PAIRS:
         mx = eff(p, body, base)
         mf = eff(p + '-foreground', body, base)
@@ -217,7 +217,7 @@ for bname, bpat in BLOCKS.items():
         fg = resolve(mf.group(1), scope)
         if not x or not fg:
             skips += 1
-            print(f'{bname:24} {p:18} {"?":9} {"?":9} {"—":>6}  SKIP (não-resolvível: rgba/alias externo)')
+            print(f'{bname:24} {p:18} {"?":9} {"?":9} {"—":>6}  SKIP (unresolvable: rgba/external alias)')
             continue
         r = contrast(x, fg)
         ok_contrast = r >= 4.5
@@ -225,12 +225,12 @@ for bname, bpat in BLOCKS.items():
             (p not in WHITE_REQUIRED)
             or (fg in ('#ffffff', '#fafafa', '#fffbeb', '#f8f8f2'))
         )
-        verdict = 'OK' if (ok_contrast and ok_white) else 'VIOLA'
-        if verdict == 'VIOLA':
+        verdict = 'OK' if (ok_contrast and ok_white) else 'VIOLATES'
+        if verdict == 'VIOLATES':
             fails += 1
-        why = '' if verdict == 'OK' else (' rótulo-não-branco' if not ok_white else '') + ('' if ok_contrast else ' contraste<4,5')
+        why = '' if verdict == 'OK' else (' label-not-white' if not ok_white else '') + ('' if ok_contrast else ' contrast<4.5')
         print(f'{bname:24} {p:18} {x:9} {fg:9} {r:6.2f}  {verdict}{why}')
-    # pares *-soft — texto sobre o próprio chip (>=4,5)
+    # *-soft pairs — text over the chip itself (>=4.5)
     for p in SOFT_PAIRS:
         mx = eff(p, body, base)
         mf = eff(p + '-foreground', body, base)
@@ -240,14 +240,14 @@ for bname, bpat in BLOCKS.items():
         fg = resolve(mf.group(1), scope)
         if not x or not fg:
             skips += 1
-            print(f'{bname:24} {p:18} {"?":9} {"?":9} {"—":>6}  SKIP (não-resolvível: rgba/alias externo)')
+            print(f'{bname:24} {p:18} {"?":9} {"?":9} {"—":>6}  SKIP (unresolvable: rgba/external alias)')
             continue
         r = contrast(x, fg)
-        verdict = 'OK' if r >= 4.5 else 'VIOLA'
-        if verdict == 'VIOLA':
+        verdict = 'OK' if r >= 4.5 else 'VIOLATES'
+        if verdict == 'VIOLATES':
             fails += 1
-        print(f'{bname:24} {p:18} {x:9} {fg:9} {r:6.2f}  {verdict}{"" if r >= 4.5 else " contraste<4,5"}')
-    # fills de progresso vs --muted (superfície real da barra). non-text >=3.
+        print(f'{bname:24} {p:18} {x:9} {fg:9} {r:6.2f}  {verdict}{"" if r >= 4.5 else " contrast<4.5"}')
+    # progress fills vs --muted (the bar's real surface). non-text >=3.
     mt = eff('muted', body, base)
     surf = resolve(mt.group(1), scope) if mt else None
     if surf:
@@ -259,22 +259,22 @@ for bname, bpat in BLOCKS.items():
             if not x:
                 continue
             r = contrast(x, surf)
-            verdict = 'OK' if r >= 3.0 else 'VIOLA'
-            if verdict == 'VIOLA':
+            verdict = 'OK' if r >= 3.0 else 'VIOLATES'
+            if verdict == 'VIOLATES':
                 fails += 1
-            print(f'{bname:24} {p + " vs muted":18} {x:9} {surf:9} {r:6.2f}  {verdict}{"" if r >= 3.0 else " fill<3,0"}')
+            print(f'{bname:24} {p + " vs muted":18} {x:9} {surf:9} {r:6.2f}  {verdict}{"" if r >= 3.0 else " fill<3.0"}')
 print('-' * 82)
-# H2/A6.1: SKIP nunca vira "OK em todos os pares" no resumo — antes da
-# adição do parser OKLCH, um par não-resolvível (ex.: OKLCH de contraste
-# ~zero) silenciosamente virava SKIP e o resumo dizia "OK", contradizendo o
-# próprio AGENTS.md (que recomenda OKLCH/TweakCN). Com o parser OKLCH, SKIP
-# só deve sobrar para formato REALMENTE não-resolvível (rgba translúcido,
-# alias externo, alpha<1) — e mesmo assim o resumo reporta explicitamente,
-# nunca "OK".
+# H2/A6.1: a SKIP never becomes "OK in all pairs" in the summary — before
+# adding the OKLCH parser, an unresolvable pair (e.g. a ~zero-contrast OKLCH)
+# silently became a SKIP and the summary said "OK", contradicting AGENTS.md
+# itself (which recommends OKLCH/TweakCN). With the OKLCH parser, a SKIP
+# should only remain for a REALLY unresolvable format (translucent rgba,
+# external alias, alpha<1) — and even then the summary reports it explicitly,
+# never "OK".
 if fails:
-    print('CONTRATO', 'VIOLADO em %d par(es)' % fails)
+    print('CONTRACT', 'VIOLATED in %d pair(s)' % fails)
 elif skips:
-    print(f'CONTRATO: {skips} par(es) NAO AVALIADOS (formato nao-resolvivel) -- nao e "OK", revise manualmente')
+    print(f'CONTRACT: {skips} pair(s) NOT EVALUATED (unresolvable format) -- not "OK", review manually')
 else:
-    print('CONTRATO', 'OK em todos os pares')
+    print('CONTRACT', 'OK in all pairs')
 sys.exit(1 if fails else (2 if skips else 0))

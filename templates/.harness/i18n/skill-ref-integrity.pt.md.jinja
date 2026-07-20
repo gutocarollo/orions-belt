@@ -1,0 +1,78 @@
+---
+name: ref-integrity
+description: >-
+  Use para detectar REFERÊNCIAS QUEBRADAS a arquivos renomeados ou deletados no repo
+  {{ project_name }} — links markdown que não resolvem e citações vivas a nomes/paths
+  antigos em md/json/txt/py/sh/toml/css. Aciona quando a tarefa mencionar:
+  renomeei/movi/deletei arquivos e preciso achar refs órfãs, verificar links quebrados,
+  validar integridade após curadoria/rename em massa, ou revisar um range de commits.
+  Fonte única `.harness/lib/ref_integrity.py`; também roda como pre-commit e no loop.
+---
+
+# Ref Integrity
+
+Integridade referencial git-aware. **Fonte única de lógica:** `.harness/lib/ref_integrity.py` (SRP: uma
+responsabilidade — nenhuma referência viva aponta para um path renomeado/deletado). Três adaptadores
+finos consomem o mesmo script (DRY):
+
+- **pre-commit** — `.githooks/pre-commit --staged`. O arquivo é sempre materializado neste projeto; a
+  ativação (`git config core.hooksPath .githooks`) roda sozinha num post-gen task do Copier quando o
+  destino já era um repositório git no momento do `copy`/`update` (fail-open — só avisa, não falha, se
+  ainda não era). Se este projeto tiver `use_pre_commit_framework=true`, o task fica desligado de
+  propósito (colidiria com `pre-commit install`) — nesse caso o hook staged equivalente é o
+  `ref-integrity-staged` de `.pre-commit-config.yaml`.
+- **esta skill** — `--range`, sob demanda.
+- **o loop de manutenção** — `.claude/loop.md --since` (sempre instalado junto com esta skill, já que
+  as duas vivem sob `.claude/`).
+
+Ver `docs/SCHEMA.md` §5 ("git é o arquivo").
+
+## Quando usar
+
+Depois de renomear/mover/deletar arquivos (curadoria, migração de naming, prune), ou ao revisar um PR/range,
+para garantir que nenhum md/json/txt/py/sh/toml/css ainda cita o nome antigo.
+
+## Como rodar
+
+```bash
+# um range de commits (ex.: desde antes da curadoria)
+python3 .harness/lib/ref_integrity.py --range <BASE>..HEAD
+# desde um ref (uso do loop)
+python3 .harness/lib/ref_integrity.py --since <ref>
+# o que está staged agora (o mesmo que o pre-commit roda)
+python3 .harness/lib/ref_integrity.py --staged
+# teste negativo do próprio detector (link morto real DEVE flagar; em code fence NÃO)
+python3 .harness/lib/ref_integrity.py --selftest
+# saída máquina
+python3 .harness/lib/ref_integrity.py --range <BASE>..HEAD --json
+```
+
+Exit 1 = há referência quebrada; 0 = limpo. Duas checagens: `[link]` (link markdown que não resolve) e
+`[stale]` (citação viva a nome/path de arquivo renomeado/deletado no diff). Link/citação DENTRO de
+code fence (` ``` `) é exemplo — não flaga (`blank_code_fences`); link com espaço/acento resolve por
+`%20`/unquote.
+{%- if use_github_ci %} O CI (`.github/workflows/docs-integrity.yaml`, instalado porque
+`use_github_ci=true`) roda `--selftest` + o range do push/PR como backstop adicional.
+{%- else %} Este projeto está com `use_github_ci=false` — não há backstop de CI; pre-commit + loop
+de manutenção são as únicas linhas de defesa.
+{%- endif %}
+
+## O que fazer com cada achado
+
+- **rename limpo** (achado mostra `novo: <path>`) → repontar a citação para o novo path.
+- **delete sem novo** (`novo: —`) → desativar o link (manter o texto + nota "histórico no git") ou remover
+  o ponteiro em comentário; NUNCA repontar para um doc diferente (link enganoso).
+- **falso-positivo conhecido** (auto-output de gerador, backup manual, stray histórico) → adicionar o termo
+  em `.ref-integrity-allowlist` (1 por linha) com comentário do porquê.
+
+## Fontes isentas (por design, não reportadas)
+
+`docs/_arquivo/`, `docs/adr/`, `docs/auditorias/`, `docs/qa-evidence/` (snapshots/imutáveis), `**/log.md`
+(append-only), `.understand-anything/` (em qualquer subdiretório{% if harness_understand_apps_root %} — inclui
+`{{ harness_understand_apps_root }}/.understand-anything/`, o PROJECT_ROOT deste projeto para o Understand
+Anything{% endif %}) e `.trash-*` (scratch). São registro histórico: citação a nome antigo ali é legítima.
+
+## Guardrail
+
+O pre-commit é fail-fast bypassável (`--no-verify`); o loop `--since` é o backstop. Não é substituto de
+revisão — é o guard determinístico que impede rename deixar ref órfã entrar no repo.

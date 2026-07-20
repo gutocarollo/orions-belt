@@ -1,0 +1,67 @@
+---
+name: deliverable-contract
+description: >
+  Persistent delivery contract for tasks that produce a DELIVERABLE (proposal,
+  client report, quote, manual, tutorial, PR text, final document)
+  OR a multi-round feature with declared priorities/constraints. Use ALWAYS when the
+  task mentions "proposal", "report", "final document", "send to the
+  client"{% if client_name %}, "{{ client_name }}"{% endif %}, "manual", "quote",
+  or when the user declares priorities, negative constraints ("NEVER/without X") or
+  locked values (prices, format, product name). Writes the contract to
+  .claude/contracts/ and feeds the deliverable-scrub-gate.
+---
+
+# Delivery Contract
+
+Origin: friction audit 2026-07-03, cluster #7 (requirement/
+audience drift: internal jargon leaking into a client doc, a declared priority
+forgotten between rounds, a negative constraint converted into a positive item).
+
+## 1. When to create
+
+Any client deliverable OR feature with a declared rule. Before producing
+content: write `.claude/contracts/<slug>.contract.md`:
+
+```markdown
+# CONTRACT: <slug>
+status: open
+audience: <client{% if client_name %} {{ client_name }}{% endif %} | internal | PR reviewer | ...>
+product (name that appears in the doc): {% if client_product_name %}{{ client_product_name }}{% else %}<commercial name that appears in the doc>{% endif %}
+final_file: <exact path of THE ONE file that is THE deliverable>
+
+## Priorities (order)
+1. <priority #1 declared by the user>
+2. ...
+
+## Negative constraints (VERBATIM — become regex ban:)
+- NEVER mention the internal project name ({{ project_name }})
+- <paste the user's constraint exactly as they wrote it>
+
+## Locked values
+- <price/deadline/format that cannot change>
+```
+
+## 2. Golden rules
+
+1. **A negative constraint goes in VERBATIM** and becomes `ban:` — converting it
+   into a positive checklist item is forbidden ("do not mention X" ≠ "mention Y").
+2. **User correction** (value, format, priority) → the FIRST action is to write it
+   to the contract; only then the work. Never re-ask what is already in the contract.
+3. **THE final_file**: a single file is the deliverable. Do not scatter the delivery
+   across N drafts and leave the user guessing which is the good one.
+4. The global banlist of internal jargon lives in `.claude/deliverable-banlist.txt`
+   (the scrub-gate runs against it on client docs). A task-specific constraint
+   disappears with the contract, but the global gate remains.
+
+## 3. Enforcement (deliverable-scrub-gate)
+
+PostToolUse hook (Write|Edit): in files that match the banlist globs
+(`docs/commercial/proposta/Proposta-*`, `manual-usuario/*`, etc.), any banned term
+({{ project_name }}, internal methodology names, "wave N"...) returns the
+violation as feedback. Prose alone has already failed (the agent reported compliance
+while inverting the constraint) — that is why it is a mechanical gate.
+
+## 4. Closing
+
+Deliverable ready → run `prova-de-conclusao` against the contract's
+priorities; `status: closed`; generate the PDF/delivery only from the `final_file`.

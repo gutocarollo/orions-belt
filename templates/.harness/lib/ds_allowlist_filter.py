@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""ds_allowlist_filter — glob real (fnmatch) para o allowlist do ds-gate.sh.
+"""ds_allowlist_filter — real glob (fnmatch) for the ds-gate.sh allowlist.
 
-Lê linhas `path:lineno:conteúdo` (saída de `grep -rEn`) em stdin e devolve em
-stdout só as que NÃO casam nenhum padrão passado em argv. Um arquivo .py
-separado (em vez de `python3 - <<HEREDOC`) é INTENCIONAL: `python3 -` lê o
-PRÓPRIO PROGRAMA de stdin — um heredoc anexado a esse invocação consome
-stdin para carregar o source e o `sys.stdin` do programa em execução chega
-vazio, descartando silenciosamente TODA a entrada do pipe (bug real
-encontrado e corrigido nesta rodada, H2/A6.3 — confirmado com
+Reads `path:lineno:content` lines (output of `grep -rEn`) from stdin and
+writes to stdout only the ones that do NOT match any pattern passed in argv.
+A separate .py file (instead of `python3 - <<HEREDOC`) is INTENTIONAL:
+`python3 -` reads the PROGRAM ITSELF from stdin — a heredoc attached to that
+invocation consumes stdin to load the source and the running program's
+`sys.stdin` arrives empty, silently discarding the ENTIRE pipe input (real
+bug found and fixed this round, H2/A6.3 — confirmed with
 `printf 'a\\nb\\n' | python3 - <<'EOF' ... EOF` → `sys.stdin.readlines()`
-retorna `[]`). Um script de arquivo real não tem esse conflito: argv carrega
-os padrões, stdin fica livre para o pipe do grep.
+returns `[]`). A real file script has no such conflict: argv carries the
+patterns, stdin is free for the grep pipe.
 
-Uso: grep -rEn ... | python3 ds_allowlist_filter.py '<glob1>' '<glob2>' ...
+Usage: grep -rEn ... | python3 ds_allowlist_filter.py '<glob1>' '<glob2>' ...
 """
 import fnmatch
 import sys

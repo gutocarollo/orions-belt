@@ -15,6 +15,6 @@ conditions:
     pattern: collab
 ---
 
-ATENÇÃO: o web dev deste projeto roda na porta **{{ harness_dev_web_port }}**{% if harness_reserved_ports %} (portas reservadas para outra ferramenta local: {{ harness_reserved_ports }} — não suba o dev nelas sem a flag de porta){% endif %}.
+ATTENTION: this project's web dev runs on port **{{ harness_dev_web_port }}**{% if harness_reserved_ports %} (ports reserved for another local tool: {{ harness_reserved_ports }} — do not start dev on them without the port flag){% endif %}.
 
-Canônico: `cd {{ harness_web_app_dir }} && npm run dev -- -p {{ harness_dev_web_port }}`{% if project_name %} — ou a skill `run-{{ project_name }}`, se preenchida neste projeto (sobe infra+API+web idempotente e valida saúde; o `dev-doctor` genérico só tem os modos `status`/`reap`, não sobe a stack){% endif %}.
+Canonical: `cd {{ harness_web_app_dir }} && npm run dev -- -p {{ harness_dev_web_port }}`{% if project_name %} — or the `run-{{ project_name }}` skill, if filled in for this project (brings up infra+API+web idempotently and validates health; the generic `dev-doctor` only has the `status`/`reap` modes, it does not bring up the stack){% endif %}.

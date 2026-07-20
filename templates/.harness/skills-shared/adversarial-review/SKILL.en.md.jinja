@@ -179,7 +179,7 @@ Attack the artifact through:
 
 Each hypothesis receives one or more classes. The class defines the mandatory proof.
 
-| Classe | Quando usar | Prova obrigatoria |
+| Class | When to use | Required proof |
 |---|---|---|
 | **PLANO/ESCOPO** | Promised item does not appear in the execution, or the execution diverges from the plan | Plan text + diff/file/log showing what was executed |
 | **ARQUITETURA** | Deviation from tenancy, runtime, deploy, domain, ADR, quality, threat model | Doc in `docs/architecture` + code/config/test that adheres or violates |
@@ -233,20 +233,20 @@ Use `SABATINAR` only for `REAL` `ALTA`/`BLOQUEANTE` material subjectivity, not r
 A valid finding must contain:
 
 ```md
-### [R[n]] [Afirmação direta]
-- Severidade: BLOQUEANTE | ALTA | MEDIA | BAIXA
-- Classe: PLANO/ESCOPO | ARQUITETURA | DESIGN-SYSTEM/UI | CODIGO/LOGICA | DADO/DB | PERFORMANCE | SEGURANCA | FONTE/OSS | TESTE/EVIDENCIA
-- Veredicto: REAL | TEORICO-descartado | REFUTADO | NAO-PROVADO
-- Contrato esperado:
-  - Plano: [arquivo/trecho ou resumo fiel]
-  - Arquitetura: [docs/architecture/... quando aplicavel]
-  - Design-system: [docs/design-system/... quando aplicavel]
-- Evidencia:
-  - Codigo: [path + linha/trecho]
-  - Execucao: [diff/log/teste/comando/manifest]
-  - Dado/Fonte: [query/doc/repo/link quando aplicavel]
-- Impacto: [caso real que quebra ou risco concreto]
-- Correcao: [acao objetiva ou decisao D[n]]
+### [R[n]] [Direct statement]
+- Severity: BLOQUEANTE | ALTA | MEDIA | BAIXA
+- Class: PLANO/ESCOPO | ARQUITETURA | DESIGN-SYSTEM/UI | CODIGO/LOGICA | DADO/DB | PERFORMANCE | SEGURANCA | FONTE/OSS | TESTE/EVIDENCIA
+- Verdict: REAL | TEORICO-descartado | REFUTADO | NAO-PROVADO
+- Expected contract:
+  - Plan: [file/excerpt or faithful summary]
+  - Architecture: [docs/architecture/... when applicable]
+  - Design-system: [docs/design-system/... when applicable]
+- Evidence:
+  - Code: [path + line/excerpt]
+  - Execution: [diff/log/test/command/manifest]
+  - Data/Source: [query/doc/repo/link when applicable]
+- Impact: [real breaking case or concrete risk]
+- Fix: [objective action or D[n] decision]
 ```
 
 Close with:
@@ -258,7 +258,7 @@ PROXIMO PASSO: [acao de maior severidade]
 
 ## 5. Forbidden anti-patterns
 
-| Anti-padrao | Por que e proibido |
+| Anti-pattern | Why it is forbidden |
 |---|---|
 | Audit only the diff | The diff does not show the project's contract nor the promised plan |
 | Ignore `docs/architecture` | May approve code that violates tenancy, runtime, quality, or security |

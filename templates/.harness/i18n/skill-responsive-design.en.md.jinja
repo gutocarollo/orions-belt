@@ -1,0 +1,101 @@
+---
+name: responsive-design
+description: >
+  Decision framework for responsiveness — fixes broken components
+  and guides the construction of new components. Decision model
+  viewport/container/vertical/content, container queries, fluid typography
+  (clamp), cross-cutting anti-patterns. 100% tech-agnostic (modern CSS);
+  use when building or refactoring any responsive layout of
+  {{ project_name }}.
+---
+
+# Responsive Design — decision framework
+
+Origin: generalized from a real responsiveness system of a reference
+donor project — the decision model and the quick decision table
+survived because they are pure CSS/tech-agnostic. What was removed:
+that specific project's stack/versions declaration, that repo's
+inline-style theming constraint (contradicts a CSS/W3C DTCG tokens
+pattern — the most common in this kind of stack) and that repo's list of
+component paths. We also did not port the rule tree
+(`rules/*.md`) referenced by the original source — citing those files without
+porting them would create a broken reference (the same failure mode that this
+harness's Karpathy wiki exists to prevent); what follows is the content that
+was INSIDE the source's `SKILL.md`, not an index to external files.
+
+## Core Decision Model
+
+**Always ask first: which spatial reference governs this
+behavior?**
+
+| Reference | When | Tools |
+|-----------|--------|--------------|
+| Viewport | Page shell, route split, full-screen areas | breakpoints (`md:`, `lg:`), `vw`, `max-w` |
+| Container | Cards, selectors, widgets, tables inside a card | `@container`, `cqi`, `clamp()` |
+| Vertical axis | Modals, drawers, dropdowns, visible height | `dvh`, `max-height`, `overflow-y` |
+| Content | Truncation, wrap, overflow, intrinsic width | `min-w-0`, `truncate`, `overflow-auto`, `flex-wrap` |
+
+Don't choose by the component's category (e.g., "it's a card, so it's always
+container"). Choose by the REAL layout constraint at play at that
+specific point — a card inside a modal has the vertical axis governing
+the height AND the container governing the width, at the same time.
+
+## Quick Decision Table
+
+| Scenario | Strategy |
+|---------|-----------|
+| Page layout (header, sidebar, main) | breakpoints (`md:`, `lg:`) or device hook |
+| Card in different containers | `@container` + container query variant |
+| Text scales with the card | `clamp(rem, rem + cqi, rem)` |
+| Text scales with the viewport | `clamp(rem, rem + vw, rem)` |
+| Modal/drawer/dropdown height | `dvh` + `max-height` + `overflow-auto` |
+| Table inside a card | `overflow-x-auto` + `min-w-0` on the flex cells |
+| Card grid | `repeat(auto-fit, minmax(280px, 1fr))` |
+| Full mobile/desktop UI swap | breakpoint hook + dedicated mobile component |
+| Icon/button inside a card | `clamp(px, px + cqi, px)` |
+| Calendar/date-picker-type grid | `containerType: 'inline-size'` + `aspectRatio` cells + `cqi` in the clamp |
+
+When using this framework in a real refactor: every example block of the
+project's CURRENT code labeled "before"/"broken" is refactor input, never
+code to copy elsewhere.
+
+## Cross-cutting rules (always apply, any axis)
+
+1. Every typography/spacing `clamp()` must include the base in **rem**, not
+   just `px`/`vw` — accessibility: WCAG 1.4.4 requires browser zoom to
+   scale text, and zoom scales `rem` (relative to the root font), not `px`.
+2. Animate only `transform` and `opacity` — never `width`, `height`, `margin` or
+   `padding`. Reason: layout properties force reflow on every frame;
+   `transform`/`opacity` stay isolated in the compositor (GPU), no reflow.
+3. Prefer CSS-first responsive behavior (media/container query)
+   before resorting to a JS breakpoint hook — CSS pays no re-render cost
+   and doesn't suffer from layout-thrashing on resize.
+4. Spacing responsibility per layer: the **shell** owns the
+   outer padding; the **container** owns the gap between children; the
+   **leaf component** owns neither — avoids duplicated padding/gap
+   when the same component is composed in different contexts.
+
+## Response Format
+
+When analyzing a component under this framework, always deliver, in this
+order:
+
+1. **Structural reading** — is it shell, container, leaf or overlay?
+2. **Spatial reference** — what governs width, height and internal
+   scale of this component specifically (Core Decision Model above)?
+3. **Recommendation** — concrete CSS/framework tools to use.
+4. **Justification** — why that strategy fits this context (not
+   "it's usually done this way").
+5. **Detected anti-patterns** — what to avoid or fix, with the
+   real path+line of the analyzed code.
+6. **Actionable plan** — separated by outer layer / internal scale /
+   vertical axis / content fallback, in the order they should be
+   applied.
+
+## Related skills
+
+| I need | Go to |
+|------------|---------|
+| Per-component-type playbook (card, dropdown, table, chart...) | `ui-component-playbook` skill |
+| Color tokens, variants, design-system anti-patterns | **this project's** canonical design-system skill/doc, if it exists |
+| Mine/cluster repeated className to decide if it becomes a token | `classname-token-workflow` skill |
