@@ -125,6 +125,11 @@ class InstallApplyTests(unittest.TestCase):
         self.assertEqual(self.apply(), 0)
         self.assertEqual((self.target / "custom-skill.md").read_text(), "project edited\n")
 
+    def test_preserve_path_missing_from_render_is_an_error(self) -> None:
+        self.source("owned.txt", "v1\n")
+        self.assertEqual(self.apply(preserve=["absent.txt"]), 2)
+        self.assertEqual(list(self.target.iterdir()), [])
+
     def test_owned_file_updates_but_local_edit_conflicts(self) -> None:
         self.source("owned.txt", "v1\n")
         self.assertEqual(self.apply(), 0)
@@ -168,8 +173,9 @@ class InstallApplyTests(unittest.TestCase):
         first = json.loads(target_settings.read_text())
         first_commands = [h["command"] for g in first["hooks"]["Stop"] for h in g["hooks"]]
         self.assertEqual(set(first_commands), {external_command, harness_v1})
-        inventory = self.manifest()["files"][".claude/settings.json"]["owned_hook_commands"]
-        self.assertEqual(inventory, [harness_v1])
+        inventory = self.manifest()["files"][".claude/settings.json"]["owned_hook_identities"]
+        self.assertEqual(len(inventory), 1)
+        self.assertIn(harness_v1, inventory[0])
 
         self.source(".claude/settings.json", settings(harness_v2))
         self.assertEqual(self.apply(), 0)
@@ -177,6 +183,31 @@ class InstallApplyTests(unittest.TestCase):
         second_commands = [h["command"] for g in second["hooks"]["Stop"] for h in g["hooks"]]
         self.assertEqual(set(second_commands), {external_command, harness_v2})
         self.assertNotIn(harness_v1, second_commands)
+
+    def test_same_command_in_an_external_event_is_preserved(self) -> None:
+        command = "bash .harness/hooks/shared.sh"
+        self.source(".claude/settings.json", json.dumps({
+            "hooks": {"Stop": [{"matcher": "", "hooks": [{"type": "command", "command": command}]}]},
+        }))
+        target_settings = self.target / ".claude/settings.json"
+        target_settings.parent.mkdir(parents=True)
+        target_settings.write_text(json.dumps({
+            "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": command}]}]},
+        }))
+        self.assertEqual(self.apply(), 0)
+        data = json.loads(target_settings.read_text())
+        self.assertIn("PreToolUse", data["hooks"])
+        self.assertIn("Stop", data["hooks"])
+
+    def test_malformed_settings_schema_returns_controlled_error(self) -> None:
+        self.source(".claude/settings.json", json.dumps({
+            "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "true"}]}]},
+        }))
+        target_settings = self.target / ".claude/settings.json"
+        target_settings.parent.mkdir(parents=True)
+        target_settings.write_text('{"hooks": []}')
+        self.assertEqual(self.apply(), 2)
+        self.assertEqual(target_settings.read_text(), '{"hooks": []}')
 
     def test_symlinked_parent_is_fatal_and_external_is_untouched(self) -> None:
         self.source(".codex/agents/reviewer.toml", "model = 'x'\n")
@@ -200,6 +231,22 @@ class InstallApplyTests(unittest.TestCase):
         self.assertEqual(self.apply(dry_run=True), 0)
         self.assertEqual(list(self.target.iterdir()), [])
 
+    def test_dry_run_refuses_pending_journal_without_recovery(self) -> None:
+        self.source("owned.txt", "v1\n")
+        run_id = "a" * 32
+        backup = self.target / ".harness/install-backups" / run_id
+        backup.mkdir(parents=True)
+        journal = self.target / ".harness/install-journal.json"
+        journal.write_text(json.dumps({
+            "version": install_apply.JOURNAL_VERSION,
+            "backup_root": str(backup),
+            "entries": [],
+        }))
+        before = journal.read_bytes()
+        self.assertEqual(self.apply(dry_run=True), 2)
+        self.assertEqual(journal.read_bytes(), before)
+        self.assertTrue(backup.is_dir())
+
     def test_plan_output_inside_target_is_rejected_without_write(self) -> None:
         self.source("new.txt", "new\n")
         rc = install_apply.main([
@@ -217,6 +264,46 @@ class InstallApplyTests(unittest.TestCase):
         self.assertEqual(self.apply(fail_after=1), 2)
         self.assertEqual(list(self.target.iterdir()), [])
 
+    def test_rollback_preserves_preexisting_empty_directory(self) -> None:
+        existing_dir = self.target / "preexisting-empty"
+        existing_dir.mkdir()
+        self.source("preexisting-empty/a.txt", "a\n")
+        self.assertEqual(self.apply(fail_after=1), 2)
+        self.assertTrue(existing_dir.is_dir())
+        self.assertEqual(list(existing_dir.iterdir()), [])
+
+    def test_edit_between_plan_and_apply_is_not_overwritten(self) -> None:
+        self.source("owned.txt", "v1\n")
+        self.assertEqual(self.apply(), 0)
+        self.source("owned.txt", "v2\n")
+        manifest = install_apply.load_manifest(self.target)
+        plan = install_apply.build_plan(self.scratch, self.target, manifest)
+        destination = self.target / "owned.txt"
+        destination.write_text("user-after-plan\n")
+        next_manifest = install_apply.manifest_for(plan, manifest, {})
+        with self.assertRaises(install_apply.InstallError):
+            install_apply.apply_plan(plan, self.target, next_manifest)
+        self.assertEqual(destination.read_text(), "user-after-plan\n")
+
+    def test_pinned_root_cannot_be_redirected_by_parent_symlink_swap(self) -> None:
+        self.source("owned.txt", "anchored\n")
+        moved = self.root / "target-moved"
+        original_identity = install_apply.target_identity(self.target)
+        with install_apply.pinned_target(self.target) as anchored:
+            self.target.rename(moved)
+            self.target.symlink_to(self.external, target_is_directory=True)
+            manifest = install_apply.load_manifest(anchored)
+            plan = install_apply.build_plan(self.scratch, anchored, manifest)
+            install_apply.apply_plan(
+                plan, anchored, install_apply.manifest_for(plan, manifest, {})
+            )
+            with self.assertRaises(install_apply.InstallError):
+                install_apply.assert_target_identity(self.target, original_identity)
+        self.assertFalse((self.external / "owned.txt").exists())
+        self.assertEqual((moved / "owned.txt").read_text(), "anchored\n")
+        self.target.unlink()
+        moved.rename(self.target)
+
     def test_tampered_journal_cannot_delete_external_backup_root(self) -> None:
         victim = self.root / "victim"
         victim.mkdir()
@@ -224,9 +311,9 @@ class InstallApplyTests(unittest.TestCase):
         journal = self.target / ".harness/install-journal.json"
         journal.parent.mkdir(parents=True)
         journal.write_text(json.dumps({
-            "version": 1,
+            "version": install_apply.JOURNAL_VERSION,
             "backup_root": str(self.target / ".." / "victim"),
-            "entries": [{"path": "owned.txt", "existed": True, "mode": "0o644"}],
+            "entries": [],
         }))
         self.assertEqual(self.apply(), 2)
         self.assertEqual((victim / "owned.txt").read_text(), "external-data\n")
@@ -240,9 +327,9 @@ class InstallApplyTests(unittest.TestCase):
         (backup_parent / run_id).symlink_to(self.external, target_is_directory=True)
         journal = self.target / ".harness/install-journal.json"
         journal.write_text(json.dumps({
-            "version": 1,
-            "backup_root": str(backup_parent / run_id),
-            "entries": [{"path": "owned.txt", "existed": True, "mode": "0o644"}],
+            "version": install_apply.JOURNAL_VERSION,
+            "backup_root": f".harness/install-backups/{run_id}",
+            "entries": [],
         }))
         self.assertEqual(self.apply(), 2)
         self.assertEqual(list(self.external.iterdir()), [])
@@ -259,6 +346,36 @@ class InstallApplyTests(unittest.TestCase):
         self.assertEqual((self.target / "b.txt").read_text(), "b1\n")
         self.assertEqual((self.target / ".harness/install-manifest.json").read_bytes(), manifest_before)
         self.assertFalse((self.target / ".harness/install-journal.json").exists())
+
+    def test_recovery_refuses_to_overwrite_a_post_crash_edit(self) -> None:
+        self.source("owned.txt", "before\n")
+        self.assertEqual(self.apply(), 0)
+        destination = self.target / "owned.txt"
+        before = destination.read_bytes()
+        before_mode = stat.S_IMODE(destination.stat().st_mode)
+        after = b"transaction\n"
+        run_id = "b" * 32
+        backup_root = self.target / ".harness/install-backups" / run_id
+        backup = backup_root / "owned.txt"
+        backup.parent.mkdir(parents=True)
+        backup.write_bytes(before)
+        destination.write_text("user-after-crash\n")
+        journal = self.target / ".harness/install-journal.json"
+        journal.write_text(json.dumps({
+            "version": install_apply.JOURNAL_VERSION,
+            "backup_root": f".harness/install-backups/{run_id}",
+            "entries": [{
+                "path": "owned.txt",
+                "existed": True,
+                "before_sha256": install_apply.sha256_bytes(before),
+                "before_mode": oct(before_mode),
+                "after_sha256": install_apply.sha256_bytes(after),
+                "after_mode": "0o644",
+            }],
+        }))
+        self.assertEqual(self.apply(), 2)
+        self.assertEqual(destination.read_text(), "user-after-crash\n")
+        self.assertTrue(journal.exists())
 
 
 if __name__ == "__main__":

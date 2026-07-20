@@ -279,11 +279,13 @@ class ScanProjectMultiRootLayoutTest(unittest.TestCase):
         facts = _run_scan("scan", self.tmpdir)
         components = {row["path"]: row for row in facts["components"]}
 
-        self.assertEqual(set(components), {"frontend", "backend"})
+        self.assertEqual(set(components), {"frontend", "backend", "odd-service"})
         self.assertEqual(components["frontend"]["web_framework"], "nextjs")
         self.assertEqual(components["backend"]["web_framework"], "fastapi")
         self.assertEqual(components["frontend"]["test_frameworks"], ["playwright", "vitest"])
         self.assertEqual(components["backend"]["test_frameworks"], ["pytest"])
+        self.assertEqual(components["odd-service"]["web_framework"], "flask")
+        self.assertEqual(components["odd-service"]["discovery_source"], "root-child:odd-service")
 
         next_evidence = components["frontend"]["evidence"]["web_frameworks"][0]
         self.assertEqual(next_evidence, {

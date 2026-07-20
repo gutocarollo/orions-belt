@@ -48,14 +48,14 @@ Uma auditoria de integração isolada (harness × MakersHub, clones limpos) prov
 
 **Corrigidos nesta arquitetura:**
 - `.harness/install-manifest.json` prova ownership de arquivo inteiro por hash; colisão desconhecida e edição local abortam antes de escrever. As quatro superfícies compartilhadas usam merge semântico.
-- O planner rejeita raiz, destino ou ancestral symlink, path inseguro e arquivo não regular antes da mutação. Journal + backups restauram falha controlada e a próxima execução recupera journal deixado por crash.
+- O planner fixa a raiz por descritor Linux, rejeita raiz/destino/ancestral symlink, path inseguro e arquivo não regular antes da mutação. Lock por alvo impede dois instaladores simultâneos. Journal + backups restauram falha controlada; após interrupção de processo, a recuperação só reverte estados que ainda coincidam com o hash anterior ou com o hash escrito pela transação, recusando sobrescrever edição posterior.
 - O scanner faz descoberta limitada de workspaces, diretórios convencionais e raízes explícitas, sem `rglob` irrestrito nem traversal de symlink; expõe evidência e confiança por componente.
 - Husky não é deslocado. `--chain-hooks` faz chaining idempotente e explícito; sem consentimento, o instalador avisa e deixa o manager intacto.
 
 **Abertos por política/escopo, não escondidos:**
 - Não há prune automático: paths removidos upstream ficam `orphaned` e preservados.
 - Um path marcado `preserve` não recebe updates do harness; reverter essa decisão ainda exige edição/ação de ownership futura.
-- Atomicidade é por arquivo com recuperação, não uma transação global; hooks/Husky e baseline de DS são pós-tarefas fora do rollback dos arquivos.
+- Atomicidade é por arquivo com recuperação, não uma transação global nem garantia de power-loss durability; hooks/Husky e baseline de DS são pós-tarefas fora do rollback dos arquivos. `--chain-hooks` explícito valida o bloco completo e propaga falha por exit não-zero, mas não desfaz a aplicação já concluída.
 - `copier update` nativo continua proibido após adoção brownfield; repetir `harness-install.sh` é o updater suportado.
 - Deploy só gera skill/guardas mutantes para `prod_deployment_driver=swarm-direct`. EasyPanel fica fail-closed até existir adapter próprio.
 - O UI evidence valida estrutura/CRC/pixels/hash, mas não atesta criptograficamente que o PNG veio do Playwright; quem controla simultaneamente o working tree e o diretório de evidência pode fabricar um par PNG+manifest válido.

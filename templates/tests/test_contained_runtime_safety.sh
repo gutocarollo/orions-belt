@@ -154,6 +154,20 @@ assert "Husky chain runs before an existing early exit" '[ -f "$CHAIN_ROOT/.chai
 assert "Husky chain marker is idempotent" \
   '[ "$(grep -c "^# orions-belt:begin pre-commit$" "$CHAIN_ROOT/.husky/pre-commit")" -eq 1 ]'
 
+# 7. A truncated marker is not an idempotent success.
+BROKEN_CHAIN_ROOT="$WORK/hooks-broken-chain"
+git init -q "$BROKEN_CHAIN_ROOT"
+mkdir -p "$BROKEN_CHAIN_ROOT/.husky" "$BROKEN_CHAIN_ROOT/.githooks"
+printf '#!/usr/bin/env bash\n# orions-belt:begin pre-commit\nexit 0\n' > "$BROKEN_CHAIN_ROOT/.husky/pre-commit"
+printf '#!/usr/bin/env bash\ntouch "$ORIONS_BELT_ROOT/.broken-chain-ran"\n' > "$BROKEN_CHAIN_ROOT/.githooks/pre-commit"
+set +e
+bash "$REPO_ROOT/templates/.harness/lib/set_hooks_path.sh" "$BROKEN_CHAIN_ROOT" --chain-existing \
+  > "$WORK/hooks-broken.out" 2> "$WORK/hooks-broken.err"
+BROKEN_CHAIN_RC=$?
+set -e
+assert "truncated Husky chain fails closed" '[ "$BROKEN_CHAIN_RC" -eq 1 ]'
+assert "truncated Husky chain is reported" 'grep -q "incomplete or modified" "$WORK/hooks-broken.err"'
+
 echo
 if [ "$FAIL" -eq 0 ]; then
 echo "ALL CONTAINED RUNTIME SAFETY TESTS PASSED."

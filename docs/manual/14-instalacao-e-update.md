@@ -22,9 +22,9 @@ E `copier update` não resolve isso retroativamente: ele precisa de `.harness/an
 [`harness-install.sh`](../../harness-install.sh) vive na **raiz** do repositório do framework (ao lado de `copier.yml`) e resolve o gap acima sem depender de `--overwrite`/`--skip`:
 
 1. **Renderiza o framework inteiro num diretório SCRATCH temporário** via `copier copy <origem-do-orions-belt> <scratch>` — nunca escreve no projeto-alvo neste passo.
-2. **Planeja sem mutar:** [`.harness/lib/install_apply.py`](../../templates/.harness/lib/install_apply.py) enumera o render, faz `lstat` dos destinos/ancestrais e calcula todos os merges. Symlink, escape, colisão desconhecida ou arquivo owned alterado localmente aborta o plano inteiro.
+2. **Planeja sem mutar:** [`.harness/lib/install_apply.py`](../../templates/.harness/lib/install_apply.py) fixa a raiz Linux por descritor (`O_DIRECTORY|O_NOFOLLOW`), enumera o render, faz `lstat` dos destinos/ancestrais e calcula todos os merges. Symlink, troca da raiz, escape, colisão desconhecida, arquivo owned alterado localmente ou edição entre plano e apply abortam.
 3. **Aplica por estratégia:** os 4 arquivos compartilhados (`AGENTS.md`, `.claude/CLAUDE.md`, `.claude/settings.json`, `.gitignore`) usam [`.harness/lib/merge_docs.py`](../../templates/.harness/lib/merge_docs.py); os demais só são atualizados quando o hash atual coincide com o último hash aplicado. `--preserve <path>` registra explicitamente uma colisão como externa e nunca a sobrescreve.
-4. **Journal + replace:** antes das escritas, guarda bytes/modos anteriores; cada arquivo usa replace atômico no próprio diretório. Falha controlada restaura o estado anterior. Crash pode deixar journal; a próxima execução recupera antes de planejar. Isso é recuperação transacional, não atomicidade global do filesystem.
+4. **Lock + journal + replace:** um lock exclusivo por alvo serializa instaladores concorrentes. Antes das escritas, o journal guarda bytes, modos, diretórios criados e hashes anterior/esperado; cada arquivo usa replace atômico no próprio diretório. Falha controlada restaura o estado anterior sem remover diretório preexistente. Interrupção de processo pode deixar journal; a próxima execução valida todos os destinos antes de recuperar. Se algum arquivo tiver sido editado depois da interrupção, a recuperação para sem sobrescrevê-lo. O journal é removido antes do backup no commit, portanto a janela residual deixa backup órfão seguro, não journal irrecuperável. Isso não promete atomicidade global nem durabilidade contra queda de energia.
 5. **Ativa hooks por último:** chama [`.harness/lib/set_hooks_path.sh`](../../templates/.harness/lib/set_hooks_path.sh). Manager existente nunca é substituído; Husky só recebe chaining marcado com `--chain-hooks` explícito.
 
 `<origem-do-orions-belt>` é sempre a **raiz** do repositório do framework (nunca o subdiretório `templates/` direto — mesmo motivo do `_subdirectory: templates` no [copier.yml](../../copier.yml): o versionamento por tag do Copier (`--vcs-ref`) só funciona apontando para a raiz de um repo git). Para instalar a partir de uma tag específica em vez do HEAD do orions-belt, adicione `--vcs-ref <tag>` aos argumentos — eles são repassados verbatim para `copier copy` (`--data`, `--vcs-ref`, `--defaults`, etc.); `--trust` é adicionado automaticamente pelo script.
@@ -35,7 +35,7 @@ Três artefatos de estado ficam gravados no projeto:
 - **`.harness/harness.conf`** — a materialização KEY=value que os hooks leem em runtime. Derivado do answers; nunca editar à mão (drifta no próximo update).
 - **`.harness/install-manifest.json`** — ownership por path/estratégia/hash/modo e referência do template aplicado. É a fonte usada por reinstall/update mesmo quando `.claude`/`.codex`/`.agents` são local-only e ignorados. Não contém segredo.
 
-Use `--dry-run --plan-json <arquivo>` para inspecionar o plano sem tocar o alvo. Colisão não-owned exige decisão nominal: preserve com `--preserve <path>` ou renomeie/remova o path no projeto; não existe `--overwrite-all`.
+Use `--dry-run --plan-json <arquivo>` para inspecionar o plano sem tocar o alvo. O diretório-alvo precisa existir e um journal pendente faz o dry-run falhar, pois recuperá-lo seria mutação. Colisão não-owned exige decisão nominal: preserve com `--preserve <path>` ou renomeie/remova o path no projeto; o path de `--preserve` precisa existir no render atual e não existe `--overwrite-all`.
 
 O comando roda o **questionário** — cada pergunta do copier.yml materializa uma chave da config central (capítulo 01): identidade (`project_name`, `owner_name`, cliente opcional), portas da dev stack, o bloco opcional de produção (`has_prod_stack` + prefixo/registry/URLs — controla os guardas de prod do capítulo 07), os caps do harness (subagents, lessons, evidência, rodadas adversariais), convenções de diretório, as duas chaves de superfície `use_claude`/`use_codex` — que gateiam as árvores `.claude/` e `.codex/`+`AGENTS.md` inteiras — e os 4 módulos stack-específicos (`use_ui_evidence`/`use_ds_gate`/`use_icon_guard`/`use_ui_skills`) que o scanner de `harness-init` (seção seguinte) pode desligar automaticamente quando não fazem sentido para a stack real (A3).
 
@@ -167,10 +167,11 @@ Copier. Answers desconhecido, symlink ou editado localmente não é consumido an
 o update falha fechado. `--data-file <outro.yml>` explícito substitui essa baseline automática.
 
 Arquivos removidos do template ficam `orphaned` no manifest e são preservados: deleção
-automática ainda não tem política segura. A aplicação usa replace atômico por arquivo,
-backup e journal recuperável; não promete transação global do filesystem. Ativação de
-hooks e baseline do DS são pós-tarefas: uma falha nelas gera warning e correção manual,
-sem desfazer os arquivos já reconciliados.
+automática ainda não tem política segura. A aplicação usa lock por alvo, replace atômico
+por arquivo, backup e journal recuperável; não promete transação global do filesystem.
+O ownership de `.claude/settings.json` usa identidade estrutural (evento + matcher/grupo + comando), não só o texto do comando, para preservar um hook externo igual em outro evento. Ativação de hooks e baseline do DS são pós-tarefas fora do rollback. Falha em chaining
+Husky solicitado explicitamente retorna erro; os arquivos já reconciliados permanecem
+para diagnóstico e retry.
 
 ### `copier update` nativo: somente projetos que nasceram de `copier copy`
 

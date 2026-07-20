@@ -114,7 +114,10 @@ class MergeSettingsJsonTest(unittest.TestCase):
             "PostToolUse": [{"hooks": [{"type": "command", "command": "bash .harness/hooks/y.sh"}]}],
         }}), encoding="utf-8")
         target = self.tmpdir / "settings.json"
-        _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        _run([
+            "settings-json", "--existing", str(target), "--new", str(new),
+            "--owned-command", "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-throttle.sh\"",
+        ])
         first = target.read_bytes()
         _run(["settings-json", "--existing", str(target), "--new", str(new)])
         self.assertEqual(target.read_bytes(), first)
@@ -221,7 +224,10 @@ class MergeSettingsJsonTest(unittest.TestCase):
             }]},
         }), encoding="utf-8")
 
-        _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        _run([
+            "settings-json", "--existing", str(target), "--new", str(new),
+            "--owned-command", "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-throttle.sh\"",
+        ])
         merged = json.loads(target.read_text(encoding="utf-8"))
         entries = [h for group in merged["hooks"]["PreToolUse"] for h in group["hooks"]]
         self.assertEqual(len(entries), 1, "must not duplicate — same script, new version replaces the old")

@@ -165,6 +165,10 @@ if [ -L "$TARGET_ARG" ]; then
   echo "harness-install.sh: target root is a symlink; refusing to install: $TARGET_ARG" >&2
   exit 2
 fi
+if [ "$INSTALL_DRY_RUN" -eq 1 ] && [ ! -d "$TARGET_ARG" ]; then
+  echo "harness-install.sh: dry-run requires an existing target directory and will not create one: $TARGET_ARG" >&2
+  exit 2
+fi
 mkdir -p -- "$TARGET_ARG"
 TARGET="$(cd "$TARGET_ARG" && pwd -P)"
 TARGET_REAL="$TARGET"
@@ -296,7 +300,8 @@ fi
 if [ -f "$LIB/set_hooks_path.sh" ]; then
   if [ "$CHAIN_HOOKS" -eq 1 ]; then
     if ! bash "$LIB/set_hooks_path.sh" "$TARGET" --chain-existing; then
-      echo "harness-install.sh: WARNING -- files were installed, but explicit Husky chaining failed; inspect .husky/pre-commit and retry manually." >&2
+      echo "harness-install.sh: ERROR -- files were installed, but explicit Husky chaining failed; inspect .husky/pre-commit and retry manually." >&2
+      exit 1
     fi
   else
     if ! bash "$LIB/set_hooks_path.sh" "$TARGET"; then

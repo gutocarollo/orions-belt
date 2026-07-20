@@ -98,6 +98,17 @@ mkdir -p "$TARGET5"
 assert "dry-run plan is valid JSON" 'python3 -m json.tool "$PLAN5" >/dev/null'
 assert "dry-run leaves target empty" '[ -z "$(find "$TARGET5" -mindepth 1 -print -quit)" ]'
 
+# 6. Dry-run must not create a missing target directory.
+TARGET6="$WORK/dry-run-missing"
+set +e
+"$INSTALLER" "$TARGET6" --dry-run "${COMMON[@]}" \
+  --data project_name=dry-run-missing --data use_claude=false --data use_codex=true \
+  >"$WORK/dry-run-missing.log" 2>&1
+RC6=$?
+set -e
+assert "dry-run against missing target fails non-zero" '[ "$RC6" -ne 0 ]'
+assert "dry-run does not create missing target" '[ ! -e "$TARGET6" ]'
+
 echo
 if [ "$FAIL" -eq 0 ]; then
   echo "RESULT: ALL FAIL-CLOSED INSTALL GATES PASSED"

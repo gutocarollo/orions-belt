@@ -186,25 +186,38 @@ def _hook_command(entry: dict) -> str | None:
 # Result: each merge round is a full reconciliation of the OWNED set
 # (idempotent — running it twice does not duplicate, because round 2 discards and
 # reinserts the same set), preserving the EXTERNAL set untouched.
-def hook_commands(data: dict) -> set[str]:
-    commands: set[str] = set()
-    for groups in data.get("hooks", {}).values():
+def hook_identities(data: dict) -> set[str]:
+    hooks = data.get("hooks", {})
+    if not isinstance(hooks, dict):
+        raise ValueError("settings hooks must be an object")
+    identities: set[str] = set()
+    for event, groups in hooks.items():
+        if not isinstance(event, str) or not isinstance(groups, list):
+            raise ValueError("settings hook events must map to lists")
         for group in groups:
+            if not isinstance(group, dict) or not isinstance(group.get("hooks", []), list):
+                raise ValueError("settings hook group must be an object with a hooks list")
+            group_scope = {key: value for key, value in group.items() if key != "hooks"}
             for entry in group.get("hooks", []):
+                if not isinstance(entry, dict):
+                    raise ValueError("settings hook entries must be objects")
                 command = _hook_command(entry)
                 if isinstance(command, str) and command:
-                    commands.add(command)
-    return commands
+                    identities.add(json.dumps(
+                        {"event": event, "group": group_scope, "command": command},
+                        sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+                    ))
+    return identities
 
 
 def merge_settings_json(
     existing_path: Path,
     new_path: Path,
-    previous_owned_commands: set[str] | None = None,
+    previous_owned_identities: set[str] | None = None,
 ) -> dict:
     new_data = json.loads(new_path.read_text(encoding="utf-8"))
-    new_owned_commands = hook_commands(new_data)
-    prior_inventory = set(previous_owned_commands or ())
+    new_owned_identities = hook_identities(new_data)
+    prior_inventory = set(previous_owned_identities or ())
 
     if not existing_path.exists():
         existing_path.parent.mkdir(parents=True, exist_ok=True)
@@ -223,6 +236,8 @@ def merge_settings_json(
     existing_data = json.loads(existing_path.read_text(encoding="utf-8"))
     existing_hooks: dict = existing_data.get("hooks", {})
     new_hooks: dict = new_data.get("hooks", {})
+    if not isinstance(existing_hooks, dict) or not isinstance(new_hooks, dict):
+        raise ValueError("settings hooks must be an object")
 
     added = 0
     kept = 0
@@ -235,16 +250,29 @@ def merge_settings_json(
         # 1) from the EXISTING side, keep only the EXTERNAL (non-owned) entries;
         #    OWNED entries are discarded here — the new side is what decides
         #    the final OWNED set (update/removal/rename resolved).
-        for matcher_group in existing_hooks.get(event, []):
+        existing_groups = existing_hooks.get(event, [])
+        new_groups = new_hooks.get(event, [])
+        if not isinstance(existing_groups, list) or not isinstance(new_groups, list):
+            raise ValueError("settings hook events must map to lists")
+        for matcher_group in existing_groups:
+            if not isinstance(matcher_group, dict) or not isinstance(matcher_group.get("hooks", []), list):
+                raise ValueError("settings hook group must be an object with a hooks list")
             group_hooks = matcher_group.get("hooks", [])
+            group_scope = {key: value for key, value in matcher_group.items() if key != "hooks"}
             external_entries = []
             for hook in group_hooks:
+                if not isinstance(hook, dict):
+                    raise ValueError("settings hook entries must be objects")
                 command = _hook_command(hook)
-                explicitly_owned = isinstance(command, str) and command in prior_inventory
+                identity = json.dumps(
+                    {"event": event, "group": group_scope, "command": command},
+                    sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+                )
+                explicitly_owned = identity in prior_inventory
                 exact_adoption = (
                     not prior_inventory
                     and isinstance(command, str)
-                    and command in new_owned_commands
+                    and identity in new_owned_identities
                 )
                 if not explicitly_owned and not exact_adoption:
                     external_entries.append(hook)
@@ -257,7 +285,9 @@ def merge_settings_json(
 
         # 2) all entries from the NEW side (always owned, coming from the template
         #    rendered now) go in in full — the source of truth.
-        for matcher_group in new_hooks.get(event, []):
+        for matcher_group in new_groups:
+            if not isinstance(matcher_group, dict) or not isinstance(matcher_group.get("hooks", []), list):
+                raise ValueError("settings hook group must be an object with a hooks list")
             new_entries = matcher_group.get("hooks", [])
             if new_entries:
                 survivor_groups.append(dict(matcher_group))
@@ -304,7 +334,17 @@ def main(argv: list[str]) -> int:
     elif args.cmd == "gitignore":
         result = merge_gitignore(args.existing, args.new, args.label)
     else:
-        result = merge_settings_json(args.existing, args.new, set(args.owned_command))
+        prior_identities: set[str] = set()
+        if args.owned_command and args.existing.exists():
+            # Legacy/manual CLI compatibility only. The stateful installer
+            # persists structural identities and never uses this command-only
+            # selector.
+            existing_data = json.loads(args.existing.read_text(encoding="utf-8"))
+            for identity in hook_identities(existing_data):
+                decoded = json.loads(identity)
+                if decoded.get("command") in set(args.owned_command):
+                    prior_identities.add(identity)
+        result = merge_settings_json(args.existing, args.new, prior_identities)
 
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0

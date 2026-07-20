@@ -49,8 +49,20 @@ fi
 
 chain_husky() {
   if grep -q '^# orions-belt:begin pre-commit$' "$HUSKY_HOOK" 2>/dev/null; then
-    echo "orions-belt: Husky pre-commit is already chained (idempotent)"
-    return 0
+    if [ "$(grep -c '^# orions-belt:begin pre-commit$' "$HUSKY_HOOK")" -eq 1 ] \
+      && [ "$(grep -c '^# orions-belt:end pre-commit$' "$HUSKY_HOOK")" -eq 1 ] \
+      && grep -Fqx 'ORIONS_BELT_ROOT="$(git rev-parse --show-toplevel)"' "$HUSKY_HOOK" \
+      && grep -Fqx 'export ORIONS_BELT_ROOT' "$HUSKY_HOOK" \
+      && grep -Fqx 'bash "$ORIONS_BELT_ROOT/.githooks/pre-commit" || exit $?' "$HUSKY_HOOK"; then
+      echo "orions-belt: Husky pre-commit is already chained (idempotent)"
+      return 0
+    fi
+    echo "orions-belt: incomplete or modified orions-belt block in Husky pre-commit; refusing false-success reconciliation: $HUSKY_HOOK" >&2
+    return 1
+  fi
+  if grep -q '^# orions-belt:end pre-commit$' "$HUSKY_HOOK" 2>/dev/null; then
+    echo "orions-belt: orphaned orions-belt end marker in Husky pre-commit: $HUSKY_HOOK" >&2
+    return 1
   fi
   [ -w "$HUSKY_HOOK" ] || { echo "orions-belt: cannot chain non-writable Husky hook: $HUSKY_HOOK" >&2; return 1; }
   local temp_hook

@@ -395,6 +395,20 @@ def _discover_component_roots(target: Path, explicit_roots: list[str] | None = N
 
     for name in sorted(DIRECT_COMPONENT_DIRS):
         add(target / name, f"conventional:{name}")
+
+    # Brownfield repos often have sibling services with domain-specific names
+    # (for example `faz-engine/`) and no workspace declaration. Scan exactly
+    # one level of root children and require a supported manifest; exclusions
+    # and _safe_component_dir keep dependencies, fixtures and symlinks out.
+    try:
+        root_children = sorted(target.iterdir(), key=lambda p: p.name)
+    except OSError:
+        root_children = []
+    for child in root_children:
+        if child.name in EXCLUDED_COMPONENT_PARTS:
+            continue
+        add(child, f"root-child:{child.name}")
+
     for container_name in sorted(COMPONENT_CONTAINER_DIRS):
         container = target / container_name
         if not container.is_dir() or container.is_symlink():
