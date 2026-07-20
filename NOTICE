@@ -35,7 +35,9 @@ or is affiliated with orions-belt (CC BY-SA 4.0 Section 2(a)(6)).
 ## 2. Trail of Bits — `trailofbits/skills`
 
 Ten skills in `templates/{% if use_claude %}.claude{% endif %}/skills/`
-(79 files total) are reproduced **verbatim, byte-for-byte**, from:
+(**69 files total** — the skill text/content; the upstream's per-skill
+`trail-of-bits-mark.svg` logo and `agents/openai.yaml` files are NOT reproduced
+here, see the Trademark note below) are reproduced **verbatim, byte-for-byte**, from:
 
 > Trail of Bits, `skills` (https://github.com/trailofbits/skills),
 > commit `cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af`, licensed under
@@ -46,17 +48,17 @@ The ten skills, with their upstream path inside that repo:
 
 | Skill (this repo)          | Upstream path (`trailofbits/skills`)                              | Files |
 |-----------------------------|---------------------------------------------------------------------|------:|
-| `semgrep`                   | `plugins/static-analysis/skills/semgrep/`                           |     7 |
-| `codeql`                    | `plugins/static-analysis/skills/codeql/`                             |    17 |
-| `sarif-parsing`             | `plugins/static-analysis/skills/sarif-parsing/`                      |     4 |
-| `semgrep-rule-creator`      | `plugins/semgrep-rule-creator/skills/semgrep-rule-creator/`          |     4 |
-| `variant-analysis`          | `plugins/variant-analysis/skills/variant-analysis/`                 |    14 |
-| `insecure-defaults`         | `plugins/insecure-defaults/skills/insecure-defaults/`                |     3 |
-| `supply-chain-risk-auditor` | `plugins/supply-chain-risk-auditor/skills/supply-chain-risk-auditor/`|     3 |
-| `agentic-actions-auditor`   | `plugins/agentic-actions-auditor/skills/agentic-actions-auditor/`    |    14 |
-| `audit-context-building`    | `plugins/audit-context-building/skills/audit-context-building/`      |     5 |
-| `fp-check`                  | `plugins/fp-check/skills/fp-check/`                                  |     8 |
-| **Total**                   |                                                                       |**79** |
+| `semgrep`                   | `plugins/static-analysis/skills/semgrep/`                           |     6 |
+| `codeql`                    | `plugins/static-analysis/skills/codeql/`                             |    16 |
+| `sarif-parsing`             | `plugins/static-analysis/skills/sarif-parsing/`                      |     3 |
+| `semgrep-rule-creator`      | `plugins/semgrep-rule-creator/skills/semgrep-rule-creator/`          |     3 |
+| `variant-analysis`          | `plugins/variant-analysis/skills/variant-analysis/`                 |    13 |
+| `insecure-defaults`         | `plugins/insecure-defaults/skills/insecure-defaults/`                |     2 |
+| `supply-chain-risk-auditor` | `plugins/supply-chain-risk-auditor/skills/supply-chain-risk-auditor/`|     2 |
+| `agentic-actions-auditor`   | `plugins/agentic-actions-auditor/skills/agentic-actions-auditor/`    |    13 |
+| `audit-context-building`    | `plugins/audit-context-building/skills/audit-context-building/`      |     4 |
+| `fp-check`                  | `plugins/fp-check/skills/fp-check/`                                  |     7 |
+| **Total**                   | (skill content only; excludes the removed logo + upstream openai.yaml)|**69** |
 
 **Modifications: none.** Every file listed above is an exact, unmodified
 copy (verified with `cmp` against a clean clone of the upstream commit —

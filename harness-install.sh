@@ -152,10 +152,38 @@ is_sensitive() {
 N_CREATED=0
 N_OVERWRITTEN=0
 N_MERGED=0
+N_SKIPPED_ESCAPE=0
+
+# Containment root: the canonical absolute path of TARGET. Every write must land
+# strictly inside it.
+TARGET_REAL="$(cd "$TARGET" 2>/dev/null && pwd -P)" || { echo "harness-install.sh: cannot resolve TARGET '$TARGET'." >&2; exit 1; }
 
 while IFS= read -r -d '' f; do
   rel="${f#"$SCRATCH"/}"
   dest="$TARGET/$rel"
+
+  # Symlink/containment guard (adversarial-audit gap #3): never write THROUGH a
+  # symlink or OUTSIDE TARGET. A symlinked dest (or a symlinked parent dir, e.g.
+  # a `.codex/` pointing elsewhere) would make `cp`/merge write to an external
+  # file. Resolve the real parent; if it escapes TARGET_REAL, skip and warn.
+  parent="$(dirname "$dest")"
+  mkdir -p "$parent" 2>/dev/null || true
+  real_parent="$(cd "$parent" 2>/dev/null && pwd -P)" || real_parent=""
+  case "${real_parent:-/nonexistent}/" in
+    "$TARGET_REAL"/*|"$TARGET_REAL"/) : ;;  # inside target — ok
+    *)
+      echo "SKIP (path escapes target via symlink): $rel -> ${real_parent:-unresolved}" >&2
+      N_SKIPPED_ESCAPE=$((N_SKIPPED_ESCAPE + 1))
+      continue
+      ;;
+  esac
+  # If dest itself is a symlink, drop it so we write a real file inside TARGET
+  # (never overwrite whatever it points at). For the 4 sensitive files this also
+  # means a symlinked instruction file is replaced, not written through.
+  if [ -L "$dest" ]; then
+    echo "note: replacing symlink with a real file: $rel" >&2
+    rm -f "$dest"
+  fi
 
   if is_sensitive "$rel"; then
     if [ -f "$dest" ]; then
@@ -237,4 +265,9 @@ echo "harness-install.sh: done."
 echo "  new files created:                   $N_CREATED"
 echo "  framework-owned overwritten:         $N_OVERWRITTEN"
 echo "  sensitive files merged (additive):   $N_MERGED"
+echo "  skipped (path escaped target):       $N_SKIPPED_ESCAPE"
+if [ "$N_OVERWRITTEN" -gt 0 ]; then
+  echo "  NOTE: 'overwritten' are paths this render ships; if a same-named file was your own"
+  echo "        (not a prior harness install), it was replaced. No ownership manifest yet — review with 'git diff'."
+fi
 echo "  .harness/answers.yml written to:     $TARGET/.harness/answers.yml (needed for a future 'copier update')"

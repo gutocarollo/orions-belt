@@ -41,10 +41,19 @@ driven by one central config and serving **Claude Code and Codex from a single s
 # into a fresh directory
 copier copy --trust gh:gutocarollo/orions-belt my-project
 
-# …or into an existing repo (brownfield-safe: never clobbers your files)
+# …or into an existing repo — the 4 sensitive files (AGENTS.md, .claude/CLAUDE.md,
+# .claude/settings.json, .gitignore) merge additively; review with `git diff` after
 curl -fsSL https://raw.githubusercontent.com/gutocarollo/orions-belt/main/harness-install.sh \
   | bash -s -- . --data project_name=my-project --data owner_name="Me" --defaults
 ```
+
+> **Brownfield status (honest):** the installer merges the 4 sensitive files additively and
+> refuses to write outside the target (symlink-guarded), but it does **not yet** have an
+> ownership manifest — a framework-shipped path (e.g. a skill name it also ships) that already
+> exists in your repo is overwritten. And `copier update` is **not yet proven safe** on a
+> brownfield install whose instruction files are git-ignored. Until those land, treat an
+> existing-repo install as *review-required* (`git diff`), not "absolute success". See
+> [chapter 15](docs/manual/15-limitacoes-conhecidas.md).
 
 The installer runs a platform preflight, scans your stack **with zero LLM**, classifies every
 component as applicable / conditional / not-applicable, renders to a scratch dir, and merges

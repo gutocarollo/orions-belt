@@ -151,6 +151,15 @@ HOOKS_JSON="$BASE/.codex/hooks.json"
 assert "(d) .codex/hooks.json exists and is valid JSON" \
   'python3 -c "import json,sys; json.load(open(\"$HOOKS_JSON\"))" 2>/dev/null'
 
+# (d.2) every rendered custom-agent TOML + config.toml must PARSE (regression for the
+# adversarial-audit gap: a {#- -#} comment between two keys ate the newline, joining
+# `model_reasoning_effort = "high"developer_instructions = """` -> invalid TOML, so the
+# Codex custom agent silently failed to load. tomllib is stdlib >=3.11.)
+for T in "$BASE"/.codex/agents/*.toml "$BASE"/.codex/config.toml; do
+  assert "(d.2) rendered TOML parses: $(basename "$T")" \
+    "python3 -c 'import tomllib,sys; tomllib.load(open(sys.argv[1],\"rb\"))' '$T'"
+done
+
 if [ -f "$HOOKS_JSON" ]; then
   PRETOOL_HAS_THROTTLE="$(python3 -c "
 import json

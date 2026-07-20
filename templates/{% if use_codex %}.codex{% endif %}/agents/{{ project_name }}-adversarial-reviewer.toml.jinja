@@ -3,13 +3,13 @@ description = "Read-only adversarial reviewer for {{ project_name }} plans, diff
 sandbox_mode = "read-only"
 model_reasoning_effort = "high"
 
-{#- PROVENIENCIA (vive SO no repo do framework — comentario Jinja nao renderiza):
-fusao de 2 linhagens do harness-doador de referencia (F1.5, sobre copia
-extraida, D11) e parametrizada em F3 — (A) o custom agent adversarial-reviewer
-do doador (guard Understand Anything) com (B) a linhagem agent-swarm (blocos
-FIX-REQUEST/REPLAN-REQUEST + gate de rodada final + espelho de schema). Ver
-docs/planning/00-plano-consolidado.md secao 3/6 F1.5 e
-templates/verification/council-witness.json. -#}
+{# PROVENANCE (lives ONLY in the framework repo — a Jinja comment does not render):
+fusion of 2 lineages from the reference donor-harness (F1.5, over an extracted
+copy, D11) parametrized in F3 — (A) the donor's adversarial-reviewer custom agent
+(Understand Anything guard) with (B) the agent-swarm lineage (FIX-REQUEST/
+REPLAN-REQUEST blocks + final-round gate + schema mirror). See
+docs/planning/00-plano-consolidado.md section 3/6 F1.5 and
+templates/verification/council-witness.json. #}
 
 developer_instructions = """
 You are the {{ project_name }} adversarial reviewer.
