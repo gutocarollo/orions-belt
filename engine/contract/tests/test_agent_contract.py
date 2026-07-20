@@ -394,12 +394,18 @@ REPLAN-REQUEST:
         subprocess — RUNS_DIR now resolves via `_tooling_conf.project_root()`
         (parameterized), which without the override would climb from the real cwd
         until it finds `.git` (could resolve to the agent-harness root instead of
-        engine/contract/, depending on where the tests run). The override makes the
-        test deterministic and self-contained, without touching the real repo root."""
+        engine/contract/, depending on where the tests run). The root is a
+        THROWAWAY tmpdir (dogfood regression, 2026-07-20): the config resolver
+        climbs from the project root, and once the framework self-installed at the
+        REPO root, the real .harness/harness.conf redefined HARNESS_LEDGER_DIR and
+        this test silently read the wrong path — ROOT=engine/contract was not
+        hermetic because engine/contract sits under the repo. A tmpdir has no conf
+        anywhere above it, so the shipped default (.agent-swarm/runs) applies."""
         run_id = "unittest-ledger"
-        run_dir = ROOT / ".agent-swarm" / "runs" / run_id
-        shutil.rmtree(run_dir, ignore_errors=True)
-        env = {**os.environ, "HARNESS_PROJECT_ROOT": str(ROOT)}
+        tmp_root = pathlib.Path(tempfile.mkdtemp(prefix="ledger-test."))
+        self.addCleanup(shutil.rmtree, tmp_root, True)
+        run_dir = tmp_root / ".agent-swarm" / "runs" / run_id
+        env = {**os.environ, "HARNESS_PROJECT_ROOT": str(tmp_root)}
         try:
             result = subprocess.run(
                 [

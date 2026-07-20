@@ -24,7 +24,10 @@ do RUN.md e encerre a passada.
   projeto, ou hook via hookify) e marcar.
 - **Wiki/documentação do repo íntegra** — `python3 .harness/lib/docs_wiki_lint.py`. FAIL →
   corrigir `{{ harness_docs_dir }}/index.md`, `{{ harness_docs_dir }}/log.md` ou o índice da
-  categoria (regidos por `{{ harness_docs_dir }}/SCHEMA.md`) e re-rodar.
+  categoria (regidos por `{{ harness_docs_dir }}/SCHEMA.md`) e re-rodar. WARNs `stray doc`
+  (markdown espalhado fora de `{{ harness_docs_dir }}/`) são o inbox do curador — backlog
+  incremental: classifique 1-2 por passada na caixinha certa via a skill `repo-wiki-curator`,
+  nunca um mutirão num turno só.
 {%- if use_ui_skills %}
 - **Frescor do mining de className** — sem gate automatizado de staleness nesta versão (P2 do
   plano de resgate, não portado). Se o código de UI sob `{{ harness_web_app_dir }}` mudou desde

@@ -56,6 +56,11 @@ STRUCTURAL = {"index.md", "log.md", "SCHEMA.md", "README.md"}
 CAPS_OK = {"README.md", "SCHEMA.md", "CLAUDE.md", "AGENTS.md", "LICENSE", "LICENSE.md", "PROVENANCE.md"}
 GENERIC_DIRS = {"sources", "assets", "img", "images", "reports", "docs", "_arquivo"}
 IGNORED_DIRS = set(get_config_csv("IGNORED_TOOL_DIRS", [".understand-anything", ".anythingllm"]))
+# Repo-wide stray sweep (WARN backlog): markdown allowed at the repo ROOT without
+# being a stray — the conventional structural/community files.
+ROOT_ALLOWED_MD = CAPS_OK | {"CONTRIBUTING.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "SECURITY.md", "NOTICE.md"}
+# Directory names never swept for strays: dependency/build output and test fixtures.
+STRAY_SKIP_DIRS = {"node_modules", "vendor", "dist", "build", "out", "target", "__pycache__", "fixtures"}
 # lowercase kebab, with an optional date (event) or number (sequenced) prefix; dot only for a version like v2.2
 NAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}-|\d+-)?[a-z0-9]+([a-z0-9.\-]*[a-z0-9])?\.[a-z0-9]+$")
 # date (YYYY-MM-DD) present but NOT as a prefix → event doc with date as a suffix (§2: must be a prefix)
@@ -177,6 +182,57 @@ def check_stray_tool_tags(base: Path) -> list[str]:
     return errs
 
 
+def _stray_covered(rel: Path, corpus: str) -> bool:
+    """A doc living outside docs/ is NOT a stray when the wiki indexes it anyway:
+    exact path cited, or an ancestor dir cited as an explicit collection ("dir/").
+    Bare-filename mentions do NOT count (any cited notes.md would silence them all)."""
+    if rel.as_posix() in corpus:
+        return True
+    parts = rel.parts[:-1]
+    for i in range(len(parts), 0, -1):
+        if parts[i - 1] in GENERIC_DIRS:
+            continue
+        if "/".join(parts[:i]) + "/" in corpus:
+            return True
+    return False
+
+
+def check_stray_docs(corpus: str) -> list[str]:
+    """Repo-wide sweep (WARN backlog): markdown scattered OUTSIDE the docs tree —
+    repo root, src/, backend/, anywhere — is invisible to the wiki (never indexed,
+    never curated), which is how PLANO-FINAL-v2.md graveyards form. Each stray is
+    inbox for the repo-wiki-curator: classify (plan? audit? architecture?
+    reference?) and `git mv` into its docs/<category>/ box (or _arquivo/) — or
+    index it in place (exact path / collection "dir/" in index.md|log.md) when it
+    legitimately lives outside. WARN-only: a brownfield adoption may surface
+    dozens; they are incremental backlog for the maintenance loop, not an
+    install-day failure."""
+    lessons_rel = get_config("HARNESS_LESSONS_FILE", "tasks/lessons.md")
+    warns: list[str] = []
+    for f in sorted(ROOT.rglob("*.md")):
+        rel = f.relative_to(ROOT)
+        parts = rel.parts
+        if rel.as_posix() == lessons_rel:  # canonical shared-memory file, not a stray
+            continue
+        if rel.name == "README.md":  # conventional locality doc, any directory
+            continue
+        if any(p.startswith(".") for p in parts):  # .git, .claude, .harness, ...
+            continue
+        if any(p in STRAY_SKIP_DIRS or p in IGNORED_DIRS for p in parts):
+            continue
+        try:
+            rel.relative_to(DOCS.relative_to(ROOT))  # already inside the wiki
+            continue
+        except ValueError:
+            pass
+        if len(parts) == 1 and rel.name in ROOT_ALLOWED_MD:
+            continue
+        if _stray_covered(rel, corpus):
+            continue
+        warns.append(f"stray doc outside {DOCS.name}/ (classify into a category or _arquivo/): {rel}")
+    return warns
+
+
 def git_diff_name_status(diff_base: str | None, staged: bool, worktree: bool, failures: list[str]) -> list[tuple[str, list[str]]]:
     if not diff_base and not staged and not worktree:
         return []
@@ -272,6 +328,7 @@ def main() -> int:
             naming_warns.append(f"naming outside the §2 standard: {rel}")
 
     foreign_warns = check_no_foreign_live_links(base)
+    stray_warns = check_stray_docs(corpus) if not scope else []
     failures.extend(check_log_format(base))
     failures.extend(check_frontmatter_updated(base))
     failures.extend(check_stray_tool_tags(base))
@@ -292,6 +349,13 @@ def main() -> int:
         print(f"docs-wiki-lint: {len(foreign_warns)} live index(es) linking to _arquivo/ (WARN — check whether it is labeled wayfinding):")
         for w in foreign_warns:
             print(f"  ~ {w}")
+
+    if stray_warns:
+        print(f"docs-wiki-lint: {len(stray_warns)} stray doc(s) outside the wiki (WARN, curator inbox — classify into docs/<category>/):")
+        for w in stray_warns[:40]:
+            print(f"  ~ {w}")
+        if len(stray_warns) > 40:
+            print(f"  ... +{len(stray_warns) - 40} others")
 
     if failures:
         print("docs-wiki-lint: FAIL")

@@ -24,7 +24,10 @@ of the RUN.md and end the pass.
   instructions, or a hook via hookify) and mark it.
 - **Repo wiki/documentation integrity** — `python3 .harness/lib/docs_wiki_lint.py`. FAIL →
   fix `{{ harness_docs_dir }}/index.md`, `{{ harness_docs_dir }}/log.md` or the category
-  index (governed by `{{ harness_docs_dir }}/SCHEMA.md`) and re-run.
+  index (governed by `{{ harness_docs_dir }}/SCHEMA.md`) and re-run. `stray doc` WARNs
+  (markdown scattered outside `{{ harness_docs_dir }}/`) are the curator inbox — incremental
+  backlog: classify 1-2 per pass into their category box via the `repo-wiki-curator` skill,
+  never a mass sweep in one turn.
 {%- if use_ui_skills %}
 - **className mining freshness** — no automated staleness gate in this version (P2 of the
   rescue plan, not ported). If the UI code under `{{ harness_web_app_dir }}` changed since

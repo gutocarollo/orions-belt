@@ -29,7 +29,10 @@ Continuous curation of the whole repository's documentation. Strategic objective
 
 All of `docs/` — `planos/`, `auditorias/`, `adr/`, `architecture/`, `design-system/`, `commercial/`,
 `developers/`, `reunioes/`, `qa-evidence/`, `_arquivo/`. It is not just design-system (that is only one
-category, with its own sub-schema in `docs/design-system/SCHEMA.md`).
+category, with its own sub-schema in `docs/design-system/SCHEMA.md`). **Plus the repo-wide stray sweep:**
+markdown scattered OUTSIDE `docs/` (repo root, `src/`, `backend/`, anywhere) is invisible to the wiki —
+the lint reports each one as a `stray doc` WARN (curator inbox); classifying those into their category
+box is part of this skill's job, not a separate task.
 
 ## Contract
 
@@ -46,9 +49,13 @@ category, with its own sub-schema in `docs/design-system/SCHEMA.md`).
 ## Procedure
 
 1. `find docs -name "*.md"` + `find docs -type f ! -name "*.md"` — inventory; compare against `docs/index.md`,
-   `docs/log.md` and each category's `index.md`.
+   `docs/log.md` and each category's `index.md`. **Repo-wide sweep:** the `stray doc` WARNs from
+   `python3 .harness/lib/docs_wiki_lint.py` are the capture inbox for markdown living outside `docs/`.
 2. For each doc: read title, verdict, date, execution status BEFORE classifying. Ambiguous/legacy →
-   check against the real code (does the doc lie? does the code confirm it?).
+   check against the real code (does the doc lie? does the code confirm it?). For each STRAY, decide its
+   box — plan? audit? architecture? reference? junk? — then `git mv` it into `docs/<category>/` with §2
+   naming (or `_arquivo/`); if it legitimately lives outside (e.g. a tool's own material), index it in
+   place: cite the exact path or the collection (`dir/`) in `docs/log.md`/`index.md`.
 3. **Naming:** rename violations with `git mv` (preserves history), **one at a time**, updating ALL the
    refs to it (`grep -rl` in the repo) before moving on — sequential migration (LEI ZERO §6), never batch.
    After the pass of renames/deletes, validate with `python3 .harness/lib/ref_integrity.py --range <base>..HEAD`
@@ -66,6 +73,7 @@ category, with its own sub-schema in `docs/design-system/SCHEMA.md`).
 
 ## Expected output
 
+- strays captured from outside `docs/` (from→to, or indexed-in-place with the reason);
 - docs added/reclassified in the index (status);
 - docs renamed (from→to) and refs updated;
 - docs pruned (with how to recover via git);

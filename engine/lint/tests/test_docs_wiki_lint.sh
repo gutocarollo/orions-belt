@@ -52,6 +52,32 @@ else
   FAIL=1
 fi
 
+echo
+echo "=== Scenario 4: repo-wide stray sweep (WARN inbox, never a failure) ==="
+STRAYFX="$(mktemp -d /tmp/lint-stray.XXXXXX)"
+mkdir -p "$STRAYFX/docs" "$STRAYFX/backend" "$STRAYFX/node_modules/pkg"
+printf '# log\n\n## [2026-07-20] chore · docs — seed\n' > "$STRAYFX/docs/log.md"
+echo "# readme" > "$STRAYFX/README.md"              # allowed at root
+echo "# lost plan" > "$STRAYFX/PLANO-FINAL-v2.md"   # stray at root
+echo "# notes" > "$STRAYFX/backend/notes.md"        # stray in a subdir
+echo "# dep" > "$STRAYFX/node_modules/pkg/README.md"  # must be skipped
+HARNESS_PROJECT_ROOT="$STRAYFX" python3 "$LINT" >/tmp/lint-out-$$ 2>&1
+rc=$?
+assert_exit "strays are WARN-only (exit stays 0)" "$rc" 0
+if grep -q "PLANO-FINAL-v2.md" /tmp/lint-out-$$ && grep -q "backend/notes.md" /tmp/lint-out-$$; then
+  echo "PASS: both strays (root + subdir) surface as curator inbox"
+else
+  echo "FAIL: stray sweep missed a scattered doc — $(cat /tmp/lint-out-$$)"
+  FAIL=1
+fi
+if grep -q "node_modules" /tmp/lint-out-$$ || grep -qE '~ .*README\.md' /tmp/lint-out-$$; then
+  echo "FAIL: sweep flagged an allowed/skipped path"
+  FAIL=1
+else
+  echo "PASS: README.md (root) and node_modules/ are not flagged"
+fi
+rm -rf "$STRAYFX"
+
 rm -f /tmp/lint-out-$$
 
 echo
