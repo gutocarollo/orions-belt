@@ -1,72 +1,133 @@
-# Orion's Belt
+<div align="center">
 
-> Framework portátil e auto-configurável de harness de agentes de IA — o "cinturão" de disciplina que instala num projeto os hooks, gates e o council que mantêm um agente de IA alinhado, verificável e anti-drift.
+<img src="assets/hero.svg" alt="Orion's Belt" width="100%">
 
-Framework portátil e auto-configurável de harness de agentes de IA — hooks determinísticos, skills, council adversarial e wiki Karpathy temporal, instaláveis em qualquer projeto de software via [Copier](https://copier.readthedocs.io/). Suporta **Claude Code** e **Codex** a partir de uma única fonte de verdade: o mesmo script de hook (`.harness/hooks/*`) e a mesma `SKILL.md` (`.agents/skills/*`) servem os dois runtimes — ver `docs/planning/research/05-codex-surface.md`.
+<p>
+  <img alt="license" src="https://img.shields.io/badge/license-CC%20BY--SA%204.0-3b82f6">
+  <img alt="version" src="https://img.shields.io/badge/version-v1.5.0-6f42c1">
+  <img alt="runtimes" src="https://img.shields.io/badge/runtimes-Claude%20Code%20%2B%20Codex-111827">
+  <img alt="install" src="https://img.shields.io/badge/install-Copier-1f6feb">
+  <img alt="instructions" src="https://img.shields.io/badge/instructions-EN%20%7C%20PT-3fb950">
+  <img alt="platform" src="https://img.shields.io/badge/platform-GNU%2FLinux-e05d44">
+</p>
 
-**Documentação do produto: [docs/manual/](docs/manual/README.md)** — 15 capítulos genéricos sobre o que o framework instala e como configurar cada componente. Config central em `.harness/harness.conf` (KEY=value, sourced por scripts) gerada pelo questionário `copier.yml` (raiz do repo, `_subdirectory: templates`); motor runtime-agnóstico em `engine/`; templates parametrizados por projeto-alvo em `templates/`.
+**A portable, self-configuring discipline harness for AI coding agents.**
+One `copier` install drops hooks, skills, an adversarial council, verification gates and a
+temporal wiki into *any* repo — so an agent stays aligned, verifiable and anti-drift.
 
-Proveniência, em um parágrafo: o framework foi extraído e generalizado de um harness de produção real, operado por meses num projeto de software vivo; os padrões aqui não são especulativos — cada guarda nasceu de um incidente ou fricção reais. O histórico completo da construção (plano, 8 relatórios de pesquisa, decisões D[n], log por fase) está em `docs/planning/` — material de arquivo factual, não parte do produto instalável.
+[Manual](docs/manual/README.md) · [Install](docs/manual/14-instalacao-e-update.md) · [How it works](#how-it-works) · [Why](docs/planning/)
 
-## Estado (F0-F5, F7-F9 completos; F6 pendente — pós-MVP, gated por D2)
+</div>
 
-Ver `docs/planning/00-plano-consolidado.md` §6 para o WBS completo. Regra dura de execução: LEI ZERO §6 — migrações sempre sequenciais, 1 por vez, testadas; cada fase abaixo foi commitada e testada isoladamente (`git log --oneline`).
+---
 
-- **F0 — Config central**: `engine/_tooling_conf.py` (parser único KEY=value, DRY do guto-wiki) + `.harness/harness.conf.jinja` (~40 variáveis) + `copier.yml` (o questionário). Primeiro hook parametrizado (`subagent-throttle.sh`) provado lendo `.conf` dinamicamente. **DONE.**
-- **F1 — Lint forte + contrato executável**: `engine/lint/docs_wiki_lint.py` + `ref_integrity.py` (versão 312-linhas do guto-wiki) portados; `engine/contract/` = schemas JSON + witness + ledger + `validate_contract.py` do agent-swarm, parametrizados. **DONE.**
-- **F1.5 — Merge do council**: as 2 linhagens (agent-swarm REPLAN/FIX-REQUEST + learnhouse subagent-obrigatório/REVISORES) fundidas numa SKILL.md única dual-runtime, protegida por `templates/tests/test_council_merge.py` (7/7) + `verification/council-witness.json`. **DONE.**
-- **F1.6 — Des-drift do AGENTS.md**: `templates/AGENTS.md.jinja` regenerado por filtro determinístico a partir do `.claude/CLAUDE.md` real do learnhouse (não do `AGENTS.md` desatualizado) — ver `docs/planning/notas-f1.6.md` para a regra exata do filtro (range de heading excluído, tabela de substituições `{{ VAR }}`). **DONE.** (Path do arquivo mudou em F5 — ver linha F5 abaixo; a regra do filtro em si não mudou.)
-- **F3 — Templatização**: as 12 regras hookify (7 sempre-geradas + 5 `{{ prod_stack_prefix }}-prod-*` condicionais a `has_prod_stack`), `settings.json`/`.codex/config.toml`, seeds da wiki Karpathy (`docs/SCHEMA.md`, `log.md`, `lessons.md`), 27 skills (`.claude/skills/` + `.agents/skills/`) e 8 subagents (4 `.md` Claude + 4 `.toml` Codex). Estrutura de `templates/` corrigida para o padrão Copier real (`templates/{% if use_claude %}.claude{% endif %}/**`, sem pastas-wrapper `claude/`/`codex/`/`shared/`). **DONE** — 6 skills `qq-*` (conteúdo de negócio de uma reunião com um cliente) e mais 6 skills brand-específicas de OUTROS projetos do dono (MakersHub, Faz Capital) **excluídas por decisão** (o mesmo princípio que em F9 removeu o case-study: conteúdo de negócio do doador não vira produto genérico); ver `git log` dos commits `a35fc15` e `feat(F3-3)` para a lista nominal e a evidência de cada exclusão.
-- **F4 — Geradores multi-runtime**: `.codex/hooks.json.jinja` (protocolo confirmado ao vivo em `learn.chatgpt.com/docs/hooks`) + os 15 scripts de hook materializados em `templates/.harness/hooks/` (dir neutro, gerado independente de `use_claude`/`use_codex` — Claude via `settings.json.jinja` e Codex via `hooks.json.jinja` apontam para os MESMOS arquivos físicos, cada runtime com exatamente 1 fonte de registro). **DONE.**
+## What is Orion's Belt?
 
-- **F5 — `harness-init`**: skill LLM (fonte única `templates/.harness/skills-shared/harness-init/SKILL.md.jinja`) que roda pós-`copier copy` num projeto-alvo real. Motor 100% determinístico em `templates/.harness/lib/scan_project.py` (scan de stack sem LLM: linguagem/manifest, package manager, web framework, test frameworks, Docker/Swarm, portas, candidato a monorepo — blueprint `scan-project.mjs` do understand-anything) + classificador por regra de 37 componentes em APLICÁVEL/NÃO-APLICÁVEL/CONDICIONAL (D5: nada ativado sem confirmação humana) + `templates/.harness/lib/merge_docs.py` (merge aditivo real — bloco marcado `<!-- orions-belt:begin/end -->` para Markdown, união de hooks por `command` para `settings.json`; nunca overwrite). Testado com 2 fixtures reais fora do repo (Python+FastAPI puro, monorepo Next.js+Playwright+Docker) e um cenário de merge não-destrutivo ponta-a-ponta via `uvx copier copy` real. Bug real corrigido nesta rodada, achado ao desenhar a lógica de merge: `AGENTS.md.jinja` só era gerado com `use_codex=true` e não existia nenhum `.claude/CLAUDE.md.jinja` — um projeto `use_claude=true`/`use_codex=false` ficava sem NENHUM arquivo de instrução (Claude Code não lê `AGENTS.md`; confirmado contra `code.claude.com/docs/en/settings` nesta sessão — não existe fallback, ao contrário do que o research 05 sugeria ao citar `project_doc_fallback_filenames`, que é na verdade uma chave do lado CODEX). Fix: `AGENTS.md.jinja` virou incondicional (raiz de `templates/`) e `templates/{% if use_claude %}.claude{% endif %}/CLAUDE.md.jinja` inclui o mesmo arquivo via `{% include %}` do Jinja — fonte única, saída byte-idêntica nos dois paths (testado). **DONE** — o gap Codex-only da skill foi FECHADO: `harness-init` migrou para o mesmo mecanismo `skills-shared` das demais skills dual-runtime (fonte única `templates/.harness/skills-shared/harness-init/SKILL.md.jinja` + wrappers `.claude/skills/harness-init/` e `.agents/skills/harness-init/`), então um projeto `use_codex=true`/`use_claude=false` agora tem invocação nativa do instalador guiado. O corpo já era runtime-neutro (trata `AskUserQuestion` como opcional "se disponível no seu runtime").
+Coding agents are strong but drift: they overclaim "done", report UI from a diff instead of a
+pixel, invent facts, and skip verification. Orion's Belt is the **operating discipline** that
+keeps them honest — extracted and generalized from a private production harness run for months
+on a live software project, then made installable into any codebase.
 
-- **F7 — Case-study (SUPERSEDED por F9)**: o tutorial do harness-doador foi copiado para dentro do repo como estudo de caso, com 2 capítulos expandidos. Em F9, por ordem do dono ("o produto é um harness parametrizável para qualquer projeto, não a história do doador"), esse diretório foi REMOVIDO do framework — o conteúdo permanece no histórico git (fase F7) e o repositório-fonte original do tutorial continua existindo fora deste produto. O que F7 tinha de genérico foi reescrito como manual em F9.
+It is **not** a wiki (despite its origins) and **not** a prompt pack. It is a parametrized
+[Copier](https://copier.readthedocs.io/) template that installs a coherent system of
+**deterministic hooks + agent skills + an adversarial delivery council + evidence gates**, all
+driven by one central config and serving **Claude Code and Codex from a single source of truth**.
 
-- **F9 — Generalização da documentação**: `docs/manual/` criado como a documentação canônica do produto — 15 capítulos genéricos (visão geral; hooks por evento; hookify; marathon; skills; wiki Karpathy; council; auto-melhoria; understand-anything; instalação/update; limitações conhecidas), cada um referenciando as variáveis da config central pelo nome e linkando os arquivos reais de `templates/`/`engine/`; zero conteúdo do projeto-doador (gate: grep de termos do doador em `docs/manual/` = 0 hits). Em paralelo, os templates receberam a rodada F9-fixes de genericidade (dev-doctor genérico shippa em `.harness/hooks/`; `use_ui_evidence`/`use_icon_guard` gateiam os módulos de UI; hooks de marathon lendo `HARNESS_RUNS_DIR`/`HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS` da config). **DONE (docs).**
+<div align="center"><img src="assets/demo.svg" alt="orions-belt install" width="88%"></div>
 
-- **F8 — Prova end-to-end de `copier update`**: provado contra o REPO REAL usando 3 tags como checkpoints (`v0.1.0` baseline, `v0.2.0` mudança upstream ortogonal, `v0.3.0` mudança que colide de propósito com uma customização de teste). Fixture real em `/tmp`: `copier copy --vcs-ref v0.1.0` → customiza `.claude/CLAUDE.md` (linha nova) + `.harness/harness.conf` (edita a porta direto no arquivo renderizado, não via resposta do copier.yml) → `copier update --vcs-ref v0.2.0` → confirma NO MESMO diff que a mudança upstream chegou E a customização sobreviveu intocada → `copier update --vcs-ref v0.3.0` → conflito real gera marcadores `<<<<<<< before updating` / `=======` / `>>>>>>> after updating` (não descarta silenciosamente), `git status` marca `UU`. Teste durável em `templates/tests/test_copier_update_e2e.sh` (12/12, reusa as 3 tags do próprio repo, sem side-effect a cada rodada). **Bugs reais encontrados e corrigidos nesta rodada** (nenhum tinha sido detectado em F0-F5): (1) `copier.yml` vivia em `templates/copier.yml` — funciona para `copy` mas quebra `--vcs-ref`/`update` silenciosamente ("Copying from template version None"); mudou pra raiz do repo com `_subdirectory: templates` (confirmado 2x isolado + `copier.readthedocs.io/en/stable/configuring/`); (2) `.harness/answers.yml` **nunca foi escrito em nenhum teste de F0-F5** — configurar a chave `_answers_file` no copier.yml não basta, o Copier 9.17.0 exige um arquivo literal `{{ _copier_conf.answers_file }}.jinja` com `{{ _copier_answers|to_nice_yaml }}` dentro do template (confirmado lendo o source instalado do Copier) — sem ele, `copier update` falha hard. **DONE.**
+## Quickstart
 
-### Pendente
+```bash
+# into a fresh directory
+copier copy --trust gh:gutocarollo/orions-belt my-project
 
-- **F6 — Plugin + distribuição** (pós-MVP, gated por D2 — decisão já resolvida como "adiável"). Gate real (`00-plano-consolidado.md` linha 95) exige `.claude-plugin/plugin.json` + marketplace, passos de trust Codex, e uma ferramenta `harness-doctor` (selftest) que ainda não existe — não é um adendo rápido; avaliado nesta sessão (F8) e decidido adiar por escopo, não por bloqueio técnico.
-
-## Arquitetura (visão rápida)
-
-```
-orions-belt/
-├── copier.yml              # o questionário — RAIZ do repo (obrigatório p/ --vcs-ref/update
-│                            # funcionarem; achado F8), com `_subdirectory: templates`
-├── engine/                 # motor runtime-agnóstico: lint/, contract/, _tooling_conf.py
-├── templates/               # a árvore renderizada (raiz efetiva do template via _subdirectory)
-│   ├── {{ _copier_conf.answers_file }}.jinja  # OBRIGATÓRIO p/ Copier escrever answers.yml (achado F8)
-│   ├── .harness/             # SEMPRE gerado: harness.conf, lib/{_tooling_conf,scan_project,merge_docs}.py, hooks/*
-│   ├── {% if use_claude %}.claude{% endif %}/   # settings.json, skills/ (incl. harness-init), agents/, hookify.*
-│   ├── {% if use_codex %}.codex{% endif %}/     # config.toml, hooks.json, agents/
-│   ├── AGENTS.md.jinja  (unconditional; .claude/CLAUDE.md.jinja inclui o mesmo via {% raw %}{% include %}{% endraw %})
-│   ├── .agents/skills/       # skills dual-runtime (council, adversarial-review)
-│   ├── docs/, tasks/         # seeds da wiki Karpathy (SCHEMA.md, log.md, lessons.md)
-│   └── tests/, verification/ # QA do PRÓPRIO orions-belt (excluído do copy via copier.yml `/tests`)
-├── docs/manual/            # o MANUAL do produto — 15 capítulos genéricos (comece aqui p/ entender)
-└── docs/planning/          # história da construção: plano + 8 relatórios de pesquisa (arquivo factual)
+# …or into an existing repo (brownfield-safe: never clobbers your files)
+curl -fsSL https://raw.githubusercontent.com/gutocarollo/orions-belt/main/harness-install.sh \
+  | bash -s -- . --data project_name=my-project --data owner_name="Me" --defaults
 ```
 
-**Instalar num projeto-alvo (o caminho canônico — funciona em projeto novo OU existente): `./harness-install.sh <destino> --data project_name=... --data owner_name=... --defaults`** — bootstrap brownfield-safe (raiz do repo, ao lado de `copier.yml`; ver `docs/manual/14-instalacao-e-update.md`). Renderiza o framework num scratch temporário via `copier copy` e só então mescla no destino: arquivo ausente copia direto, os 4 arquivos sensíveis (`AGENTS.md`/`.claude/CLAUDE.md`/`.claude/settings.json`/`.gitignore`) que já existirem levam merge aditivo (nunca overwrite), e `core.hooksPath` só é ativado se estava vazio (nunca faz clobber de Husky/outro hook manager). `uvx copier copy <origem> <destino> --trust` DIRETO só é seguro quando o destino é um diretório genuinamente vazio — contra um projeto com qualquer um desses 4 arquivos, falha parcial (sem `--overwrite`) ou destrói conteúdo do usuário (com `--overwrite`); o Copier não tem merge nativo para esse caso. Atualizar um projeto-alvo já instalado: `copier update --trust --answers-file .harness/answers.yml` (flag `--answers-file` é obrigatória — `_answers_file` custom não é auto-detectado pelo `update`).
+The installer runs a platform preflight, scans your stack **with zero LLM**, classifies every
+component as `APLICAVEL` / `CONDICIONAL` / `NAO_APLICAVEL`, renders to a scratch dir, and merges
+in **additively** — `AGENTS.md`, `.claude/settings.json`, `.gitignore` get a marked block, never
+an overwrite. A full install is **189 files · 31 skills · 15 hooks**, and `git status` on your
+existing files stays clean.
 
-## Testes — plataforma e convenção de exit code (H4)
+## What you get
 
-**Plataforma suportada:** os hooks/scripts (`.harness/hooks/`, `.harness/lib/`) e os testes E2E deste repo pressupõem **Linux com Bash ≥4, GNU coreutils, `flock` (util-linux) e `python3`** — dependem de `mapfile`/`declare -A` (Bash 4+), `stat -c` (GNU; BSD/macOS usa `stat -f`), `date +%s%N` (nanossegundos GNU-only) e `flock` (Linux, sem equivalente nativo built-in no macOS). **macOS não é suportado nativamente** — instale `coreutils`, `flock`/`util-linux` e `bash` ≥4 via Homebrew (`brew install coreutils util-linux bash`) e prefixe os comandos GNU (`gstat`, `gdate`) ou ajuste o `PATH` para preferi-los; **Windows nativo (sem WSL) não é suportado**. Rode `bash .harness/lib/check-platform.sh` (gerado no projeto-alvo) para um preflight explícito das dependências antes de confiar nos hooks. Ver `docs/manual/15-limitacoes-conhecidas.md`.
+| | Component | What it does |
+|---|---|---|
+| 🧭 | **Delivery council** | Orchestrates a task from `EXECUTION` / `PLANNING` / `PLAN_REVIEW` / `AUTO` with automatic trade-off decisions and adversarial loops. |
+| 🔬 | **Adversarial review** | Evidence-based verifier that must confirm or refute each gap with proof — runs in a subagent, never self-review. |
+| 🎯 | **grill-me** | Interviews you on a plan one decision at a time (behavior, ≥2 real good/bad examples, Option C) — before code is written. |
+| ✅ | **Completion gate** | A Stop hook that **blocks any "done" claim** without a `PROVA-DE-CONCLUSAO` block of this-session evidence. |
+| 🖼️ | **UI-evidence** | Playwright before/after full-page PNGs + console + manifest; a Stop hook blocks shipping UI changes seen only as a diff. |
+| 📚 | **Karpathy wiki** | Temporal doc indexing; a pre-commit lint fails on orphaned docs or dead references. |
+| 🧠 | **Understand graph** | Incremental knowledge-graph refresh, triggered from the maintenance loop by a change threshold. |
+| ♻️ | **Self-improvement loop** | `/loop` maintenance pass: lessons capture → inject → promote, wiki lint, ref-integrity, graph freshness. |
+| 🛡️ | **Deterministic hooks** | 15 event hooks: completion/UI/design-system gates, subagent throttle, leak reaper, git-doctor. |
+| 🌐 | **Dual runtime** | Claude Code (`.claude/`) and Codex (`.agents/`, `.codex/`) generated byte-identically from one source. |
 
-**Convenção de exit code dos testes E2E (`templates/tests/test_*.sh`):** `0` = PASS, `1` = FAIL, **`77` = SKIP** (ambiente sem pré-requisito — `uvx` ausente, tag git ausente etc.; mesma convenção do protocolo de teste Automake/Meson para "skip", não inventada aqui). SKIP nunca é silenciosamente verde: o script imprime `SKIP: <motivo>` em stderr e sai com `77`, nunca `0` — quem invocar esses scripts numa pipeline (`&&`/`set -e`) precisa tratar `77` como "não provado" e não como sucesso.
+## How it works
 
-## Licença e proveniência (H5/B2)
+The core is a **plan → review → execute → verify** pipeline where every stage is gated and every
+adversarial review runs in an isolated subagent (self-review isn't adversarial):
 
-Este repositório é licenciado sob **Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)** — texto completo em [`LICENSE`](./LICENSE).
+```mermaid
+flowchart LR
+    A["task"] --> B{"START_AT"}
+    B -- "PLANNING" --> P["plan + trade-offs"]
+    P --> PR["subagent: adversarial plan review"]
+    PR -- "REPLANEJAR" --> P
+    PR -- "SABATINAR" --> G["grill-me: resolve D[n]"]
+    G --> P
+    PR -- "SATISFEITO" --> E["execute (sequential)"]
+    B -- "EXECUTION" --> E
+    E --> V["subagent: adversarial verification"]
+    V -- "CORRIGIR" --> E
+    V -- "SATISFEITO" --> D["done — only with PROVA-DE-CONCLUSAO evidence"]
+```
 
-- **[`LICENSE`](./LICENSE)** — texto oficial completo da CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0/legalcode).
-- **[`NOTICE`](./NOTICE)** — atribuições legíveis: o que é original deste repo, o que veio de terceiros (Trail of Bits, Diátaxis/Daniele Procida), o que foi extraído/generalizado de um harness de produção privado (nome do cliente omitido por decisão) e o que foi portado de outros repositórios do mesmo autor (`guto-wiki`, `agent-swarm`) ou reimplementado a partir de um blueprint externo (Understand Anything/Egonex-AI, MIT).
-- **[`PROVENANCE.json`](./PROVENANCE.json)** — inventário máquina-legível, componente por componente: repo/commit upstream, licença, se é byte-idêntico ou modificado, e o resumo das modificações. Inclui a revisão de compatibilidade de licença (nenhuma incompatibilidade encontrada; um flag não-bloqueante sobre o asset de marca `trail-of-bits-mark.svg`).
+The **contract tokens** the gates and tests match (`PROVA-DE-CONCLUSAO`,
+`PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | SABATINAR | BLOQUEADO`, `GATE-GRILL`,
+severities) are a **fixed vocabulary** — the same in every language, so the deterministic layer
+never depends on prose.
 
-Resumo rápido: 10 skills / 79 arquivos em `templates/{% if use_claude %}.claude{% endif %}/skills/` são cópia byte-a-byte de [trailofbits/skills](https://github.com/trailofbits/skills) (commit `cfe5d7b1619e47fb5b38b7e2561dad7e5f1e89af`, CC BY-SA 4.0) — confirmado por diff real contra um clone limpo do upstream, não por presunção. Ver `docs/manual/15-limitacoes-conhecidas.md` item 13 para o histórico da correção (a afirmação anterior de que a proveniência "foi preservada" era falsa antes deste hardening).
+## English or Portuguese
 
-**Propagação para o produto instalado:** `templates/NOTICE.jinja` gera um `NOTICE` na raiz de TODO projeto-alvo (via `harness-install.sh` ou `copier copy` direto) — sempre com a proveniência de `.harness/lib/` (guto-wiki + blueprint do Understand Anything, sempre instalados) e, quando `use_claude=true`, também as 10 skills trailofbits + `diataxis` + as 3 skills learnhouse-internas. Testado com `uvx copier copy . <scratch> --vcs-ref HEAD` nos dois casos (`use_claude=true`/`false`); nenhuma mudança de código foi necessária em `harness-install.sh` (o `NOTICE` do alvo não é um dos 4 arquivos sensíveis, então segue o fluxo genérico create/overwrite). Pendência residual (declarada, não bloqueante): não há teste de regressão automatizado garantindo que `templates/NOTICE.jinja` continua sincronizado se a lista de skills de terceiros mudar — ver `docs/manual/15-limitacoes-conhecidas.md` item 14.
+Instruction prose ships in **English (default) or Portuguese** via the `harness_language`
+question. It's a Jinja language selector — only the chosen language renders; the deterministic
+contract tokens are identical in both, so gates and hooks are language-independent. You can also
+just *use* the harness in any language: the built-in rule "respond in the user's language" covers
+output regardless of this choice. See [chapter 14](docs/manual/14-instalacao-e-update.md).
+
+## Install & update
+
+- **Install / adapt:** `harness-install.sh` (deterministic) or the `harness-init` skill
+  (agent-guided, resolves conditional components in conversation).
+- **Update:** `copier update --trust --answers-file .harness/answers.yml` — 3-way merge; your
+  customizations survive, real conflicts get markers.
+
+Full procedure, decision trees per component, and gotchas: **[chapter 14](docs/manual/14-instalacao-e-update.md)**.
+
+## Documentation
+
+- **[docs/manual/](docs/manual/README.md)** — the canonical product docs: 15 chapters on what
+  the framework installs and how to configure every component.
+- **[docs/planning/](docs/planning/)** — why it's built this way (construction archive).
+- **[SCHEMA.md](SCHEMA.md)** / **[llms.txt](llms.txt)** — repo organization and LLM routing.
+
+## Platform
+
+GNU/Linux with Bash ≥4, GNU coreutils, `flock` and `python3`. Run
+`bash .harness/lib/check-platform.sh` for a preflight. macOS needs Homebrew coreutils/util-linux;
+Windows needs WSL. See [chapter 15](docs/manual/15-limitacoes-conhecidas.md).
+
+## License & provenance
+
+**CC BY-SA 4.0** — see [`LICENSE`](LICENSE). Component-by-component provenance (upstream repo,
+commit, byte-identical vs. modified) is in [`PROVENANCE.json`](PROVENANCE.json) and
+[`NOTICE`](NOTICE): ten security skills reproduced verbatim from
+[trailofbits/skills](https://github.com/trailofbits/skills), the `diataxis` skill adapted from
+[Diátaxis](https://diataxis.fr/), a scanner design credited to
+[Understand-Anything](https://github.com/Egonex-AI/Understand-Anything) (MIT), and everything else
+original. Every rendered project also receives its own `NOTICE`.

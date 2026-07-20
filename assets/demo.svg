@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="330" viewBox="0 0 820 330" role="img" aria-label="Orion's Belt install output">
+  <rect x="0.5" y="0.5" width="819" height="329" rx="10" fill="#0d1117" stroke="#2b3450"/>
+  <path d="M0.5 10.5 a10 10 0 0 1 10 -10 h799 a10 10 0 0 1 10 10 v24 h-819 z" fill="#161c2e"/>
+  <circle cx="22" cy="17" r="6" fill="#ec6a5e"/><circle cx="42" cy="17" r="6" fill="#f4bf4f"/><circle cx="62" cy="17" r="6" fill="#61c554"/>
+  <text x="410" y="21" text-anchor="middle" font-family="Consolas,Menlo,monospace" font-size="12" fill="#8b98b8">orions-belt — install</text>
+  <g font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="14">
+    <text x="20" y="68"><tspan fill="#56d4dd">$ </tspan><tspan fill="#e6edf3">./harness-install.sh my-app --data project_name=my-app --defaults</tspan></text>
+    <text x="20" y="98"><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">platform preflight</tspan><tspan fill="#8b98b8">  ·  Bash 5.2 · GNU coreutils · flock · python3</tspan></text>
+    <text x="20" y="126"><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">scan stack (no LLM)</tspan><tspan fill="#8b98b8"> · classify </tspan><tspan fill="#a5b4ff">APLICAVEL / CONDICIONAL / NAO_APLICAVEL</tspan></text>
+    <text x="20" y="154"><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">render → scratch → non-destructive merge</tspan><tspan fill="#8b98b8"> (never clobbers your files)</tspan></text>
+    <text x="20" y="182"><tspan fill="#8b98b8">    create </tspan><tspan fill="#e6edf3">AGENTS.md</tspan><tspan fill="#8b98b8">   </tspan><tspan fill="#e6edf3">.claude/settings.json</tspan><tspan fill="#8b98b8">   </tspan><tspan fill="#e6edf3">.claude/CLAUDE.md</tspan></text>
+    <text x="20" y="210"><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">core.hooksPath → .githooks</tspan><tspan fill="#8b98b8">    </tspan><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">ds-gate ratchet baseline</tspan></text>
+    <text x="20" y="246"><tspan fill="#3fb950">✓ installed: </tspan><tspan fill="#e6edf3">189 files</tspan><tspan fill="#8b98b8"> · 0 overwritten · 0 clobbered</tspan></text>
+    <text x="20" y="274"><tspan fill="#a5b4ff">→ </tspan><tspan fill="#e6edf3">31 skills · 15 hooks · adversarial council · completion &amp; UI-evidence gates</tspan></text>
+    <text x="20" y="304"><tspan fill="#56d4dd">$ </tspan><tspan fill="#e6edf3">▮</tspan></text>
+  </g>
+</svg>
