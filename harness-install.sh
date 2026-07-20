@@ -350,8 +350,23 @@ if [ -f "$TARGET/.harness/hooks/ds-gate-posttool.sh" ] && [ -f "$TARGET/.harness
   fi
 fi
 
+# Decision report — the install audit trail (what was installed / skipped & why,
+# with applied examples). Part of the process: regenerated on every (re)install
+# from the manifest + answers. Non-blocking (the install already succeeded).
+REPORT_PATH=""
+if [ -f "$TARGET/.harness/lib/install_report.py" ]; then
+  if REPORT_PATH="$(python3 "$TARGET/.harness/lib/install_report.py" --target "$TARGET" \
+      --timestamp "$(date '+%Y-%m-%d %H:%M:%S %Z')" 2>/dev/null)"; then
+    :
+  else
+    echo "harness-install.sh: WARNING -- install report generation failed (non-blocking)." >&2
+    REPORT_PATH=""
+  fi
+fi
+
 echo
 echo "harness-install.sh: done."
 echo "  ownership state: $TARGET/.harness/install-manifest.json"
 echo "  rendered answers: $TARGET/.harness/answers.yml"
+[ -n "$REPORT_PATH" ] && echo "  decision report: $REPORT_PATH"
 echo "  update policy: rerun the installer from a pinned newer release; do not use raw Copier update for brownfield/local-only surfaces"
