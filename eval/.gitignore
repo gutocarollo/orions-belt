@@ -4,3 +4,6 @@
 *.stderr
 *-plan.json
 last-run-*/
+eval.log
+*-changed-tracked.txt
+unexpected-changes.txt
