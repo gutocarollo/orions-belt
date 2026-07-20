@@ -361,7 +361,9 @@ Regras fixas:
 {% if has_prod_stack and prod_deployment_driver == 'swarm-direct' %}
 - Claim sobre **prod** exige evidência no alvo de prod (state-check da skill de deploy), nunca localhost.
 {% endif %}
+{% if use_ui_evidence %}
 - Claim **visual** exige evidência da skill `ui-evidence` (PNG + manifest).
+{% endif %}
 - Mudança única (1 bug/1 arquivo): usar a skill `verify` — o gate não exige tabela para isso.
 - Sem evidência para um item = item vira gap declarado. Reformular o veredito sem o claim é sempre legítimo; fabricar o sentinel sem rodar os comandos é a violação máxima.
 
@@ -504,7 +506,7 @@ Fonte: CLAUDE.md do Boris Cherny (gist.github.com/hqman/e29cb6386c539d795767e8c3
 1. **Plan-first** — tarefa não-trivial (3+ passos ou decisão arquitetural) começa por plano (§6, council `START_AT=PLANNING`, skill `grill-me` quando o Gate Condicional de Grill a exigir). **Se algo der errado no meio da execução: PARE e replaneje imediatamente — não continue empurrando.** Plan mode também serve para VERIFICAÇÃO, não só para construir.
 2. **Subagents liberais** — manter o contexto principal limpo: pesquisa, exploração e análise paralela vão para subagents (1 investigação por subagent; cap {{ harness_subagent_max_concurrent }} via hook `subagent-throttle`). Problema difícil = jogar mais compute via subagents (council/adversarial loops), não insistir inline.
 3. **Self-Improvement Loop** — §16 (executável, com hooks).
-4. **Verification before done** — já ENFORCED por §10 (`prova-de-conclusao` + Stop hook `completion-gate` + `ui-evidence-gate`). Pergunta-guia do Boris adotada: **"um staff engineer aprovaria isto?"** — fazer a si mesmo ANTES de apresentar.
+4. **Verification before done** — já ENFORCED por §10 (`prova-de-conclusao` + Stop hook `completion-gate`{% if use_ui_evidence %} + `ui-evidence-gate`{% endif %}). Pergunta-guia do Boris adotada: **"um staff engineer aprovaria isto?"** — fazer a si mesmo ANTES de apresentar.
 5. **Demand elegance (balanceado)** — para mudança não-trivial, antes de apresentar: "sabendo tudo que sei agora, existe solução mais elegante?". Fix que parece gambiarra = reimplementar do jeito certo. NÃO aplicar a fixes triviais (anti-over-engineering).
 6. **Autonomous bug fixing** — bug report, teste falhando, CI vermelho: consertar direto (logs → causa raiz → fix → re-teste, §11), sem pedir hand-holding. Coerente com §0 (proibido pergunta sem exploração).
 

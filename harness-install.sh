@@ -221,7 +221,12 @@ TEMPLATE_REF="$(git -C "$REPO_ROOT" describe --tags --always --dirty 2>/dev/null
 TEMPLATE_SOURCE="$(git -C "$REPO_ROOT" config --get remote.origin.url 2>/dev/null || basename "$REPO_ROOT")"
 
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/harness-install.XXXXXX")"
-cleanup() { rm -rf "$SCRATCH"; }
+# WORK holds install-time artifacts (plan JSON, apply stdout) that must NEVER
+# live inside SCRATCH: source_files() rglobs SCRATCH as the render, so anything
+# dropped there gets enumerated and installed into the target (G1 — a 0-byte
+# install-plan.stdout.json was landing as an owned file at the target root).
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/harness-install-work.XXXXXX")"
+cleanup() { rm -rf "$SCRATCH" "$WORK"; }
 trap cleanup EXIT
 
 echo "harness-install.sh: rendering $REPO_ROOT -> scratch $SCRATCH ..." >&2
@@ -266,7 +271,7 @@ import json, sys
 print(json.dumps({"source": sys.argv[1], "ref": sys.argv[2]}))
 PY
 )"
-PLAN_OUT="${INSTALL_PLAN_JSON:-$SCRATCH/install-plan.json}"
+PLAN_OUT="${INSTALL_PLAN_JSON:-$WORK/install-plan.json}"
 APPLY_ARGS=(
   --scratch "$SCRATCH"
   --target "$TARGET_REAL"
@@ -279,7 +284,7 @@ for preserved in "${PRESERVE_PATHS[@]}"; do
 done
 
 echo "harness-install.sh: planning ownership/containment for $TARGET_REAL ..." >&2
-python3 "$LIB/install_apply.py" "${APPLY_ARGS[@]}" > "$SCRATCH/install-plan.stdout.json"
+python3 "$LIB/install_apply.py" "${APPLY_ARGS[@]}" > "$WORK/install-plan.stdout.json"
 
 python3 - "$PLAN_OUT" <<'PY'
 import json, sys

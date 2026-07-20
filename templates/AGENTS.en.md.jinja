@@ -360,7 +360,9 @@ Fixed rules:
 {% if has_prod_stack and prod_deployment_driver == 'swarm-direct' %}
 - A claim about **prod** requires evidence on the prod target (state-check of the deploy skill), never localhost.
 {% endif %}
+{% if use_ui_evidence %}
 - A **visual** claim requires evidence from the `ui-evidence` skill (PNG + manifest).
+{% endif %}
 - Single change (1 bug/1 file): use the `verify` skill — the gate does not require a table for that.
 - No evidence for an item = the item becomes a declared gap. Rephrasing the verdict without the claim is always legitimate; fabricating the sentinel without running the commands is the ultimate violation.
 
@@ -503,7 +505,7 @@ Source: Boris Cherny's CLAUDE.md (gist.github.com/hqman/e29cb6386c539d795767e8c3
 1. **Plan-first** — a non-trivial task (3+ steps or an architectural decision) starts with a plan (§6, council `START_AT=PLANNING`, skill `grill-me` when the Conditional Grill Gate requires it). **If something goes wrong mid-execution: STOP and replan immediately — do not keep pushing.** Plan mode also serves VERIFICATION, not just building.
 2. **Liberal subagents** — keep the main context clean: research, exploration, and parallel analysis go to subagents (1 investigation per subagent; cap {{ harness_subagent_max_concurrent }} via hook `subagent-throttle`). A hard problem = throw more compute via subagents (council/adversarial loops), do not insist inline.
 3. **Self-Improvement Loop** — §16 (executable, with hooks).
-4. **Verification before done** — already ENFORCED by §10 (`prova-de-conclusao` + Stop hook `completion-gate` + `ui-evidence-gate`). Boris's adopted guiding question: **"would a staff engineer approve this?"** — ask yourself BEFORE presenting.
+4. **Verification before done** — already ENFORCED by §10 (`prova-de-conclusao` + Stop hook `completion-gate`{% if use_ui_evidence %} + `ui-evidence-gate`{% endif %}). Boris's adopted guiding question: **"would a staff engineer approve this?"** — ask yourself BEFORE presenting.
 5. **Demand elegance (balanced)** — for a non-trivial change, before presenting: "knowing everything I now know, is there a more elegant solution?". A fix that looks like a hack = reimplement it the right way. Do NOT apply to trivial fixes (anti-over-engineering).
 6. **Autonomous bug fixing** — bug report, failing test, red CI: fix it directly (logs → root cause → fix → re-test, §11), without asking for hand-holding. Consistent with §0 (questions without exploration forbidden).
 

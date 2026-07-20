@@ -160,6 +160,15 @@ assert "2nd run: AGENTS.md does not duplicate the marker" \
 assert "2nd run: core.hooksPath still .husky" \
   '[ "$(git -C "$TARGET" config --get core.hooksPath)" = ".husky" ]'
 
+# --- 8. G1 regression: install-time plan/stdout artifacts must NEVER be
+#         installed into the target (they used to land inside SCRATCH, which
+#         source_files() rglobs as the render, so a 0-byte install-plan.stdout.json
+#         became an owned file at the target root). ---
+assert "G1: no install-plan* artifact leaks into the target tree" \
+  '[ "$(find "$TARGET" -name "install-plan*" | wc -l)" -eq 0 ]'
+assert "G1: the ownership manifest records no install-plan* path" \
+  '! grep -q "install-plan" "$TARGET/.harness/install-manifest.json"'
+
 echo
 if [ "$FAIL" -eq 0 ]; then
   echo "RESULT: ALL BROWNFIELD GATES PASSED (harness-install.sh e2e)"
