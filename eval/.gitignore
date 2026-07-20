@@ -1,0 +1,6 @@
+# raw per-run logs are bulky/environment-specific; keep the reusable script + curated FINDINGS.md
+*.sha256
+*.stdout
+*.stderr
+*-plan.json
+last-run-*/

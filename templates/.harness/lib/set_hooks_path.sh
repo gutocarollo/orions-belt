@@ -29,6 +29,14 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 CURRENT_HP="$(git config --get core.hooksPath 2>/dev/null || true)"
+# The pre-commit framework (pre-commit.com) writes to .git/hooks/pre-commit and
+# leaves core.hooksPath EMPTY. Setting core.hooksPath=.githooks makes git ignore
+# .git/hooks entirely, so it would SILENTLY disable those hooks (A2 for a manager
+# that does not announce itself via core.hooksPath). Detect it by its config file.
+PRECOMMIT_DETECTED=0
+if [ -f "$TARGET/.pre-commit-config.yaml" ] || [ -f "$TARGET/.pre-commit-config.yml" ]; then
+  PRECOMMIT_DETECTED=1
+fi
 HUSKY_HOOK="$TARGET/.husky/pre-commit"
 HUSKY_DETECTED=0
 if [ -e "$HUSKY_HOOK" ] || [ -L "$HUSKY_HOOK" ] || [ -L "$TARGET/.husky" ]; then
@@ -100,6 +108,12 @@ if [ -z "$CURRENT_HP" ]; then
     else
       echo "orions-belt: Husky detected at .husky/pre-commit while core.hooksPath is empty -- .githooks was NOT activated, because a later 'husky' prepare would replace it. Re-run with --chain-hooks to add the explicit idempotent chain." >&2
     fi
+  elif [ "$PRECOMMIT_DETECTED" -eq 1 ]; then
+    # pre-commit framework (.pre-commit-config.yaml) present, core.hooksPath empty.
+    # Setting it to .githooks would make git ignore .git/hooks/pre-commit (where
+    # `pre-commit install` writes), silently disabling the user's hooks. Do NOT set
+    # it; teach the idiomatic integration instead (A2, anti-clobber).
+    echo "orions-belt: pre-commit framework detected (.pre-commit-config.yaml) while core.hooksPath is empty -- .githooks was NOT activated, because setting core.hooksPath makes git ignore .git/hooks/pre-commit (where 'pre-commit install' writes), silently disabling your hooks. To run the harness ref-integrity WITHOUT displacing pre-commit, add a local hook to .pre-commit-config.yaml (repo: local; entry: bash .githooks/pre-commit; language: system; always_run: true). To hand hook control to the harness instead, run 'git config core.hooksPath .githooks' yourself. See docs/manual/14-instalacao-e-update.md." >&2
   elif git config core.hooksPath .githooks; then
     echo "orions-belt: core.hooksPath -> .githooks"
   else
