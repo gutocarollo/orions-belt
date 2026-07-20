@@ -40,6 +40,16 @@
             "statusMessage": "lessons: injecting lessons from prior sessions"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/harness-freshness.sh\"",
+            "timeout": 20,
+            "statusMessage": "orions-belt: checking install freshness"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

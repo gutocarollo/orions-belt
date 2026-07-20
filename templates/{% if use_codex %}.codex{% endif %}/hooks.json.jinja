@@ -87,6 +87,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/harness-freshness.sh\"",
+            "timeout": 20
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
