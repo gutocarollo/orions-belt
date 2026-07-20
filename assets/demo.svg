@@ -6,7 +6,7 @@
   <g font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="14">
     <text x="20" y="68"><tspan fill="#56d4dd">$ </tspan><tspan fill="#e6edf3">./harness-install.sh my-app --data project_name=my-app --defaults</tspan></text>
     <text x="20" y="98"><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">platform preflight</tspan><tspan fill="#8b98b8">  ·  Bash 5.2 · GNU coreutils · flock · python3</tspan></text>
-    <text x="20" y="126"><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">scan stack (no LLM)</tspan><tspan fill="#8b98b8"> · classify </tspan><tspan fill="#a5b4ff">APLICAVEL / CONDICIONAL / NAO_APLICAVEL</tspan></text>
+    <text x="20" y="126"><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">scan stack (no LLM)</tspan><tspan fill="#8b98b8"> · classify </tspan><tspan fill="#a5b4ff">applicable / conditional / n-a</tspan></text>
     <text x="20" y="154"><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">render → scratch → non-destructive merge</tspan><tspan fill="#8b98b8"> (never clobbers your files)</tspan></text>
     <text x="20" y="182"><tspan fill="#8b98b8">    create </tspan><tspan fill="#e6edf3">AGENTS.md</tspan><tspan fill="#8b98b8">   </tspan><tspan fill="#e6edf3">.claude/settings.json</tspan><tspan fill="#8b98b8">   </tspan><tspan fill="#e6edf3">.claude/CLAUDE.md</tspan></text>
     <text x="20" y="210"><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">core.hooksPath → .githooks</tspan><tspan fill="#8b98b8">    </tspan><tspan fill="#3fb950">✓ </tspan><tspan fill="#e6edf3">ds-gate ratchet baseline</tspan></text>
