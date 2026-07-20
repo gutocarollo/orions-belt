@@ -47,7 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/gutocarollo/orions-belt/main/harnes
 ```
 
 The installer runs a platform preflight, scans your stack **with zero LLM**, classifies every
-component as `APLICAVEL` / `CONDICIONAL` / `NAO_APLICAVEL`, renders to a scratch dir, and merges
+component as applicable / conditional / not-applicable, renders to a scratch dir, and merges
 in **additively** — `AGENTS.md`, `.claude/settings.json`, `.gitignore` get a marked block, never
 an overwrite. A full install is **189 files · 31 skills · 15 hooks**, and `git status` on your
 existing files stays clean.
@@ -59,7 +59,7 @@ existing files stays clean.
 | 🧭 | **Delivery council** | Orchestrates a task from `EXECUTION` / `PLANNING` / `PLAN_REVIEW` / `AUTO` with automatic trade-off decisions and adversarial loops. |
 | 🔬 | **Adversarial review** | Evidence-based verifier that must confirm or refute each gap with proof — runs in a subagent, never self-review. |
 | 🎯 | **grill-me** | Interviews you on a plan one decision at a time (behavior, ≥2 real good/bad examples, Option C) — before code is written. |
-| ✅ | **Completion gate** | A Stop hook that **blocks any "done" claim** without a `PROVA-DE-CONCLUSAO` block of this-session evidence. |
+| ✅ | **Completion gate** | A Stop hook that **blocks any "done" claim** without a proof-of-completion block of this-session evidence (the `PROVA-DE-CONCLUSAO` sentinel). |
 | 🖼️ | **UI-evidence** | Playwright before/after full-page PNGs + console + manifest; a Stop hook blocks shipping UI changes seen only as a diff. |
 | 📚 | **Karpathy wiki** | Temporal doc indexing; a pre-commit lint fails on orphaned docs or dead references. |
 | 🧠 | **Understand graph** | Incremental knowledge-graph refresh, triggered from the maintenance loop by a change threshold. |
@@ -77,20 +77,21 @@ flowchart LR
     A["task"] --> B{"START_AT"}
     B -- "PLANNING" --> P["plan + trade-offs"]
     P --> PR["subagent: adversarial plan review"]
-    PR -- "REPLANEJAR" --> P
-    PR -- "SABATINAR" --> G["grill-me: resolve D[n]"]
+    PR -- "replan" --> P
+    PR -- "grill" --> G["grill-me: resolve open decision"]
     G --> P
-    PR -- "SATISFEITO" --> E["execute (sequential)"]
+    PR -- "approved" --> E["execute (sequential)"]
     B -- "EXECUTION" --> E
     E --> V["subagent: adversarial verification"]
-    V -- "CORRIGIR" --> E
-    V -- "SATISFEITO" --> D["done — only with PROVA-DE-CONCLUSAO evidence"]
+    V -- "fix" --> E
+    V -- "approved" --> D["done — only with proof-of-completion evidence"]
 ```
 
-The **contract tokens** the gates and tests match (`PROVA-DE-CONCLUSAO`,
-`PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | SABATINAR | BLOQUEADO`, `GATE-GRILL`,
-severities) are a **fixed vocabulary** — the same in every language, so the deterministic layer
-never depends on prose.
+The diagram uses plain verbs, but the **actual status tokens** the gates and tests match are a
+**fixed contract vocabulary** — `PROVA-DE-CONCLUSAO`, `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO |
+REPLANEJAR | SABATINAR | BLOQUEADO`, `GATE-GRILL`, severities. They are byte-identical in every
+language (English *and* Portuguese instructions emit the same tokens), so the deterministic layer
+never depends on prose. Think of them as enum values, not words to translate.
 
 ## English or Portuguese
 
