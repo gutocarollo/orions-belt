@@ -1,0 +1,174 @@
+{#-
+  Fonte única (H3/A1, orions-belt) — ver comentário completo em
+  ../grill-me/SKILL.md.jinja (mesmo mecanismo de include).
+  Gerada nos dois runtimes só quando `use_ui_evidence=true` — os wrappers
+  reais (.claude/skills/{% raw %}{% if use_ui_evidence %}{% endraw %}ui-evidence{% raw %}{% endif %}{% endraw %}/
+  e .agents/skills/{% raw %}{% if use_codex and use_ui_evidence %}{% endraw %}ui-evidence{% raw %}{% endif %}{% endraw %}/)
+  carregam a condicional no NOME do diretório; este arquivo-fonte em si é
+  sempre materializado no repo do framework (excluído do copy via
+  copier.yml `_exclude`), então não precisa repetir o guard aqui dentro.
+-#}
+---
+name: ui-evidence
+description: >
+  Evidência visual OBRIGATÓRIA para qualquer trabalho de UI no {{ project_name }} —
+  capturas PNG full-page + erros de console + manifest auditável, por rota e
+  por tema (ver tests/visual/theme-map.config.ts). Use SEMPRE que alterar
+  {{ harness_web_app_dir }}/{app,components,styles}, antes de declarar trabalho visual pronto,
+  quando o usuário pedir prints/screenshots/before-after, e quando o Stop hook
+  ui-evidence-gate bloquear o turno. Report de UI a partir de diff de código,
+  sem pixel renderizado, é proibido.
+---
+
+# UI Evidence — pixels, não diffs
+
+Origem: adaptado de um protocolo do harness-doador de referência (UI entregue sem ser
+vista, toolchain de captura quebrada, prints colados à mão como único teste de
+regressão visual).
+
+## 0. Pré-requisito: instalar o motor (rode uma vez, não incluído automaticamente)
+
+O Copier materializa o MOTOR (os arquivos abaixo) em
+`{{ harness_web_app_dir }}/`, mas **não** edita o `package.json` do seu app
+— isso é conteúdo do projeto-alvo, fora do que o harness templateia. Antes
+do §1 funcionar, confirme os passos abaixo:
+
+1. **Arquivos do motor** (gerados por `use_ui_evidence: true`, plano de
+   resgate §R3) — devem existir em `{{ harness_web_app_dir }}/`:
+   - `scripts/ui-evidence.sh` — orquestrador (preflight + captura + manifest).
+   - `scripts/gen-visual-routes.mjs` — ESQUELETO gerador de `routes.json`;
+     preencha o TODO com as rotas reais do seu projeto (ou edite
+     `tests/visual/routes.json` direto — veja `routes.json.example`).
+   - `playwright.visual.config.ts` — config Playwright dedicada (viewports,
+     projeto `setup`, `maxDiffPixelRatio`).
+   - `tests/visual/evidence.spec.ts` — captura (rota × tema).
+   - `tests/visual/baseline.spec.ts` — regressão (`toHaveScreenshot`).
+   - `tests/visual/theme-map.config.ts` — **customize aqui** os temas reais
+     deste projeto (o default é um único tema `default`, sem manipulação de
+     classe/atributo/localStorage — genérico, não sabe do seu design system).
+   - `tests/visual/auth.setup.ts` — **STUB**: lança erro até você implementar
+     `loginForVisualEvidence(page)` (ver TODO no arquivo), ou apagar o
+     arquivo se as rotas capturadas forem 100% públicas.
+   - `tests/visual/routes.json` — seed mínimo (`[{"name":"home","path":"/"}]`).
+
+   Se algum desses arquivos NÃO existir, o motor não foi instalado
+   (`use_ui_evidence` estava `false` no `copier copy`, ou este projeto
+   antecede o R3) — rode `copier update` ou instale manualmente antes de
+   prosseguir; o Stop hook `ui-evidence-gate` fica INATIVO (fail-open) até
+   existir.
+
+2. **Wiring do `package.json`** (o harness NÃO edita isto — adicione à mão,
+   uma vez, em `{{ harness_web_app_dir }}/package.json` → `"scripts"`):
+
+   ```json
+   "ui:evidence": "bash scripts/ui-evidence.sh"
+   ```
+
+   Sem essa entrada, o hook `ui-evidence-gate` detecta "comando não wired" e
+   não bloqueia (fail-open) — a presença de `scripts/ui-evidence.sh` no disco
+   SOZINHA não conta: o gate exige o script `"ui:evidence"` dentro do
+   `package.json` (é a única prova de que o comando roda de verdade). Self-check
+   rápido: `grep -q '"ui:evidence"' {{ harness_web_app_dir }}/package.json`.
+
+3. **Dependência `@playwright/test`** — os arquivos do motor (`playwright.visual.config.ts`,
+   `tests/visual/*.spec.ts`) importam `@playwright/test`; o Copier não instala
+   pacotes npm. Adicione como devDependency (`npm install -D @playwright/test`)
+   e instale o browser: `npx playwright install chromium` (ver "Chromium" em §3 abaixo).
+
+## 1. Comando canônico
+
+```bash
+cd {{ harness_web_app_dir }} && npm run ui:evidence -- <label> [--routes /a,/b] [--themes <csv de tests/visual/theme-map.config.ts>] [--project desktop|mobile-md|tablet]
+```
+
+- `<label>`: `before` (ANTES de mexer) | `after` (depois) | slug livre.
+- Sem `--routes`: todas as rotas de `tests/visual/routes.json`.
+- Sem `--themes`: TODOS os temas declarados em `tests/visual/theme-map.config.ts`.
+- Saída: `{{ harness_evidence_dir }}/<label>/` → `<rota>__<tema>__<projeto>.png` +
+  `.meta.json` (HTTP status + erros de console) + `manifest.json` (sha256,
+  git HEAD, timestamp) — o manifest é o que o Stop hook procura.
+
+## 2. Protocolo before/after (mudança visual intencional)
+
+1. ANTES de editar: `npm run ui:evidence -- before --routes <afetadas>`.
+2. Edite.
+3. `npm run ui:evidence -- after --routes <afetadas>`.
+4. OLHE os PNGs (Read) — before vs after, em TODOS os temas. Confirme:
+   a mudança pretendida aconteceu; nada mais mudou; `consoleErrors` não cresceu.
+5. Só então reporte, linkando os paths dos PNGs no veredito.
+
+## 3. Fatos do ambiente (a maioria das falhas históricas vem daqui)
+
+- **Alvo dev = http://localhost:{{ harness_dev_web_port }}.**{% if harness_reserved_ports %} A porta {{ harness_reserved_ports }} pode estar
+  ocupada por outra ferramenta local — o preflight do script detecta e aborta.{% endif %}
+  {%- if project_name %} Suba a stack com a skill `run-{{ project_name }}` se o preflight falhar.{% endif %}
+- **Auth:** `tests/visual/auth.setup.ts` é um **STUB** (§0) — lança erro até
+  você implementar `loginForVisualEvidence(page)` para este projeto, ou
+  apagar o arquivo se as rotas capturadas forem 100% públicas. Não assume
+  nenhum helper de e2e pré-existente.
+- **Temas:** a matriz real vive em `tests/visual/theme-map.config.ts` — o
+  default de fábrica é um único tema `default` sem manipulação de
+  classe/atributo/localStorage. Customize lá (brand via atributo, modo
+  claro/escuro via classe `.dark`, seed de localStorage pré-hidratação —
+  o que este projeto usar). `HARNESS_UI_EVIDENCE_THEMES` ({{ harness_ui_evidence_themes }})
+  é só o hint de default documentado aqui — quem decide os temas capturáveis
+  de fato é o `theme-map.config.ts`.
+- **Chromium:** binários em `~/.cache/ms-playwright/chromium-*`; se o
+  preflight acusar ausência: `cd {{ harness_web_app_dir }} && npx playwright install chromium`.
+
+## 4. MCP Playwright/chrome-devtools vs este script
+
+MCP = exploração INTERATIVA e debug (clicar, inspecionar, fluxo ao vivo).
+Evidência FINAL de entrega = SEMPRE este script (determinístico, com manifest
+e console anexados; snapshots MCP ficam stale e não deixam prova auditável).
+
+## 5. Stop hook ui-evidence-gate
+
+Bloqueia fim de turno com `{{ harness_web_app_dir }}/{app,components,styles}/*.tsx|css`
+alterados sem manifest mais novo que a mudança. Escapes legítimos:
+- rodar o comando canônico (§1);
+- mudança comprovadamente não-visual ou stack fora do ar:
+  `touch {{ harness_evidence_dir }}/SKIP` (vale {{ harness_ui_evidence_skip_ttl_seconds // 3600 }}h) e DECLARAR o motivo no veredito.
+Fabricar SKIP para pular validação visual de mudança visual = violação.
+
+## 6. Assertions de regressão (complementar)
+
+`tests/visual/baseline.spec.ts` (toHaveScreenshot com baselines commitadas)
+continua sendo o teste de REGRESSÃO. Este skill produz EVIDÊNCIA de revisão.
+Não confundir: baseline falha build; evidence informa humano/agente.
+
+## 7. Avaliador de PAR de contraste{% if use_ds_gate %} — `.harness/lib/ds-pair-eval.py`{% endif %}
+
+{% if use_ds_gate -%}
+Instalado por `use_ds_gate` (ligado neste projeto): ao tokenizar, o erro
+clássico é trocar a cor do TEXTO sem checar o FUNDO — `text-foreground` sobre
+`bg-white` fixo fica branco-sobre-branco no dark; `text-white` sobre
+`bg-muted` (token neutro) some no light. Uma função assim julga um par
+determinísticamente nos temas do projeto (`PROJECT_THEMES` do
+`.harness/harness.conf`), sem olhar pixel.
+
+```bash
+python3 .harness/lib/ds-pair-eval.py --text text-foreground --bg bg-white           # → FAIL no dark
+python3 .harness/lib/ds-pair-eval.py --text text-primary-foreground --bg bg-primary # → PASS (botão de marca)
+python3 .harness/lib/ds-pair-eval.py --text text-muted-foreground --bg bg-card --non-text
+echo '[{"text":"text-white","bg":"bg-muted"}]' | python3 .harness/lib/ds-pair-eval.py --batch  # lote JSON
+```
+
+Resolve tokens do globals.css por tema (com herança da cascata) + paleta Tailwind
+crua (slate/zinc/neutral/gray/stone/white/black); compõe opacidade (`/70`). Imprime
+ratio+PASS/FAIL por tema e o veredito "se enquadra / NÃO se enquadra + temas que
+falham". Exit 1 se falhar em algum tema (usável em gate e por subagents de auditoria).
+
+**Quando um par SE ENQUADRA:** o texto contrasta ≥4,5:1 (texto) / ≥3:1 (non-text)
+com o fundo REAL em TODOS os temas. Fundo real = subir no DOM até a superfície que
+pinta atrás. Par válido = texto e fundo do MESMO eixo (ambos tokens neutros que
+adaptam juntos, ou ambos fixos pareados). Misturar token-texto + fundo-fixo (ou
+vice-versa) é o que quebra — é o que esta função pega.
+{%- else -%}
+Não instalado neste projeto (`use_ds_gate: false`). Se este projeto tiver um
+avaliador de contraste equivalente, ele resolve o mesmo problema: julgar
+deterministicamente se um par texto×fundo se enquadra (≥4,5:1 texto / ≥3:1
+non-text) em TODOS os temas do projeto sem depender de olhar pixel — o erro
+clássico é trocar a cor do TEXTO sem checar o FUNDO (`text-foreground` sobre
+`bg-white` fixo vira branco-sobre-branco no dark).
+{%- endif %}

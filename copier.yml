@@ -119,6 +119,16 @@ _exclude:
   # mesma regra de exclusão nominal.
   - "/.harness/skills-shared/delivery-council/SKILL.md"
   - "/.harness/skills-shared/adversarial-review/SKILL.md"
+  # i18n (harness_language): variantes .pt/.en das skills são FONTE dos selectors
+  # SKILL.md.jinja ({% raw %}{% include "..." ~ harness_language ~ "..." %}{% endraw %});
+  # só o selector renderiza (SKILL.md, já excluído acima). AGENTS.pt/.en idem
+  # (o selector AGENTS.md.jinja renderiza AGENTS.md real); loop.pt/.en vivem em
+  # .harness/i18n/ (dir 100% fonte, excluído inteiro).
+  - "/.harness/skills-shared/*/SKILL.pt.md"
+  - "/.harness/skills-shared/*/SKILL.en.md"
+  - "/AGENTS.pt.md"
+  - "/AGENTS.en.md"
+  - "/.harness/i18n/*"
 
 # _tasks — 1 post-gen task (R5, plano de resgate §2 P0 item "camada de enforcement da wiki").
 # Ativa `.githooks/pre-commit` (sempre materializado, incondicional — ver
@@ -242,6 +252,20 @@ git_remote_url:
 # para has_prod_stack (movido para o bloco PROD, antes de
 # harness_mcp_db_prod_port, que tinha o mesmo bug).
 # =========================================================================
+harness_language:
+    type: str
+    help: >-
+        Idioma das INSTRUÇÕES de prosa (CLAUDE.md/AGENTS.md, skills, council,
+        loop). `en` = inglês (canônico para adoção open-source); `pt` =
+        português. Os tokens de contrato determinístico (sentinels tipo
+        PROVA-DE-CONCLUSAO / PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | ... e
+        os nomes de variável HARNESS_*) NÃO são traduzidos — são vocabulário
+        fixo casado por hooks/testes, idêntico nos dois idiomas.
+    choices:
+        English (en): en
+        Português (pt): pt
+    default: en
+
 use_claude:
     type: bool
     help: Gerar as superfícies do Claude Code (.claude/, CLAUDE.md, .agents/skills)?

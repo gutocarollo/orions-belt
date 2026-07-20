@@ -56,8 +56,11 @@ CODEX_ROOT = ROOT / "{% if use_codex %}.codex{% endif %}"
 # só {% raw %}{% include %}{% endraw %}); os testes de PARIDADE/gate
 # simétrico (test_codex_parity.py / test_skill_runtime_parity.py) leem os
 # dois wrappers via render real.
-COUNCIL = ROOT / ".harness/skills-shared/delivery-council/SKILL.md.jinja"
-ADVERSARIAL = ROOT / ".harness/skills-shared/adversarial-review/SKILL.md.jinja"
+# i18n: SKILL.md.jinja virou selector ({% include ... harness_language ...); o conteúdo
+# real vive em SKILL.{pt,en}.md.jinja. Este teste asserta a fonte PT (strings PT + sentinels);
+# os sentinels são idênticos nos 2 idiomas (contrato fixo), então o gate independe do idioma.
+COUNCIL = ROOT / ".harness/skills-shared/delivery-council/SKILL.pt.md.jinja"
+ADVERSARIAL = ROOT / ".harness/skills-shared/adversarial-review/SKILL.pt.md.jinja"
 REVIEWER = CODEX_ROOT / "agents/{{ project_name }}-adversarial-reviewer.toml.jinja"
 
 

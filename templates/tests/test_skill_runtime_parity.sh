@@ -121,7 +121,7 @@ done
 assert "council renderizado tem os sentinels reais (não é stub vazio)" \
   'grep -q "PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | SABATINAR | BLOQUEADO" "$BOTH/.claude/skills/$COUNCIL_SKILL/SKILL.md"'
 assert "adversarial-review renderizado tem o protocolo real (não é stub vazio)" \
-  'grep -q "Protocolo sequencial" "$BOTH/.claude/skills/adversarial-review/SKILL.md"'
+  'grep -q "ADVERSARIAL-VERIFICATION" "$BOTH/.claude/skills/adversarial-review/SKILL.md"'
 
 # =============================================================================
 # grep de termos do doador/outros projetos do dono = 0 (path-neutro obrigatório)

@@ -1,0 +1,79 @@
+{#-
+  Fonte única (H3/A1, orions-belt) — ver comentário completo em
+  ../grill-me/SKILL.md.jinja (mesmo mecanismo de include).
+
+  Skill NOVA (não existia em nenhum runtime antes desta rodada — achado real
+  da auditoria: AGENTS.md.jinja e prova-de-conclusao/SKILL.md.jinja já CITAM
+  a skill `verify` desde F1.6, mas o pacote nunca materializou o arquivo.
+  Conteúdo genérico próprio deste framework, não um clone do skill builtin
+  homônimo de nenhum produto específico — cobre o mesmo papel (evidência de
+  comportamento real para mudança pontual) usando só os primitivos que o
+  próprio orions-belt já instala: a skill `run-{{ project_name }}` (se
+  existir) e a skill `ui-evidence` (se `use_ui_evidence`).
+-#}
+---
+name: verify
+description: >
+  Verifica que uma mudança de código PONTUAL (1 bug, 1 arquivo, 1 endpoint,
+  1 feature pequena) faz o que deveria, exercitando o fluxo afetado
+  ponta-a-ponta — não só rodando teste/typecheck ou lendo o diff. Use antes
+  de declarar uma correção pontual pronta. Para claims de nível de PLANO
+  (percentual, "tudo corrigido", múltiplos itens) use a skill
+  `prova-de-conclusao` em vez desta — o completion-gate não bloqueia claims
+  de mudança única, mas essa liberdade não desculpa reportar sem observar
+  comportamento real.
+---
+
+# Verify
+
+Complementa `prova-de-conclusao`: mudança única não precisa da tabela nem do
+sentinel `PROVA-DE-CONCLUSAO: x/y PASS, gaps: [...]` — precisa de EVIDÊNCIA
+DE COMPORTAMENTO real, não de leitura de diff.
+
+## Quando usar
+
+- Corrigiu 1 bug, 1 arquivo, 1 endpoint, 1 função — não uma auditoria/plano
+  de N itens (para isso, `prova-de-conclusao`).
+- NÃO use para diff que só toca teste ou doc sem superfície de execução
+  própria (nada para observar rodando) — nesse caso a suíte de testes já É
+  a prova.
+
+## Procedimento
+
+1. **Suba o app**, se a mudança tiver superfície de runtime: use a skill
+   `run-{{ project_name }}` se este projeto tiver uma (levanta infra +
+   backend{% if harness_dev_api_port %} `:{{ harness_dev_api_port }}`{% endif %} +
+   frontend{% if harness_dev_web_port %} `:{{ harness_dev_web_port }}`{% endif %}).
+   Se não houver skill de run, use o comando de start real do projeto
+   (`package.json`/`Makefile`/`docker-compose`).
+2. **Exercite o fluxo afetado de verdade** — não apenas rode a suíte de
+   testes existente:
+   - Endpoint: `curl` real contra a rota mudada, com o payload que dispara
+     o código alterado (`curl -s -o /dev/null -w '%{http_code}' ...`).
+   - UI: siga o protocolo da skill `ui-evidence`{% if use_ui_evidence %} (instalada
+     neste projeto — captura antes/depois, veja `{{ harness_evidence_dir }}/`){% else %}
+     (não instalada neste projeto — `use_ui_evidence: false`; captura manual e
+     honesta no veredito é o mínimo aceitável){% endif %} se a mudança tocar
+     `{{ harness_web_app_dir }}/{app,components,styles}`.
+   - Query/dado: rode a query real no banco (MCP dev, se configurado) e
+     confira o resultado — não assuma o schema.
+3. **Observe o resultado real** (status code, output, screenshot, linha de
+   log) — "deve funcionar" não é evidência.
+4. Se o comportamento não bate com o esperado: pare, diagnostique causa
+   raiz, corrija, repita o passo 2 antes de declarar pronto.
+
+## Diferença de `prova-de-conclusao`
+
+| | `verify` | `prova-de-conclusao` |
+|---|---|---|
+| Escopo | 1 mudança pontual | Claim de nível de plano (percentual, "tudo corrigido") |
+| Formato de saída | Nenhum sentinel obrigatório | Tabela + `PROVA-DE-CONCLUSAO: x/y PASS, gaps: [...]` |
+| Gate automático | Não bloqueia o Stop hook | `completion-gate` bloqueia sem o sentinel completo |
+
+## Anti-padrão
+
+Reportar "corrigido" citando só o diff ou a leitura do código, sem ter
+rodado o app/endpoint/query afetado nesta sessão, é o mesmo erro que
+`prova-de-conclusao` proíbe para claims de plano — só que sem o gate
+automático te parando. A ausência de bloqueio não é licença para pular a
+verificação.

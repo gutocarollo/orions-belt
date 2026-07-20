@@ -1,0 +1,79 @@
+{#-
+  Single source (H3/A1, orions-belt) — see the full comment in
+  ../grill-me/SKILL.md.jinja (same include mechanism).
+
+  NEW skill (didn't exist in any runtime before this round — a real finding
+  from the audit: AGENTS.md.jinja and prova-de-conclusao/SKILL.md.jinja already CITE
+  the `verify` skill since F1.6, but the package never materialized the file.
+  Generic content of this framework's own, not a clone of the builtin skill
+  of the same name from any specific product — it covers the same role (evidence
+  of real behavior for a pointed change) using only the primitives that
+  orions-belt itself already installs: the `run-{{ project_name }}` skill (if
+  it exists) and the `ui-evidence` skill (if `use_ui_evidence`).
+-#}
+---
+name: verify
+description: >
+  Verifies that a POINTED code change (1 bug, 1 file, 1 endpoint,
+  1 small feature) does what it should, exercising the affected flow
+  end-to-end — not just running tests/typecheck or reading the diff. Use before
+  declaring a pointed fix done. For PLAN-level claims
+  (percentage, "everything fixed", multiple items) use the
+  `prova-de-conclusao` skill instead of this one — the completion-gate does not block claims
+  of a single change, but that freedom doesn't excuse reporting without observing
+  real behavior.
+---
+
+# Verify
+
+Complements `prova-de-conclusao`: a single change doesn't need the table nor the
+`PROVA-DE-CONCLUSAO: x/y PASS, gaps: [...]` sentinel — it needs EVIDENCE
+OF real BEHAVIOR, not a diff read.
+
+## When to use
+
+- You fixed 1 bug, 1 file, 1 endpoint, 1 function — not an audit/plan
+  of N items (for that, `prova-de-conclusao`).
+- Do NOT use for a diff that only touches tests or docs with no execution
+  surface of its own (nothing to observe running) — in that case the test suite already IS
+  the proof.
+
+## Procedure
+
+1. **Bring the app up**, if the change has a runtime surface: use the
+   `run-{{ project_name }}` skill if this project has one (brings up infra +
+   backend{% if harness_dev_api_port %} `:{{ harness_dev_api_port }}`{% endif %} +
+   frontend{% if harness_dev_web_port %} `:{{ harness_dev_web_port }}`{% endif %}).
+   If there's no run skill, use the project's real start command
+   (`package.json`/`Makefile`/`docker-compose`).
+2. **Actually exercise the affected flow** — not just run the existing
+   test suite:
+   - Endpoint: real `curl` against the changed route, with the payload that triggers
+     the altered code (`curl -s -o /dev/null -w '%{http_code}' ...`).
+   - UI: follow the `ui-evidence` skill's protocol{% if use_ui_evidence %} (installed
+     in this project — before/after capture, see `{{ harness_evidence_dir }}/`){% else %}
+     (not installed in this project — `use_ui_evidence: false`; manual and
+     honest capture in the verdict is the minimum acceptable){% endif %} if the change touches
+     `{{ harness_web_app_dir }}/{app,components,styles}`.
+   - Query/data: run the real query against the database (dev MCP, if configured) and
+     check the result — don't assume the schema.
+3. **Observe the real result** (status code, output, screenshot, log
+   line) — "should work" is not evidence.
+4. If the behavior doesn't match what's expected: stop, diagnose the root
+   cause, fix, repeat step 2 before declaring done.
+
+## Difference from `prova-de-conclusao`
+
+| | `verify` | `prova-de-conclusao` |
+|---|---|---|
+| Scope | 1 pointed change | Plan-level claim (percentage, "everything fixed") |
+| Output format | No mandatory sentinel | Table + `PROVA-DE-CONCLUSAO: x/y PASS, gaps: [...]` |
+| Automatic gate | Doesn't block the Stop hook | `completion-gate` blocks without the complete sentinel |
+
+## Anti-pattern
+
+Reporting "fixed" citing only the diff or the code read, without having
+run the affected app/endpoint/query in this session, is the same error that
+`prova-de-conclusao` forbids for plan claims — only without the automatic
+gate stopping you. The absence of blocking is not a license to skip
+verification.

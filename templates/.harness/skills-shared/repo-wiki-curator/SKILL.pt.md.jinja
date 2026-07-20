@@ -1,0 +1,81 @@
+{#-
+  Fonte única (H3/A1, orions-belt) — ver comentário completo em
+  ../grill-me/SKILL.md.jinja (mesmo mecanismo de include). Path
+  relativo abaixo (`../../../docs/SCHEMA.md`) é sobre a profundidade do
+  arquivo FÍSICO final (.claude/skills/repo-wiki-curator/SKILL.md ou
+  .agents/skills/repo-wiki-curator/SKILL.md — 3 níveis até a raiz do
+  projeto-alvo nos dois casos), não a profundidade deste arquivo-fonte —
+  {% raw %}{% include %}{% endraw %} substitui o corpo no destino final, o
+  link markdown viaja com o texto renderizado, resolvido relativo ao arquivo
+  de SAÍDA, não a este arquivo-fonte.
+-#}
+---
+name: repo-wiki-curator
+description: >-
+  Use para indexar, curar, auditar, renomear e reorganizar QUALQUER documentação do
+  repositório {{ project_name }} (não só design-system) no padrão Karpathy LLM Wiki
+  temporal. Cobre planos, auditorias, ADRs, arquitetura, design-system, commercial,
+  developers, reuniões, qa-evidence. Aciona quando a tarefa mencionar: curadoria de
+  docs, indexação temporal, naming de arquivos, documento órfão/ambíguo, doc legado vs
+  atual, limpar docs/, Karpathy, LLM wiki.
+---
+
+# Repo Wiki Curator
+
+Curadoria contínua da documentação do repositório inteiro. Objetivo estratégico e regras: **leia primeiro
+[`docs/SCHEMA.md`](../../../docs/SCHEMA.md)** — este SKILL é o procedimento operacional daquela constituição.
+
+## Escopo
+
+Todo `docs/` — `planos/`, `auditorias/`, `adr/`, `architecture/`, `design-system/`, `commercial/`,
+`developers/`, `reunioes/`, `qa-evidence/`, `_arquivo/`. Não é só design-system (esse é apenas uma
+categoria, com sub-schema próprio em `docs/design-system/SCHEMA.md`).
+
+## Contrato
+
+1. **Ler `docs/SCHEMA.md`** antes de tocar em qualquer doc.
+2. **Naming (SCHEMA §2):** `kebab-case` minúsculo; classe temporal define a data no nome —
+   `living` = `slug.md` (sem data), `event` = `YYYY-MM-DD-slug.md` (prefixo), `sequenced` = `NNNN-slug.md`.
+   Exceções em caps: `README/SCHEMA/CLAUDE/AGENTS/LICENSE`. FULL-CAPS e Title-Case são violação.
+3. **Frontmatter** (SCHEMA §3): `title/status/updated/scope`. `status ∈ {canon, active, superseded, historico, proposta}`.
+4. **Dupla indexação temporal** (SCHEMA §4): todo `.md` no `index.md` da categoria + no `docs/log.md` de repo.
+5. **Prune = git é o arquivo** (SCHEMA §5): `superseded`/`historico` resolvido, PDF render, JSON regenerável e
+   print de QA saem do working tree (git preserva); nunca deletar o que ainda informa o estado atual.
+6. **Nunca marcar `canon` plano que o código atual não confirma.** Verdade viva = código, não doc.
+
+## Procedimento
+
+1. `find docs -name "*.md"` + `find docs -type f ! -name "*.md"` — inventário; compare contra `docs/index.md`,
+   `docs/log.md` e o `index.md` de cada categoria.
+2. Para cada doc: leia título, veredicto, data, status de execução ANTES de classificar. Ambíguo/legado →
+   confira contra o código real (o doc mente? o código confirma?).
+3. **Naming:** renomeie violações com `git mv` (preserva história), **uma por vez**, atualizando TODAS as
+   refs a ela (`grep -rl` no repo) antes de seguir — migração sequencial (LEI ZERO §6), nunca batch.
+   Após a passada de renames/deletes, valide com `python3 .harness/lib/ref_integrity.py --range <base>..HEAD`
+   (detector git-aware de refs órfãs; protocolo de correção na skill `ref-integrity`) — é o guard que
+   pega a citação esquecida que o `grep -rl` manual deixou passar.
+4. Atualize `index.md` (categoria) + `docs/log.md` (`## [YYYY-MM-DD] tipo · categoria`, append-only).
+5. Sub-wiki densa (design-system): atualize também `wiki/` e o SCHEMA especializado.
+6. Prune o superseded/resolvido (git rm) e registre no log.
+7. `python3 .harness/lib/docs_wiki_lint.py` — deve ficar verde (ou justificar exceção no próprio script).
+   Se a passada renomeou/deletou arquivos: `python3 .harness/lib/ref_integrity.py --range <base>..HEAD`
+   também verde (`.githooks/pre-commit` re-checa no próximo commit, se `core.hooksPath` estiver
+   apontado pra lá — skill `ref-integrity` cobre a ativação e a exceção de `use_pre_commit_framework`;
+   o loop `.claude/loop.md` roda `--since` como backstop independente de hook local, só quando
+   `use_claude=true` — sem equivalente nativo no Codex, ver `docs/manual/15-limitacoes-conhecidas.md`).
+
+## Saída esperada
+
+- docs adicionados/reclassificados no índice (status);
+- docs renomeados (de→para) e refs atualizadas;
+- docs pruned (com como recuperar via git);
+- backlog de naming restante (o que fica para próximas passadas do loop);
+- resultado de `python3 .harness/lib/docs_wiki_lint.py`;
+- resultado de `python3 .harness/lib/ref_integrity.py --range <base>..HEAD` quando houve rename/delete.
+
+## Guardrail
+
+Curadoria é incremental e contínua (roda no `.claude/loop.md` quando `use_claude=true`; sem esse
+runtime, um cron externo chamando o agente em modo não-interativo com o mesmo checklist é o
+equivalente). Não fazer mutirão de 80 renames num turno — 1 categoria por passada, testada. O
+objetivo é o repo ficar navegável para IA, não perfeito de uma vez.

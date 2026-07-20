@@ -1,0 +1,92 @@
+{#-
+  Single source (H3/A1, orions-belt) — see the full comment in
+  ../grill-me/SKILL.md.jinja (same mechanism: this file is not
+  copied to the target project, only included by the .claude/skills/ and
+  .agents/skills/ wrappers). Runtime-neutral skill: it cites "Stop hook completion-gate",
+  an event NAME that exists in both runtimes (confirmed Codex also
+  has a Stop event via WebFetch learn.chatgpt.com/docs/hooks in this session).
+-#}
+---
+name: prova-de-conclusao
+description: >
+  Mandatory gate before ANY plan-level completion claim —
+  "100%", "plan executed", "everything fixed/implemented", completion
+  percentage, "ready for production/homologation", "gaps zeroed" — and whenever
+  {{ owner_name }} asks "what is missing for 100%?", requests the % calculation memo,
+  or pastes an external audit to reconcile. It is also the protocol required
+  by the Stop hook completion-gate when it blocks a verdict. Produces the
+  PROVA-DE-CONCLUSAO block with raw evidence per item.
+---
+
+# Prova de Conclusão
+
+Origin: adapted from a protocol of the reference donor-harness (friction audit) —
+completion claims that external adversarial audits later knocked down. This protocol
+replaces self-optimism with raw evidence.
+
+## 1. When to use (tiers)
+
+- **FULL protocol (this file)**: plan-level claims — percentages,
+  "plan executed", multi-item deliveries, response to "what is missing for 100%?",
+  reconciliation of an external audit pasted into the chat.
+- **Single change** (1 bug, 1 file, 1 small feature): use the built-in skill
+  `verify` (exercise the flow end to end) — it needs neither the table nor the
+  sentinel, and the completion-gate does not block single-change claims.
+
+## 2. Verdict contract (mandatory format)
+
+Table with one row per declared item:
+
+| ID | Item | Evidence type | Command executed | Raw output (summary) | PASS/FAIL |
+|----|------|---------------|------------------|----------------------|-----------|
+
+Last line of the verdict, literal (the Stop hook `completion-gate` looks for it):
+
+```
+PROVA-DE-CONCLUSAO: <x>/<y> PASS, gaps: [<ids> ou 'nenhum']
+```
+
+`x` = PASS items, `y` = total items in the claim. If `x < y`, the verdict text
+must NOT contain "100%", "everything", "complete" — declare the gaps.
+
+## 3. Fixed percentage rules
+
+1. **Denominator** = only items executable by the team.{% if has_prod_stack %} Client infra
+   (Teams/Zoom, the client's SSO IdP, their network/DNS) stays OUT of the denominator —
+   {{ owner_name }}'s rule ("what is client infra should not count toward our 100%").{% endif %}
+2. A **PARTIAL item counts as 0** in the numerator. There is no half-PASS.
+3. **Evidence is from THIS session**: a command run now, with visible output.
+   Evidence from memory/a previous session does not count — re-run it.
+{%- if has_prod_stack %}
+4. A claim about **prod** requires evidence at the prod target (URLs {{ prod_public_web_url }}
+   or the registry `{{ prod_registry_url }}/{{ prod_stack_prefix }}-*`, `docker service ps`),
+   NEVER on localhost:{{ harness_dev_web_port }}/{{ harness_dev_api_port }}.
+{%- endif %}
+5. A static claim ("the rule exists", "the gate is there") requires `grep` with
+   **path + Line** in the output.
+
+## 4. Accepted evidence types
+
+- Command + **exit code** (tests: literal `N passed / M failed` count).
+- `grep -n` with path + line.
+- `ui-evidence` manifest (before/after screenshots) for visual claims.
+- `curl -s -o /dev/null -w '%{http_code}'` on the real URL for endpoint claims.
+{%- if has_prod_stack %}
+- `docker service ps`/registry digest for deploy claims.
+{%- endif %}
+
+## 5. Prohibitions
+
+- A percentage without a calculation memo (list of the y items and status of each).
+- "Should work", "probably ok", inferred evidence.
+- Marking PASS with a partially red test ("0 regression" requires the baseline vs
+  current count in the table).
+- Omitting items from the original claim to inflate the %.
+
+## 6. If the completion-gate blocks your verdict
+
+The block means: a plan claim without the sentinel. Two legitimate ways out:
+(a) run this protocol and emit the table + sentinel; or
+(b) if there is no evidence for everything, rewrite the verdict without the
+completion claim, listing explicitly what is missing. Fabricating the sentinel without running
+the commands is the maximum violation of this contract.

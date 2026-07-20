@@ -1,0 +1,96 @@
+{#-
+  Single source (H3/A1, orions-belt) — see the full comment in
+  ../grill-me/SKILL.md.jinja (same include mechanism).
+
+  Content FIX applied in this migration (not just relocation — a real finding):
+  the previous version of this SKILL.md (only in .claude/skills/marathon/) hardcoded
+  the literal path `.claude/runs/...` in 6 places, contradicting the rest of the
+  framework — AGENTS.md.jinja already references `{{ harness_runs_dir }}` (a variable),
+  and the hooks themselves (marathon-stop-gate.sh, marathon-reinject.sh,
+  marathon-precompact.sh) already read HARNESS_RUNS_DIR from .harness/harness.conf,
+  not a fixed path. If this skill were materialized as-is for Codex
+  (H3/A1), it would instruct the agent to `mkdir -p .claude/runs/...` in a project that
+  may not even have a `.claude/` folder (use_codex=true/use_claude=false) — corrected
+  to use `{{ harness_runs_dir }}` everywhere, like the rest of the stack.
+-#}
+---
+name: marathon
+description: >
+  Harness for LONG/autonomous executions in {{ project_name }}: multi-wave plans,
+  subagent pipelines, E2E checklists, any execution estimated at >1h or
+  >3 phases. Use ALWAYS when the user says "run all the waves", "finish
+  everything", "go all the way", "don't stop", "/goal ...", or when RESUMING work
+  when {{ harness_runs_dir }}/ACTIVE exists. Creates durable state in
+  {{ harness_runs_dir }}/ that survives compaction and feeds the hooks
+  marathon-stop-gate and marathon-reinject. Do NOT use for short
+  single-session tasks.
+---
+
+# Marathon — durable state for long executions
+
+Origin: adapted from a protocol of the reference donor-harness ("CONTINUE" typed
+several times, context lost in compaction, the project owner as the message bus
+between sessions).
+
+## 1. Marathon start (scaffolding)
+
+```bash
+SLUG=<short-kebab-of-the-mission>   # ex: migracao-tokens
+mkdir -p {{ harness_runs_dir }}/$SLUG
+echo "$SLUG" > {{ harness_runs_dir }}/ACTIVE
+```
+
+Create `{{ harness_runs_dir }}/$SLUG/RUN.md` with EXACTLY this skeleton (hard cap
+~150 lines — it is reinjected into context after compaction):
+
+```markdown
+# RUN: <slug>
+goal: <1 sentence — the verifiable final state>
+started: <YYYY-MM-DD HH:MM>
+
+## Checklist (source of truth — update after EACH item)
+- [ ] <verifiable item 1>
+- [ ] <item 2>
+
+## Next action
+<1 imperative and specific line — never empty while there is an open item>
+
+## Decisions and facts (append-only, 1 line each)
+- <user decision, test credential, canonical path, discovered gotcha>
+
+## Journal (1 line per milestone)
+- <HH:MM> <what closed / what broke>
+```
+
+## 2. Discipline during execution
+
+1. Closed an item → `- [x]` + update "Next action" + line in the Journal.
+   That is WHAT survives compaction — the conversation context does not.
+2. User decision ("A, not B"), constraint ("NEVER X"), credential or
+   gotcha → line in "Decisions" RIGHT AWAY. Never re-ask what is already there.
+3. Subagents: max **{{ harness_subagent_max_concurrent }} concurrent** (the
+   subagent-throttle hook blocks the next one).
+4. Real blocker (missing user decision) → record it in "Next action"
+   as `WAITING: <objective question>` and only then stop.
+
+## 3. Resumption (post-compaction, new session, "continue")
+
+The `marathon-reinject` hook injects the RUN.md automatically on resume/compact.
+Protocol: read Checklist + Next action → execute the Next action. No
+re-planning from scratch, no re-asking recorded decisions.
+
+## 4. Marathon end
+
+1. Run `prova-de-conclusao` against the Checklist.
+2. `rm {{ harness_runs_dir }}/ACTIVE && mkdir -p {{ harness_runs_dir }}/done && mv {{ harness_runs_dir }}/$SLUG {{ harness_runs_dir }}/done/`
+3. What became permanent knowledge (gotcha, canonical pattern) → memory
+   or a doc, it does not stay only in the archived RUN.md.
+
+## 5. Hooks this state feeds
+
+- `marathon-stop-gate` (Stop): with ACTIVE + open items, it blocks the stop
+  and returns the Next action ({{ harness_marathon_max_blocks_without_progress }} strikes
+  without progress → releases with a warning, does not trap forever). Force close:
+  `rm {{ harness_runs_dir }}/ACTIVE`.
+- `marathon-reinject` (SessionStart resume/compact): injects the RUN.md.
+- `marathon-precompact` (PreCompact): marks the compaction in the Journal.

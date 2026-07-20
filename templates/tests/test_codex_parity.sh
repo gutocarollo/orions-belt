@@ -69,8 +69,12 @@ assert "(a) .agents/skills existe" '[ -d "$BASE/.agents/skills" ]'
 #     .agents/skills, com frontmatter YAML válido (--- na 1a linha, sem
 #     linha em branco antes)
 # =============================================================================
-CITED="$(grep -oE 'skill `[a-z][a-z0-9-]*`' "$BASE/AGENTS.md" | sed -E 's/skill `//;s/`//' | sort -u)"
-assert "(b) AGENTS.md cita ao menos 5 skills (sanity do grep)" \
+# neutro de idioma (i18n harness_language): captura refs de skill em QUALQUER frasing —
+# "skill `x`" (PT), "`x` skill" (EN) e "$x" (invocação, idêntica nos 2) — não só a frase PT.
+# Só refs adjacentes a "skill"/"$" entram (não pega CSS/hook/token soltos em backtick).
+CITED="$(grep -oE 'skill `[a-z0-9-]+`|`[a-z0-9-]+` skill|\$[a-z][a-z0-9-]+' "$BASE/AGENTS.md" \
+  | sed -E 's/^skill `//; s/` skill$//; s/`//g; s/^\$//' | sort -u)"
+assert "(b) AGENTS.md cita ao menos 5 skills (sanity, neutro de idioma)" \
   '[ "$(echo "$CITED" | grep -c .)" -ge 5 ]'
 
 for name in $CITED; do

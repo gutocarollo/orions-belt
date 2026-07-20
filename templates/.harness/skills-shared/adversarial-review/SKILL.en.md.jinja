@@ -1,0 +1,326 @@
+{#-
+  Single source (M-ALTA/H4, orions-belt) — this file is NOT copied into the
+  target project (excluded by name in copier.yml `_exclude`); it exists only
+  to be {% raw %}{% include %}{% endraw %}d by the two real wrappers:
+  `.claude/skills/adversarial-review/SKILL.md.jinja` (Claude Code, generated
+  when use_claude=true) and `.agents/skills/{% raw %}{% if use_codex %}
+  {% endraw %}adversarial-review{% raw %}{% endif %}{% endraw %}/
+  SKILL.md.jinja` (Codex, generated when use_codex=true).
+
+  GAP CLOSED (adversarial audit post-H3): same case as the
+  `{{ project_name }}-delivery-council` (see the sibling file's header in
+  `../delivery-council/SKILL.md.jinja`) — this skill only existed in
+  `.agents/skills/adversarial-review/`, with no runtime conditional, and a
+  Claude-only install ended up without it (Claude Code does not scan
+  `.agents/skills`). Edit ONLY here — the wrappers are a 1-line include,
+  never duplicate the body. The PROVENANCE comment of the F1.5 merge
+  stays further down in this file, untouched.
+-#}
+---
+name: adversarial-review
+description: "Evidence-grounded adversarial reviewer for the {{ project_name }}. Use when the user asks to review, audit, critique, find gaps, or validate a plan, PR, diff, implementation, architecture, design-system, tests, or execution. The audit must explicitly confront: architecture docs in docs/architecture, design-system docs in docs/design-system, real app code, the plan text, and what was executed. Every accusation must be confirmed or refuted with concrete evidence."
+---
+
+# Adversarial Review
+
+{#-
+PROVENANCE (lives ONLY in the framework repo — a Jinja comment does not render in the
+target project; F9-fixes requirement: zero donor content in the render): a merge of
+2 lineages from the reference donor harness, done in F1.5 over an extracted copy
+(D11) and parameterized in F3 — (A) the donor's adversarial-review skill (the
+"Execution mode" section + kebab-case naming of docs) with (B) the
+agent-swarm lineage (section 7, "Output for the Delivery Council loops" — REPLAN-REQUEST/
+FIX-REQUEST). See docs/planning/00-plano-consolidado.md sections 3/6 F1.5. The
+doc paths cited below (docs/architecture/ etc.) remain fixed because they are a
+repo-structure convention, not an identity value of the schema.
+-#}
+
+A reviewer who attacks the plan and the implementation to find where they break, but pays the price of proving every accusation. An accusation without proof is noise. Agreement without proof is also noise.
+
+## Execution mode (inline self-review forbidden)
+
+If the audited artifact was produced IN THIS conversation by the agent itself (own plan/diff/execution — the case of the `{{ project_name }}-delivery-council` loops), this skill does NOT run inline: it is the CONTRACT of the prompt of a subagent `{{ project_name }}-adversarial-reviewer` (isolated context; Claude Code: Agent tool, Codex: custom agent thread). Running inline is only legitimate when the auditor is not the author — e.g., the user asks for a review of an old commit, a third-party PR, or an external artifact.
+
+## 0. {{ project_name }} scope
+
+This skill is specific to `{{ project_root }}`. It does not review only the diff. It reviews the adherence between five mandatory sources:
+
+1. **Plan** - text sent by the user or a cited plan file. If the plan was not provided, reconstruct the intent from commits, diffs, execution docs, and the user's request, declaring the limitation.
+2. **Execution** - changed files, diff, logs, commands run, execution reports, tests, and visual evidence when it exists.
+3. **Architecture** - canonical documents in `docs/architecture`.
+4. **Design system** - canonical documents in `docs/design-system`.
+5. **Real app code** - `apps/api`, `apps/web`, `packages`, migrations, scripts, tests, configs, and styles.
+
+An audit that ignores any of these sources is incomplete. Docs define the contract; code and execution prove adherence or deviation.
+
+## 1. Mandatory sources
+
+### 1.1 Architecture
+
+Before evaluating an architectural, security, data, tenancy, runtime, deploy, performance, integration, or domain-flow decision, read the relevant docs in `docs/architecture`.
+
+Mandatory entry point:
+
+- `docs/architecture/README.md` - arc42 map and reading order.
+
+Choose the documents according to the audited topic:
+
+- `docs/architecture/sad.md` - domain/product architecture.
+- `docs/architecture/multi-tenancy.md` - tenancy modes and isolation.
+- `docs/architecture/03-estrategia-solucao.md` - master decisions.
+- `docs/architecture/04-building-blocks.md` - containers/components.
+- `docs/architecture/05-visao-runtime.md` - critical flows.
+- `docs/architecture/06-visao-deployment.md` - topology and deploy constraints.
+- `docs/architecture/07-conceitos-transversais.md` - security, reliability, performance, observability, and data.
+- `docs/architecture/08-decisoes-arquitetura-adr.md` - ADRs.
+- `docs/architecture/09-requisitos-qualidade.md` - quality attributes and capacity.
+- `docs/architecture/11-modelo-ameacas-stride.md` - threats and controls.
+
+Rule: if the cited gap touches architecture, cite at least one doc from `docs/architecture` and one code snippet/file that confirms adherence or deviation.
+
+### 1.2 Design system
+
+Before evaluating UI, theme, tokens, contrast, components, motion, dropdowns, dashboards, charts, responsiveness, className/Tailwind, or visual evidence, read the relevant docs in `docs/design-system`.
+
+Mandatory entry point:
+
+- `docs/design-system/index.md` - canonical catalog.
+
+Choose the documents according to the audited topic:
+
+- `docs/design-system/wiki/design-system.md` - consolidated current truth.
+- `docs/design-system/wiki/contrato-pares.md` - colored-pairs contract.
+- `docs/design-system/wiki/classname-token-workflow.md` - className/Tailwind workflow.
+- `docs/design-system/w3c-design-tokens.md` - DTCG contract.
+- `docs/design-system/decision-shadcn-adoption.md` - shadcn direction.
+- `docs/design-system/migration-tracking.md` - migration state.
+- Current audits listed in `docs/design-system/index.md`, when the topic matches.
+
+Mandatory code to check the contract:
+
+- `{{ harness_web_app_dir }}/styles/globals.css` (or equivalent) - living source of tokens.
+- `{{ harness_web_app_dir }}/components/ui/` - local shadcn/ui components.
+- Components and screens changed in the diff.
+- Guards/scripts when applicable (shipped by the harness in `.harness/lib/`, not by the project): `.harness/lib/ds-pairs-check.py`, `.harness/lib/ds-pair-eval.py`, `.harness/lib/ds-gate.sh`, className miner.
+
+Rule: a visual claim requires rendered evidence (`ui-evidence`) when the conclusion depends on pixels. A token/contrast claim requires doc + point of use + guard/script when available.
+
+### 1.3 Code, plan, and execution
+
+Always cross-check:
+
+- What the plan promised.
+- What was actually changed.
+- What the canonical docs require.
+- What the tests/evidence cover.
+- What the code does at runtime.
+
+Useful commands:
+
+- `git diff --stat` and `git diff -- <paths>` for real scope.
+- `rg` to find patterns, existing usages, invariants, and tests.
+- Module-specific tests for the changed module before concluding.
+- Dev database in local Postgres when the gap depends on real data.
+
+Do not declare "done", "correct", or "100%" without evidence from this session.
+
+## 2. Law Zero as a review criterion
+
+Reinventing the wheel is a first-class gap. For a non-trivial feature, evaluate whether there was a library, pattern, local component, skill, doc, ADR, or mature OSS implementation that should have been reused.
+
+Mandatory trail:
+
+- Look for a local pattern first: `rg`, existing components, architecture/design-system docs, and project skills.
+- For libs/frameworks/APIs/CLI/cloud: use Context7 via `ctx7` as per `AGENTS.md`.
+- For a mature OSS solution: search GitHub/awesome-lists/recent references when the decision is non-trivial.
+
+If a mature/local solution was ignored and the handcrafted implementation increases cost or risk, the gap is REAL even if the code compiles.
+
+## 3. Sequential protocol
+
+### Step 1 - Inventory the artifacts
+
+List what is being audited:
+
+- Original plan or requirement.
+- Changed files.
+- Execution docs or reports.
+- Existing tests/evidence.
+- Architecture/design-system docs that govern the topic.
+
+Without an inventory, there is no audit.
+
+### Step 2 - Build the adherence matrix
+
+For each relevant item of the plan or the implementation:
+
+```md
+Item | Prometido | Executado | Contrato arquitetura | Contrato design-system | Codigo/teste/evidencia | Hipotese
+```
+
+Use the matrix to generate hypotheses. Do not jump straight to opinion.
+
+### Step 3 - Raise hypotheses aggressively
+
+Attack the artifact through:
+
+- Plan vs execution divergence.
+- Violation of `docs/architecture`.
+- Violation of `docs/design-system`.
+- Code/logic bug.
+- Real-data failure.
+- Performance.
+- Security/privacy/tenancy.
+- Missing or insufficient test.
+- Missing visual evidence when mandatory.
+- Reinventing the wheel.
+
+### Step 4 - Classify and prove each hypothesis
+
+Each hypothesis receives one or more classes. The class defines the mandatory proof.
+
+| Classe | Quando usar | Prova obrigatoria |
+|---|---|---|
+| **PLANO/ESCOPO** | Promised item does not appear in the execution, or the execution diverges from the plan | Plan text + diff/file/log showing what was executed |
+| **ARQUITETURA** | Deviation from tenancy, runtime, deploy, domain, ADR, quality, threat model | Doc in `docs/architecture` + code/config/test that adheres or violates |
+| **DESIGN-SYSTEM/UI** | Token, theme, contrast, shadcn, dropdown, chart, responsiveness, motion, className | Doc in `docs/design-system` + component/style code + visual evidence or guard when applicable |
+| **CODIGO/LOGICA** | Missing branch, invalid state, race, validation error, authorization, error handling | Literal code snippet + execution path + concrete case that breaks |
+| **DADO/DB** | Premise about cardinality, NULL, status, volume, integrity, real distribution | Query on the available dev/real database + literal result. Without a query, it is not REAL |
+| **PERFORMANCE** | N+1, full scan, missing index, excessive render, heavy asset | EXPLAIN/metrics/profile when possible + real volume or declared estimate |
+| **SEGURANCA** | Auth, RBAC, tenant isolation, injection, PII, LGPD, secrets | Code + threat model/OWASP/applicable doc + concrete exploitation case |
+| **FONTE/OSS** | Reinvention, API/lib used outside the contract, inadequate dependency | Context7/official doc + compared local repo/lib/pattern |
+| **TESTE/EVIDENCIA** | Missing test, test that does not cover the bug, visual claim without PNG | Test file/log/manifest or absence proven by search |
+
+Rule: the proof has to decide the hypothesis. A database query does not prove a UI bug. A screenshot does not prove tenant isolation. Use the right trail.
+
+### Step 5 - Reach a verdict
+
+Each hypothesis closes in exactly one status:
+
+- **REAL** - evidence confirms the gap and the material impact.
+- **TEORICO-descartado** - logically possible, but the proof shows null impact on the real state.
+- **REFUTADO** - the premise was wrong; the code/docs/tests already cover it.
+- **NAO-PROVADO** - lacked access or evidence. Does not enter as an accusation, enters as a risk/pending item.
+
+Refuting requires proof at the same level as accusing.
+
+### Step 6 - Plan the fix
+
+For a REAL gap, propose a minimal fix that adheres to the project. If there is a genuinely open human decision, use `$grill-me`: one D[n] at a time, with behavior, two good applied examples, two bad ones, a recommendation, and a selection criterion.
+
+Do not close a final plan for a decision that depends on the user's choice. Close a conditioned plan or stop at the D[n] block.
+
+### Step 6.1 - Material subjectivity in the Planning Adversarial Loop
+
+For each plan finding that is `REAL` with severity `ALTA` or `BLOQUEANTE`, classify whether the blocker is objective or subjective before requesting any decision:
+
+- **Objective:** code, docs, data, test, source, or additional investigation can decide it. Propose `REPLANEJAR` or keep researching; do not engage the user.
+- **Material subjectivity:** the answer depends on preference, priority, business limit, or human contract that the evidence does not determine, and the answer will materially change the plan or the acceptance criterion.
+
+When this skill is the reviewer's contract inside the Delivery Council, the reviewer does not ask the user questions. If all conditions of the Conditional Grill Gate are proven, it ends the round suspended with:
+
+```md
+PLAN-ADVERSARIAL-VERIFICATION: SABATINAR
+NECESSITA-GRILL: SIM
+DECISOES-GRILL: D[n] — [decisao subjetiva material]
+PROXIMA-ACAO: sabatinar
+```
+
+Use `SABATINAR` only for `REAL` `ALTA`/`BLOQUEANTE` material subjectivity, not resolvable by evidence, whose answer changes the plan. For every other case, keep `SATISFEITO`, `REPLANEJAR`, or `BLOQUEADO` as the proof dictates. The Council invokes `$grill-me`, records the decision, and resumes the same reviewer.
+
+## 4. Minimum evidence per finding
+
+A valid finding must contain:
+
+```md
+### [R[n]] [Afirmação direta]
+- Severidade: BLOQUEANTE | ALTA | MEDIA | BAIXA
+- Classe: PLANO/ESCOPO | ARQUITETURA | DESIGN-SYSTEM/UI | CODIGO/LOGICA | DADO/DB | PERFORMANCE | SEGURANCA | FONTE/OSS | TESTE/EVIDENCIA
+- Veredicto: REAL | TEORICO-descartado | REFUTADO | NAO-PROVADO
+- Contrato esperado:
+  - Plano: [arquivo/trecho ou resumo fiel]
+  - Arquitetura: [docs/architecture/... quando aplicavel]
+  - Design-system: [docs/design-system/... quando aplicavel]
+- Evidencia:
+  - Codigo: [path + linha/trecho]
+  - Execucao: [diff/log/teste/comando/manifest]
+  - Dado/Fonte: [query/doc/repo/link quando aplicavel]
+- Impacto: [caso real que quebra ou risco concreto]
+- Correcao: [acao objetiva ou decisao D[n]]
+```
+
+Close with:
+
+```md
+PLACAR: N reais | M teoricos descartados | K refutados | P nao provados
+PROXIMO PASSO: [acao de maior severidade]
+```
+
+## 5. Forbidden anti-patterns
+
+| Anti-padrao | Por que e proibido |
+|---|---|
+| Audit only the diff | The diff does not show the project's contract nor the promised plan |
+| Ignore `docs/architecture` | May approve code that violates tenancy, runtime, quality, or security |
+| Ignore `docs/design-system` | May approve UI that breaks tokens, themes, contrast, or canonical patterns |
+| Compare execution without reading the plan | You cannot measure adherence to what was requested |
+| Declare a data gap without a real query | Guesswork dressed as rigor |
+| Declare UI correct without visual evidence when pixels matter | Code does not prove the final render |
+| Cite docs without checking the code | A doc is a contract; code proves the real state |
+| Cite code without checking the canonical docs | An implementation may work and still be off the {{ project_name }} standard |
+| Agree reflexively | Refutation also needs evidence |
+| List dozens of hypotheses without a verdict | Adversariality without closure becomes noise |
+| Invent a number, test, or source | Fabrication invalidates the audit |
+
+## 6. Expected output
+
+Start with the technical verdict. Then list findings in severity order. Include questions only after exploration and only when a real decision remains open.
+
+Recommended format:
+
+1. Overall verdict.
+2. Audited inventory.
+3. Findings R[n].
+4. Decisions D[n], if any.
+5. Aggregate scoreboard.
+6. Concrete next step.
+
+## 7. Output for the Delivery Council loops
+
+When the audit is called by the `${{ project_name }}-delivery-council`, also use the sentinel of the corresponding loop.
+
+### Planning Adversarial Loop
+
+```md
+PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | SABATINAR | BLOQUEADO
+GAPS-CRITICOS: N
+DECISAO-ESCOLHIDA: [opcao escolhida ou bloqueio]
+NECESSITA-GRILL: SIM | NAO
+DECISOES-GRILL: [D[n] ou NENHUMA]
+PROXIMA-ACAO: [executar | replanejar | sabatinar | pedir decisao]
+REPLAN-REQUEST:
+- gap: [achado REAL que exige mudanca no plano]
+- evidencia: [fonte/codigo/doc/teste que prova o gap]
+- alteracao-obrigatoria: [mudanca objetiva que o plano revisado deve incorporar]
+```
+
+If it returns `REPLANEJAR`, `REPLAN-REQUEST` is mandatory. The reviewer does not replan; the Council consumes that block and must record `REPLAN-CONSUMED` before the next round. Return `SABATINAR` only for `REAL` `ALTA`/`BLOQUEANTE` material subjectivity (Step 6.1): the Council invokes `$grill-me`, records D[n], and resumes the same reviewer; it is a suspended state, it does not consume a round.
+
+### Adversarial Verification Loop
+
+```md
+ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
+GAPS-CRITICOS: N
+PROXIMA-ACAO: [corrigir | parar | pedir decisao]
+FIX-REQUEST:
+- gap: [achado REAL BLOQUEANTE/ALTA que exige mudanca na execucao]
+- evidencia: [fonte/codigo/doc/teste/log que prova o gap]
+- alteracao-obrigatoria: [mudanca objetiva que a correcao deve incorporar]
+```
+
+If it returns `CORRIGIR`, `FIX-REQUEST` is mandatory. The reviewer does not fix; the Council consumes that block and must record `FIX-CONSUMED` before the next round.
+
+When the `agent-swarm` package is present and the Council asks for a parseable form,
+mirror the result as JSON compatible with `schemas/plan-review-result.schema.json`
+or `schemas/execution-review-result.schema.json`. The JSON does not replace the
+Markdown sentinels; it serves only for validation and ledger.

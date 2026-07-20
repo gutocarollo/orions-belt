@@ -1,0 +1,374 @@
+{#-
+  Single source (M-ALTA/H4, orions-belt) — this file is NOT copied to the
+  target project (excluded by name in copier.yml `_exclude`); it exists only
+  to be {% raw %}{% include %}{% endraw %} by the two real wrappers:
+  `.claude/skills/{{ project_name }}-delivery-council/SKILL.md.jinja`
+  (Claude Code, generated when use_claude=true) and `.agents/skills/{% raw %}
+  {% if use_codex %}{% endraw %}{{ project_name }}-delivery-council{% raw %}
+  {% endif %}{% endraw %}/SKILL.md.jinja` (Codex, generated when
+  use_codex=true).
+
+  GAP CLOSED (adversarial audit post-H3): before this round, this skill
+  only existed in `.agents/skills/{{ project_name }}-delivery-council/`, WITHOUT
+  a runtime conditional — an install with `use_claude=true`/`use_codex=false`
+  had no council in `.claude/skills` (Claude Code does not scan
+  `.agents/skills` — same finding as H3/A1 that motivated the
+  skills-shared mechanism for the other 6 skills). It is the SYMMETRIC gap to what H3
+  fixed for Codex: here it was the Claude-only case that was left without the council and
+  without `adversarial-review`. Same mechanism, same rule: edit ONLY here —
+  the wrappers are a 1-line include, never duplicate the body. The
+  PROVENANCE comment of the F1.5 merge (fusion of the 2 agent-swarm/donor lineages)
+  remains further down in this file, untouched.
+-#}
+---
+name: {{ project_name }}-delivery-council
+description: Use on complex {{ project_name }} tasks involving implementation, planning, review of an existing plan, architecture, design-system, database, auth, tenancy, security, tests, PR review, or any change that needs to start from EXECUTION, PLANNING, PLAN_REVIEW or AUTO, with automatic trade-off and adversarial loops.
+---
+
+# {{ project_name }} Delivery Council
+
+Coordinate a delivery inside `{{ project_root }}` using native Codex: `AGENTS.md`, repo skills, custom agents, real commands and evidence from this session.
+
+{#-
+PROVENANCE (lives ONLY in the framework repo — a Jinja comment does not render in the
+target project; F9-fixes requirement: zero donor content in the render): fusion of
+2 lineages of the reference donor-harness council, done in F1.5 over an extracted
+copy (D11) and parameterized in F3. Merge rule (docs/planning/
+00-plano-consolidado.md section 3/6 F1.5): REPLAN-REQUEST/CONSUMED +
+FIX-REQUEST/CONSUMED + final-round gate + ledger come from the
+agent-swarm lineage; review-always-in-subagent + REVISORES: + continuation of the same
+subagent + Understand-Anything guard come from the live donor lineage. Neither
+of the two alone is the state of the art — see witness in
+templates/verification/council-witness.json.
+-#}
+
+## Input Arguments
+
+Accept arguments in an `ARGS:` block. If the user does not send `ARGS`, infer `START_AT=AUTO`.
+
+```text
+ARGS:
+START_AT=EXECUTION | PLANNING | PLAN_REVIEW | AUTO
+PLAN_SOURCE=<path | inline | issue | diff>
+AUTO_DECIDE=true | false
+PLAN_REVIEW_MAX={{ harness_plan_review_max }}
+EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}
+AUTO_EXECUTE_AFTER_PLAN=false | true
+```
+
+Defaults:
+
+- `START_AT=AUTO`
+- `PLAN_SOURCE` omitted; use a `PLAN:` block or path cited in the prompt when one exists.
+- `AUTO_DECIDE=true`
+- `PLAN_REVIEW_MAX={{ harness_plan_review_max }}`
+- `EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}`
+- `AUTO_EXECUTE_AFTER_PLAN=false` for `START_AT=PLANNING`; effective default `true` for `START_AT=PLAN_REVIEW`
+
+Limits:
+
+- `PLAN_REVIEW_MAX` can never exceed {{ harness_plan_review_max }}.
+- `EXECUTION_REVIEW_MAX` can never exceed {{ harness_execution_review_max }}.
+
+Interpret:
+
+- `START_AT=EXECUTION`: start from execution. Do only minimal context, local reuse and blocking checks before editing.
+- `START_AT=PLANNING`: start by creating/structuring the plan. Do not edit code until the Planning Adversarial Loop concludes, unless `AUTO_EXECUTE_AFTER_PLAN=true`.
+- `START_AT=PLAN_REVIEW`: a plan already exists. Read `PLAN_SOURCE`, the `PLAN:` block or the cited file; review the plan with the Planning Adversarial Loop; if it becomes `SATISFEITO`, execute; then run the Adversarial Verification Loop of the execution. Do not redo broad initial planning.
+- `START_AT=AUTO`: infer from the request. "implement", "fix", "finish", "do" and "apply" indicate execution; "plan", "design", "architect", "evaluate approach" indicate planning; "plan already exists", "review and execute" and "review of the approved plan" indicate plan review.
+- `PLAN_SOURCE`: required for `START_AT=PLAN_REVIEW` when the plan is not in the prompt. Accept a local path, pasted excerpt, issue or diff as the source.
+- `AUTO_EXECUTE_AFTER_PLAN`: if omitted, treat as `false` in `START_AT=PLANNING` and as `true` in `START_AT=PLAN_REVIEW`.
+
+## Scope Rule
+
+Use the full flow when the task has medium/high risk, touches multiple files, changes a domain contract, UI, data, auth, tenancy, security, architecture or test. For a trivial single-file adjustment, use a compact version: minimal context, implementation, validation and report.
+
+Do not delegate raw ambiguity to the user. Explore code, docs and real data first. The only clarification mechanism is `$grill-me`, invoked only by the Conditional Grill Gate.
+
+## Mandatory Flow
+
+1. Resolve the entry point (`START_AT`).
+2. Produce a Context Brief proportional to the entry point:
+   - real request and true objective;
+   - relevant docs read;
+   - local patterns found with `rg`;
+   - likely files;
+   - risks and required validations.
+3. Look for local reuse before creating new code:
+   - existing components, hooks, services, scripts, ADRs, skills and docs;
+   - cite concrete paths when a pattern governs the change.
+4. Resolve blocking decisions:
+   - if `AUTO_DECIDE=true`, automatically choose the best option by trade-off;
+   - before asking, apply the Conditional Grill Gate;
+   - if the gate returns `SIM`, pause the plan and use `$grill-me`; it resolves one D[n] decision at a time;
+   - if the gate returns `NAO`, keep the automatic decision and record the trade-off;
+   - do not implement still-open D[n] choices when they involve a real human decision.
+5. If `START_AT=PLANNING` or `START_AT=PLAN_REVIEW`, run the Planning Adversarial Loop.
+6. If `START_AT=PLANNING` and `AUTO_EXECUTE_AFTER_PLAN=false`, stop after the Planning Adversarial Loop with a revised/approved plan.
+7. If `START_AT=PLAN_REVIEW`, execute only after `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO`, except with `AUTO_EXECUTE_AFTER_PLAN=false`, which turns the mode into review-only.
+8. If proceeding to execution, implement sequentially:
+   - change the smallest set of files that satisfies the plan;
+   - preserve unrelated local changes;
+   - do not add production dependencies without explicit justification.
+9. Validate with real commands:
+   - run tests, typecheck, lint, queries, scripts or visual evidence according to the risk;
+   - a visual claim requires rendered evidence when pixels matter;
+   - a data claim requires a query or equivalent proof.
+10. When the `agent-swarm` package (or `engine/contract/scripts/agent_swarm_ledger.py` from orions-belt) is available in the workspace, record critical rounds with the ledger script; this is auxiliary evidence, it does not replace the review.
+11. Run the Adversarial Verification Loop for execution.
+12. Report without inflating conclusions:
+    - state exactly what changed;
+    - list commands run and results;
+    - declare remaining gaps or risks.
+
+## Automatic Trade-off In Planning
+
+When `AUTO_DECIDE=true`, automatically choose the best option using:
+
+- quality delta;
+- cost delta;
+- breakeven;
+- non-adoption condition;
+- reversibility;
+- adherence to docs and local patterns.
+
+Only ask for a human decision when the best option depends on:
+
+- a destructive action;
+- credential, payment or external access;
+- prod/deploy;
+- irreversible business decision;
+- D[n] ambiguity that cannot be resolved by code, docs or real data.
+
+## Conditional Grill Gate
+
+Run this gate before producing or reviewing a plan in `START_AT=PLANNING` or `START_AT=PLAN_REVIEW`; also run it when the preflight of a task in execution discovers a still-open plan decision. It protects the automatic loop: `AUTO_DECIDE=true` remains the default and the gate is not a mandatory step.
+
+A **material subjectivity** is a decision whose correct answer depends on preference, priority, business limit or human contract that cannot be deduced from code, docs, data or available external evidence. Lack of investigation, unknown fact and testable hypothesis are not material subjectivity.
+
+With `AUTO_DECIDE=true`, return `GATE-GRILL: SIM` only if **all** conditions are true:
+
+1. the decision remains open after the mandatory exploration;
+2. it is a material subjectivity;
+3. choosing wrong creates a `REAL` finding or concrete risk of `ALTA` or `BLOQUEANTE` severity;
+4. the user's answer materially changes the plan, the contract or the acceptance criterion; and
+5. the question can resolve the decision without depending on credential, access, deploy/production or destructive action.
+
+With `AUTO_DECIDE=false`, use the same test, but a material subjectivity that changes the plan is already enough for `SIM`; still do not ask about a researchable fact, a choice already defined by contract, a blocker the user cannot resolve or a risk with no material impact.
+
+Return `GATE-GRILL: NAO` for `MEDIA`/`BAIXA` risk when `AUTO_DECIDE=true`, a choice already defined by contract, a reversible technical alternative the Council can choose, a factual gap that can still be researched or a blocker the user cannot resolve. In this case, keep the automatic decision and record the trade-off.
+
+When the result is `SIM`, stop before consolidating the plan, invoke `$grill-me` and ask one question at a time until the material branches are closed. Record the answers as D[n], update only the affected part of the plan and resume the flow. The interview does not consume a Planning Adversarial Loop round.
+
+## Planning Adversarial Loop
+
+Run when `START_AT=PLANNING` or `START_AT=PLAN_REVIEW`.
+
+Limit: maximum of {{ harness_plan_review_max }} rounds.
+
+### Planning round
+
+1. Produce or revise the plan with options and trade-offs.
+   - In `START_AT=PLANNING`, produce/structure the plan.
+   - In `START_AT=PLAN_REVIEW`, treat the existing plan as the initial source; adjust only fixable critical gaps, without redoing broad discovery/planning.
+2. DISPATCH a `{{ project_name }}-adversarial-reviewer` subagent against the plan, docs and relevant real code (Claude Code: Agent tool; Codex: custom agent thread). MANDATORY in every round: the adversarial review NEVER runs inline in the main context — whoever produced the plan does not self-review. `$adversarial-review` is the CONTRACT the subagent follows, not a procedure for the main agent to execute. In the prompt, point to the artifacts by path (plan, files, decisions) instead of pasting large content.
+3. Require closure:
+
+```md
+PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | SABATINAR | BLOQUEADO
+GAPS-CRITICOS: N
+DECISAO-ESCOLHIDA: [chosen option or blocker]
+NECESSITA-GRILL: SIM | NAO
+DECISOES-GRILL: [D[n] or NENHUMA]
+PROXIMA-ACAO: [executar | replanejar | sabatinar | pedir decisao]
+REPLAN-REQUEST:
+- gap: [REAL finding that requires a change in the plan]
+- evidencia: [source/code/doc/test that proves the gap]
+- alteracao-obrigatoria: [objective change the revised plan must incorporate]
+```
+
+The reviewer may only return `SABATINAR` if it proves the Conditional Grill Gate for a `REAL` `ALTA`/`BLOQUEANTE` finding: the decision is a material subjectivity, was not resolved by evidence and the user's answer changes the plan. Do not use this status for a still-researchable fact, a preference with no material impact or a `MEDIA`/`BAIXA` gap.
+
+If the review returns `SABATINAR`, interrupt the loop before automatically replanning, invoke `$grill-me`, record D[n] and resume the **same** subagent with the updated plan and the answers. `SABATINAR` is a suspended state, not a completed round: it does not consume the limit of {{ harness_plan_review_max }} rounds until the same reviewer emits `SATISFEITO`, `REPLANEJAR` or `BLOQUEADO`. Avoid repetition: the reviewer may only request a new grill for a new material D[n] that the previous answers did not resolve.
+
+If the review returns `REPLANEJAR` with a fixable critical gap, the Council must replan using the `REPLAN-REQUEST` block as mandatory input. The reviewer does not replan; it accuses and specifies the minimal change. The Council incorporates that change into the revised plan, records what changed and only then runs the next plan review round.
+
+Mandatory handoff on each `REPLANEJAR`:
+
+```md
+REPLAN-CONSUMED:
+- source-review-round: <n>
+- gaps-incorporados: [...]
+- plano-alterado-em: [...]
+- decisao-atualizada: [...]
+```
+
+Without a `REPLAN-REQUEST` from the reviewer and without a `REPLAN-CONSUMED` from the Council, the next loop round is invalid. Stop at `SATISFEITO`, `BLOQUEADO` or {{ harness_plan_review_max }} rounds.
+
+If `engine/contract/scripts/agent_swarm_ledger.py` (or `scripts/agent_swarm_ledger.py` in a standalone agent-swarm package) exists in the workspace, record:
+
+```bash
+python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop planning --round <n> --event replan-request --status REPLANEJAR --payload-json '{"gap":"...","evidencia":"...","alteracao_obrigatoria":"..."}'
+python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop planning --round <n> --event replan-consumed --status REPLANEJAR --payload-json '{"source_review_round":1,"gaps_incorporados":["..."]}'
+```
+
+Gate rule: execution may only start from planning when the last plan review round returns `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO`. If the second round returns `REPLANEJAR`, the final status of the planning loop is `PENDENTE` and execution CANNOT start, even if the agent incorporates the gap right after. Incorporating a gap after a review counts as a new replanning; without a new satisfactory adversarial round, the plan remains unapproved.
+
+In `START_AT=PLANNING`, after `SATISFEITO`:
+
+- if `AUTO_EXECUTE_AFTER_PLAN=true`, proceed to execution;
+- if `AUTO_EXECUTE_AFTER_PLAN` is omitted or `false`, stop with the revised/approved plan.
+
+In `START_AT=PLAN_REVIEW`, after `SATISFEITO`:
+
+- if `AUTO_EXECUTE_AFTER_PLAN` is omitted or `true`, proceed to execution;
+- if `AUTO_EXECUTE_AFTER_PLAN=false`, stop with the revised plan and report review-only.
+
+On `REPLANEJAR` in the final round:
+
+- report `PLAN-ADVERSARIAL-LOOP: {{ harness_plan_review_max }}/{{ harness_plan_review_max }}, status: PENDENTE`;
+- do not execute;
+- do not write "formally pending" if execution continued, because that masks a broken gate;
+- deliver the final `REPLAN-REQUEST` as a concrete next action for the next call, or stop with the declared pending item.
+
+At the end, report:
+
+```md
+PLAN-ADVERSARIAL-LOOP: <rounds>/{{ harness_plan_review_max }}, status: <SATISFEITO|PENDENTE|BLOQUEADO>
+REVISORES: [round 1: new subagent | round 2: same subagent via SendMessage/continuation]
+```
+
+## Adversarial Verification Loop
+
+Run this loop at the end of a medium/high-risk task.
+
+Limit: maximum of {{ harness_execution_review_max }} rounds.
+
+### Round
+
+1. DISPATCH a `{{ project_name }}-adversarial-reviewer` subagent (Claude Code: Agent tool; Codex: custom agent thread). MANDATORY in every round: the review NEVER runs inline in the main context. In round N+1 of the same loop, prefer to CONTINUE the same subagent (Claude Code: SendMessage; Codex: same thread) sending the applied corrections and requiring re-verification with new evidence.
+2. Require the review to compare:
+   - original request/plan;
+   - diff and changed files;
+   - architecture docs when applicable;
+   - design-system docs when applicable;
+   - real code;
+   - commands and evidence from this session.
+3. Require the review to end with:
+
+```md
+ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
+GAPS-CRITICOS: N
+PROXIMA-ACAO: [corrigir | parar | pedir decisao]
+FIX-REQUEST:
+- gap: [REAL BLOQUEANTE/ALTA finding that requires a change in the execution]
+- evidencia: [source/code/doc/test/log that proves the gap]
+- alteracao-obrigatoria: [objective change the correction must incorporate]
+```
+
+### Correction criterion
+
+Fix sequentially and run a new round when there is a `REAL` gap with `BLOQUEANTE` or `ALTA` severity.
+
+If the review returns `CORRIGIR`, the Council must fix using the `FIX-REQUEST` block as mandatory input. The reviewer does not fix; it accuses and specifies the minimal change. The Council implements the correction, records what changed, revalidates and only then runs the next execution review round.
+
+Mandatory handoff on each `CORRIGIR`:
+
+```md
+FIX-CONSUMED:
+- source-review-round: <n>
+- gaps-corrigidos: [...]
+- arquivos-alterados: [...]
+- validacao-rodada: [...]
+```
+
+Without a `FIX-REQUEST` from the reviewer and without a `FIX-CONSUMED` from the Council, the next loop round is invalid.
+
+If `engine/contract/scripts/agent_swarm_ledger.py` (or `scripts/agent_swarm_ledger.py` in a standalone agent-swarm package) exists in the workspace, record:
+
+```bash
+python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop execution --round <n> --event fix-request --status CORRIGIR --payload-json '{"gap":"...","evidencia":"...","alteracao_obrigatoria":"..."}'
+python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop execution --round <n> --event fix-consumed --status CORRIGIR --payload-json '{"source_review_round":1,"gaps_corrigidos":["..."],"validacao_rodada":["..."]}'
+```
+
+Do not automatically fix:
+
+- a D[n] decision without the user's choice;
+- a destructive action;
+- credential, payment or external access;
+- deploy/prod without a specific procedure;
+- a `NAO-PROVADO` gap that needs unavailable evidence.
+
+### Stop criterion
+
+Stop when:
+
+- the review returns `ADVERSARIAL-VERIFICATION: SATISFEITO`;
+- {{ harness_execution_review_max }} rounds are completed;
+- only a `MEDIA`/`BAIXA` gap explicitly accepted as pending remains;
+- a real blocker beyond the reach of the session remains.
+
+On `CORRIGIR` in the final round:
+
+- report `ADVERSARIAL-LOOP: {{ harness_execution_review_max }}/{{ harness_execution_review_max }}, status: PENDENTE`;
+- do not declare `ADVERSARIAL-VERIFICATION: SATISFEITO`;
+- deliver the final `FIX-REQUEST` as a concrete next action for the next call, or stop with the declared pending item.
+
+In the final response, include:
+
+```md
+ADVERSARIAL-LOOP: <rounds>/{{ harness_execution_review_max }}, status: <SATISFEITO|PENDENTE|BLOQUEADO>
+REVISORES: [round 1: new subagent | round N: same subagent via SendMessage/continuation]
+```
+
+## Mandatory Sources
+
+Always start from:
+
+- `AGENTS.md`
+- the plan, issue, diff or prompt provided by the user
+- real code under `apps/api`, `apps/web`, `packages`, migrations, scripts and tests
+
+{% if harness_understand_apps_root %}If the topic involves `/understand`, Understand Anything, `.understand-anything`, `knowledge-graph`, code graph or `compute-batches`, use the `understand-apps-incremental` skill. Blocking rule: the product graph uses `PROJECT_ROOT={{ harness_understand_apps_root }}`, but the Git root is the repo root; an incremental in `{{ harness_understand_apps_root }}/` must generate changed files with `git diff --relative={{ harness_understand_apps_root }} <last>..HEAD --name-only -- {{ harness_understand_apps_root }}` or `bash .harness/lib/understand-apps-changed-files.sh`. Never feed `compute-batches` with `{{ harness_understand_apps_root }}/api/...` paths; it expects `api/...`.
+{% endif %}
+
+Also read when the topic requires it:
+
+- Architecture: `docs/architecture/README.md` and relevant documents in `docs/architecture`
+- UI/design-system: `docs/design-system/index.md`, relevant docs in `docs/design-system`, `apps/web/styles/globals.css` and `apps/web/components/ui`
+- Database/data: schema, migrations, services and queries on the dev database when the conclusion depends on cardinality, status, NULL, integrity or real distribution
+- Tools, SDKs, frameworks, APIs, CLI or cloud: current documentation per `AGENTS.md`
+
+## Minimum Output
+
+For complete tasks, deliver in this order:
+
+1. Technical verdict or delivery state.
+2. Context Brief.
+3. Sequential plan or D[n] decisions.
+4. Changed files.
+5. Validation commands with results.
+6. Result of the Adversarial Verification Loop or justification for why it did not apply.
+7. Real pending items.
+
+## Use With Subagents
+
+Hard rules:
+
+- Every adversarial review round (Planning Adversarial Loop and Adversarial Verification Loop) runs MANDATORILY in a `{{ project_name }}-adversarial-reviewer` subagent, in an isolated context. FORBIDDEN for the main agent to run the review inline: self-review in the same context inherits the biases of whoever produced the plan/diff (it is not truly adversarial) and the dozens of reads of the review blow up the main context.
+- Round 1 of a loop = new subagent. Subsequent rounds of the SAME loop may continue the SAME subagent (Claude Code: SendMessage; Codex: same thread) — it already knows the gaps and re-verifies more cheaply. The valid verdict is always the text returned BY the subagent; the main agent relays it, does not rewrite it.
+- In the final report, attribute each round to its executor (the `REVISORES:` line of the closure blocks). A round without an executor attribution does not count as a valid review.
+- If the subagent mechanism is unavailable, STOP and declare the blocker — do not run the review inline as a silent fallback.
+- Parallelizable exploration/research → `{{ project_name }}-context-scout` (1 investigation per subagent). Mechanical batch implementation of low risk (many files, decision already made) may go to `{{ project_name }}-implementer` to spare the main context; architectural decisions and central editing stay with the main agent. `{{ project_name }}-test-auditor` validates whether the evidence sustains the claim when the risk is high.
+- Always wait for the round's subagents to finish before consolidating findings. Do not use subagents to escape a decision that requires the main agent to directly read the skill instructions (ARGS, gates, D[n]).
+
+## Package Executable Contract
+
+When maintaining this package, use `python3 engine/contract/scripts/validate_contract.py`
+(or `python3 scripts/validate_contract.py` in a standalone agent-swarm package). That script is the
+single validation point: JSON schemas, skill metadata, witness, regression and whitespace.
+Do not create parallel validators.
+
+The schemas in `schemas/` are optional structured mirrors of the sentinels in
+Markdown. The human output stays Markdown; the JSON is used when
+execution needs parseable evidence.

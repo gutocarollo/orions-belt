@@ -1,0 +1,71 @@
+# loop.md — autonomous maintenance of {{ project_name }} (run with /loop without arguments)
+
+<!--
+PROVENANCE (orions-belt, R5 — rescue plan §2 P0 item "loop.md, .githooks/pre-commit,
+.github/workflows/docs-integrity.yaml cited as real by several templates but absent"):
+generalized from the `.claude/loop.md` of a reference donor project. The generic
+checks (lessons, docs-wiki-lint, dirty git tree, ref-integrity) point to this framework's
+real engine in `.harness/lib/` — not to `scripts/` (the donor's path, does not exist
+here). The stack-specific checks (className mining, design-system ratchet) are conditional on
+the same flags that gate the corresponding modules (`use_ui_skills`, `use_ds_gate`); no
+command is emitted for an engine this project does not have installed.
+-->
+
+You are in the maintenance loop (Self-Improvement Loop — see CLAUDE.md/AGENTS.md §16 or the
+equivalent section of this project's instructions). One pass = the checks below, in order,
+fixing what is cheap and reporting what is not. Durable state: if
+`{{ harness_runs_dir }}/ACTIVE` exists, the marathon has priority — execute the "Next action"
+of the RUN.md and end the pass.
+
+## Checks of the pass
+
+- **Lessons pending promotion** — `{{ harness_lessons_file }}`: any lesson repeated 2×+
+  still without `[PROMOVIDA → destino]`? If so, promote it (permanent rule in the project's
+  instructions, or a hook via hookify) and mark it.
+- **Repo wiki/documentation integrity** — `python3 .harness/lib/docs_wiki_lint.py`. FAIL →
+  fix `{{ harness_docs_dir }}/index.md`, `{{ harness_docs_dir }}/log.md` or the category
+  index (governed by `{{ harness_docs_dir }}/SCHEMA.md`) and re-run.
+{%- if use_ui_skills %}
+- **className mining freshness** — no automated staleness gate in this version (P2 of the
+  rescue plan, not ported). If the UI code under `{{ harness_web_app_dir }}` changed since
+  the last mining, regenerate it manually:
+  `node .harness/lib/classname-miner-v2.mjs --root {{ harness_web_app_dir }}` and stage the updated
+  `.md` (skill `classname-token-workflow`).
+{%- endif %}
+- **Git tree dirty with an orphan artifact** — `git status --short`: a generated file that should
+  not be committed (PDF, JSON >1MB, loose screenshot in `{{ harness_docs_dir }}/`)? Report it with the path;
+  do not delete anything tracked without an explicit order.
+{%- if use_ds_gate %}
+- **Design-system gates** — `bash .harness/lib/ds-gate.sh` (anti-hardcode ratchet over
+  `{{ harness_web_app_dir }}`, read at runtime from `.harness/harness.conf`). Regression → report the
+  cluster and `path:line`.
+{%- endif %}
+{%- if harness_understand_apps_root %}
+- **Graph freshness (Understand Anything)** — only if the graph already exists
+  (`{{ harness_understand_apps_root }}/.understand-anything/meta.json`). Count how many files
+  changed under the PROJECT_ROOT since the last build, with the **mandatory relative diff** (the graph
+  uses `PROJECT_ROOT={{ harness_understand_apps_root }}`, but the git root is the repo root — a raw
+  diff emits wrong paths):
+
+  ```bash
+  LAST=$(python3 -c "import json;print(json.load(open('{{ harness_understand_apps_root }}/.understand-anything/meta.json'))['gitCommitHash'])" 2>/dev/null)
+  N=$(git diff --relative={{ harness_understand_apps_root }} "$LAST"..HEAD --name-only -- {{ harness_understand_apps_root }} | grep -cv '^\.understand-anything/')
+  ```
+
+  If `N >= {{ harness_graph_refresh_threshold }}` (`HARNESS_GRAPH_REFRESH_THRESHOLD`), run the
+  incremental `/understand` (NOT `--full`) and commit the updated graph; otherwise, just report `N`.
+  `/understand` is LLM-heavy (subagents, subscription quota) — hence the threshold trigger,
+  not every pass. `/understand` runs on the model of the loop's own session; it does not use the API.
+{%- endif %}
+- **Referential integrity (rename/delete backstop)** —
+  `python3 .harness/lib/ref_integrity.py --since <ref-of-the-last-green-pass>` (report-only:
+  catches what escaped pre-commit — `--no-verify` bypass, manual edit, or a project where
+  `.githooks/pre-commit` has not yet been activated). A `[link]`/`[stale]` finding → fix per the
+  `ref-integrity` skill (repoint / disable / allowlist in `.ref-integrity-allowlist`).
+
+## Loop rules
+
+- Irreversible action (push, delete tracked, deploy, prod) = OUT of the loop; only report.
+- Each pass ends with a 3-6 line summary: what passed, what it fixed, what needs
+  a human decision.
+- Nothing to do in 2 consecutive passes → end the loop (self-paced: do not schedule the next).
