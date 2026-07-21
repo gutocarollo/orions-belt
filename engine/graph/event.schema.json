@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orions-belt.dev/schemas/control-event.schema.json",
+  "title": "Append-only control graph event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event_id", "run_id", "sequence", "type", "occurred_at", "payload"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "event_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "sequence": {"type": "integer", "minimum": 1},
+    "type": {"enum": ["RUN_STARTED", "NODE_ENTERED", "REVIEW_RECORDED", "HUMAN_DECISION", "BUDGET_CONSUMED", "CHECKPOINT_SAVED", "RUN_COMPLETED", "RUN_BLOCKED"]},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "payload": {"type": "object"}
+  },
+  "allOf": [
+    {"if": {"properties": {"type": {"const": "NODE_ENTERED"}}}, "then": {"properties": {"payload": {"required": ["node_id", "on"]}}}},
+    {"if": {"properties": {"type": {"const": "REVIEW_RECORDED"}}}, "then": {"properties": {"payload": {"required": ["family", "outcome"]}}}}
+  ]
+}

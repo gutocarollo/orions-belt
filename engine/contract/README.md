@@ -36,9 +36,9 @@ Explicit instruction of the plan: replace hardcode with reading `.harness/harnes
 | Script | Original hardcode | Config key (default = original value) |
 |---|---|---|
 | `validate_skills.py` | `SKILL_DIR = ROOT/".agents"/"skills"` | `HARNESS_SKILLS_DIR` |
-| `validate_skills.py` | `REQUIRED_SKILLS = ("learnhouse-delivery-council", "adversarial-review", "clarification-plan")` | `HARNESS_REQUIRED_SKILLS` (CSV; empty default) |
+| `validate_skills.py` | `REQUIRED_SKILLS = ("learnhouse-delivery-council", "adversarial-review", "clarification-plan")` | `HARNESS_REQUIRED_SKILLS` (CSV; obrigatório quando skills/Codex estão instalados) |
 | `validate_skills.py` | `.codex/agents`, `.codex/config.toml` | `HARNESS_CODEX_AGENTS_DIR`, `HARNESS_CODEX_CONFIG_PATH` (fail-open skip if `.codex/` does not exist — Claude-only project) |
-| `validate_skills.py` | `openai.yaml` of `learnhouse-delivery-council` fixed | `HARNESS_COUNCIL_SKILL_NAME` (optional; empty = check skipped) |
+| `validate_skills.py` | `openai.yaml` of `learnhouse-delivery-council` fixed | `HARNESS_COUNCIL_SKILL_NAME` (obrigatório quando Codex está instalado) |
 | `agent_swarm_ledger.py` | `RUNS_DIR = ROOT/".agent-swarm"/"runs"` | `HARNESS_LEDGER_DIR` (default `${HARNESS_RUNS_DIR}/agent-swarm` — reuses marathon's run-state dir instead of a second root directory) |
 | `render_prompt.py` | line 1 `"Use $learnhouse-delivery-council."` | `HARNESS_COUNCIL_SKILL_NAME` (fallback `delivery-council`) |
 

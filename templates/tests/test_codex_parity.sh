@@ -131,7 +131,7 @@ if [ -f "$GATE" ]; then
 
   echo '{"stop_hook_active": false, "transcript_path": null, "last_assistant_message": "Task complete. PROVA-DE-CONCLUSAO: 5/5 PASS, gaps: [nenhum]"}' | python3 "$GATE" >/dev/null 2>&1
   EXIT=$?
-  assert "(c) Codex payload, EN claim, WITH full sentinel -> exit 0 (allows)" '[ "$EXIT" -eq 0 ]'
+  assert "(c) forged prose-only sentinel -> exit 2 (blocks)" '[ "$EXIT" -eq 2 ]'
 
   echo '{"stop_hook_active": false, "transcript_path": null, "last_assistant_message": "All fixed. PROVA-DE-CONCLUSAO: 0/999"}' | python3 "$GATE" >/dev/null 2>&1
   EXIT=$?

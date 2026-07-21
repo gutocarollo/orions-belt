@@ -21,6 +21,8 @@ Contract: exit 0 = allow stop; exit 2 = block (stderr goes to the model).
 Fail-open: any internal error allows the stop.
 """
 import json
+import importlib.util
+from pathlib import Path
 import re
 import sys
 
@@ -54,6 +56,11 @@ CLAIM_RE = re.compile(
 SENTINEL_RE = re.compile(
     r"PROVA-DE-CONCLUSAO:\s*\d+\s*/\s*\d+\s*PASS\s*,\s*gaps\s*:", re.IGNORECASE
 )
+SENTINEL_DETAIL_RE = re.compile(
+    r"PROVA-DE-CONCLUSAO:\s*(\d+)\s*/\s*(\d+)\s*PASS\s*,\s*gaps\s*:\s*\[([^\]]*)\]",
+    re.IGNORECASE,
+)
+EVIDENCE_RE = re.compile(r"evidence\s*:\s*(`?)([^\s`,]+\.json)\1", re.IGNORECASE)
 TAIL_BYTES = 2_000_000  # transcripts reach 45MB; only the tail matters
 
 
@@ -114,15 +121,38 @@ def main():
     if not CLAIM_RE.search(last):
         return 0
     # the sentinel may be in this message or just before it (verdict in a prior msg)
-    if any(SENTINEL_RE.search(t) for t in texts[-3:]):
-        return 0
+    for candidate in texts[-3:]:
+        if not SENTINEL_RE.search(candidate):
+            continue
+        match = EVIDENCE_RE.search(candidate)
+        detail = SENTINEL_DETAIL_RE.search(candidate)
+        if not match or not detail:
+            continue
+        root = Path(data.get("cwd") or ".").resolve()
+        module_path = root / ".harness/lib/proof_evidence.py"
+        try:
+            spec = importlib.util.spec_from_file_location("proof_evidence", module_path)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            evidence_path = root / match.group(2)
+            ok, _reason = module.verify_manifest(evidence_path, root)
+            actual_pass, actual_total, actual_gaps = module.summary(evidence_path, root)
+            declared_gaps = [item.strip().strip("'\"") for item in detail.group(3).split(",") if item.strip()]
+            if declared_gaps in (["none"], ["nenhum"]):
+                declared_gaps = []
+            if ok and (int(detail.group(1)), int(detail.group(2)), sorted(declared_gaps)) == (actual_pass, actual_total, sorted(actual_gaps)):
+                return 0
+        except Exception:
+            continue
     sys.stderr.write(
         "COMPLETION-GATE: plan-level completion claim without an evidence block.\n"
         "Before declaring 100%/plan executed/all fixed, run the `prova-de-conclusao` "
-        "skill: for each declared item, THIS-SESSION evidence (command + exit code, "
+        "skill: execute proof commands with `.harness/lib/proof_evidence.py run`, "
         "grep with path+line, test counts, ui-evidence manifest, curl on the prod "
         "URL) in a table, ending with the literal line "
-        "`PROVA-DE-CONCLUSAO: <x>/<y> PASS, gaps: [ids or 'none']`.\n"
+        "`PROVA-DE-CONCLUSAO: <x>/<y> PASS, gaps: [ids or 'none'], evidence: <manifest.json>`.\n"
         "If there is no evidence for an item, it's a gap — reword the verdict without "
         "the completion claim instead of fabricating certainty.\n"
     )

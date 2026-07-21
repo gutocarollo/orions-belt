@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orions-belt.dev/schemas/trace-event.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "trace_id", "span_id", "run_id", "kind", "name", "timestamp", "attributes"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "trace_id": {"type": "string", "minLength": 1},
+    "span_id": {"type": "string", "minLength": 1},
+    "parent_span_id": {"type": ["string", "null"]},
+    "run_id": {"type": "string", "minLength": 1},
+    "node_id": {"type": ["string", "null"]},
+    "agent_id": {"type": ["string", "null"]},
+    "kind": {"enum": ["SPAN_START", "SPAN_END", "EVENT", "ERROR"]},
+    "name": {"type": "string", "minLength": 1},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "attributes": {"type": "object"}
+  }
+}

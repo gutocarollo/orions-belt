@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orions-belt.dev/schemas/control-run-state.schema.json",
+  "title": "Materialized control graph run state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "graph_id", "graph_version", "status", "current_node", "sequence", "visited", "reviews", "budgets", "applied_event_ids", "applied_event_hashes", "pending_outcome"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_id": {"type": "string"},
+    "graph_id": {"type": "string"},
+    "graph_version": {"type": "integer", "minimum": 1},
+    "status": {"enum": ["RUNNING", "WAITING_HUMAN", "COMPLETED", "BLOCKED"]},
+    "current_node": {"type": ["string", "null"]},
+    "sequence": {"type": "integer", "minimum": 1},
+    "visited": {"type": "array", "items": {"type": "string"}},
+    "reviews": {"type": "object"},
+    "budgets": {"type": "object"},
+    "applied_event_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "applied_event_hashes": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+    "pending_outcome": {"type": ["string", "null"]}
+  }
+}

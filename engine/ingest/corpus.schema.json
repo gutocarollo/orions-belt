@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orions-belt.dev/schemas/corpus-record.schema.json",
+  "title": "Orion's Belt corpus pipeline envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "stage", "generated_at", "records"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "stage": {"enum": ["manifest", "validated", "curated", "canonical"]},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "records": {"type": "array", "items": {"$ref": "#/$defs/record"}}
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "required": ["id", "path", "sha256", "bytes", "source_url", "trust_label"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^source:[a-f0-9]{24}$"},
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "source_url": {"type": ["string", "null"], "format": "uri"},
+        "final_url": {"type": ["string", "null"], "format": "uri"},
+        "source_url_method": {"type": ["string", "null"]},
+        "license": {"type": ["string", "null"]},
+        "trust_label": {"enum": ["raw_untrusted", "validated_untrusted", "reviewed", "canonical"]},
+        "status": {"enum": ["accepted", "quarantined", "approved"]},
+        "reasons": {"type": "array", "items": {"type": "string"}},
+        "claims": {"type": "array"},
+        "reviewed_by": {"type": "string"}
+      }
+    }
+  }
+}

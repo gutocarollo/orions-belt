@@ -1,13 +1,14 @@
 # Orion's Belt — framework portátil e auto-configurável de harness de agentes de IA
 
-> Hooks determinísticos, skills, council adversarial e wiki Karpathy temporal, instaláveis em qualquer projeto de software via [Copier](https://copier.readthedocs.io/). Suporta **Claude Code** e **Codex** a partir de uma única fonte de verdade — o mesmo script de hook e a mesma SKILL.md servem os dois runtimes. Tudo parametrizado pela config central (`.harness/harness.conf`) gerada pelo questionário `copier.yml`.
+> Hooks determinísticos, skills, council adversarial e wiki Karpathy temporal, instaláveis em qualquer projeto de software via [Copier](https://copier.readthedocs.io/). Suporta **Claude Code** e **Codex** por contratos e núcleo compartilhados; capacidades específicas de runtime permanecem explícitas. Tudo parametrizado pela config central (`.harness/harness.conf`) gerada pelo questionário `copier.yml`.
 
-Este arquivo é um índice de roteamento no padrão [llms.txt](https://llmstxt.org). Uma LLM chegando a este repositório tem uma de três perguntas — cada uma tem uma resposta em um lugar diferente. Ver `SCHEMA.md` para a organização completa.
+Este arquivo é um índice de roteamento no padrão [llms.txt](https://llmstxt.org). Cada tipo de pergunta tem uma resposta em um lugar diferente. Ver `SCHEMA.md` para a organização completa.
 
-## As 3 audiências
+## Audiências
 
 - [docs/manual/](docs/manual/README.md): **"Quero ENTENDER o harness que este framework instala."** A documentação canônica do produto: 15 capítulos genéricos — visão geral e ciclo de vida de um turno (01); os hooks por evento: SessionStart, prompt, PreToolUse, PostToolUse, Stop (02-06); regras hookify declarativas (07); execuções longas/marathon (08); skills operacionais (09); wiki Karpathy + lints (10); council adversarial + subagents (11); ciclo de auto-melhoria (12); understand-anything em monorepo (13); instalação e update (14); limitações conhecidas (15). Cada capítulo cita as variáveis `HARNESS_*`/`PROD_*` pelo nome e linka os arquivos reais do framework. O README do manual tem a tabela "leia quando" por capítulo — roteie por ela.
 - [templates/](templates/) + [copier.yml](copier.yml): **"Quero INSTALAR o harness num projeto."** A árvore Copier parametrizada: `.harness/` (config central + hooks + libs determinísticas), superfícies por runtime (`.claude/`, `.codex/`, `AGENTS.md`), skills, regras hookify, seeds da wiki. O passo a passo de instalação/adaptação/update é o capítulo [14 do manual](docs/manual/14-instalacao-e-update.md); o questionário comentado é o próprio `copier.yml`.
+- [docs/architecture/](docs/architecture/README.md): **"Qual é a arquitetura ATUAL/ALVO e quais contratos governam a evolução?"** Três grafos lógicos, trust boundaries, ingestão segura, matriz de capacidades e rollout. Comece por [arquitetura-alvo.md](docs/architecture/arquitetura-alvo.md).
 - [docs/planning/](docs/planning/00-plano-consolidado.md): **"Como e por que este framework foi construído assim?"** História da construção — arquivo factual, não parte do produto: o plano consolidado (arquitetura-alvo, WBS de fases com gates, decisões D[n], riscos) e os 8 relatórios de pesquisa (`research/01..08`) que o fundamentam, cada um citado por seção no plano. Leia quando precisar da RAZÃO de uma decisão de design; para o comportamento atual de um componente, prefira sempre o manual.
 
 ## Infraestrutura de suporte (não é uma 4ª audiência)

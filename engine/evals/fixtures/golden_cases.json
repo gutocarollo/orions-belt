@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0",
+  "cases": [
+    {
+      "id": "happy-plan",
+      "trajectory": [
+        {"type": "RUN_STARTED"},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "context", "on": "START"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "risk_router", "on": "READY"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "plan", "on": "PLAN"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "plan_review", "on": "READY"}},
+        {"type": "REVIEW_RECORDED", "payload": {"family": "plan", "outcome": "SATISFEITO"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "execute", "on": "SATISFEITO"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "execution_review", "on": "READY"}},
+        {"type": "REVIEW_RECORDED", "payload": {"family": "execution", "outcome": "SATISFEITO"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "proof", "on": "SATISFEITO"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "done", "on": "PASS"}},
+        {"type": "RUN_COMPLETED"}
+      ],
+      "expected": {
+        "status": "COMPLETED", "current_node": "done",
+        "visited": ["context", "risk_router", "plan", "plan_review", "execute", "execution_review", "proof", "done"],
+        "plan_outcomes": ["SATISFEITO"], "execution_outcomes": ["SATISFEITO"]
+      }
+    },
+    {
+      "id": "human-grill",
+      "trajectory": [
+        {"type": "RUN_STARTED"},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "context", "on": "START"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "risk_router", "on": "READY"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "plan", "on": "PLAN"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "plan_review", "on": "READY"}},
+        {"type": "REVIEW_RECORDED", "payload": {"family": "plan", "outcome": "SABATINAR"}},
+        {"type": "NODE_ENTERED", "payload": {"node_id": "human_input", "on": "SABATINAR"}}
+      ],
+      "expected": {"status": "WAITING_HUMAN", "current_node": "human_input", "plan_outcomes": ["SABATINAR"], "execution_outcomes": []}
+    }
+  ]
+}

@@ -9,13 +9,10 @@ read via `engine/_tooling_conf.py`:
   ROOT = parents[1] (agent-swarm repo)        -> _tooling_conf.project_root() (TARGET PROJECT root,
                                                   not this package — unlike verify_witness.py)
   SKILL_DIR = ROOT/".agents"/"skills"         -> HARNESS_SKILLS_DIR (default ".agents/skills")
-  REQUIRED_SKILLS = ("learnhouse-...", ...)   -> HARNESS_REQUIRED_SKILLS (CSV, empty default —
-                                                  no skill is required by default; each
-                                                  target project declares its own via copier.yml)
+  REQUIRED_SKILLS = ("learnhouse-...", ...)   -> HARNESS_REQUIRED_SKILLS (CSV; mandatory when
+                                                  Codex or the skills directory is present)
   ".codex"/"agents", ".codex"/"config.toml"   -> HARNESS_CODEX_AGENTS_DIR, HARNESS_CODEX_CONFIG_PATH
-  openai.yaml of "learnhouse-delivery-...".   -> HARNESS_COUNCIL_SKILL_NAME (optional; empty = skips
-                                                  the check, fail-open — not every project has a
-                                                  companion OpenAI-interface in the council skill)
+  openai.yaml of "learnhouse-delivery-...".   -> HARNESS_COUNCIL_SKILL_NAME (mandatory with Codex)
 
 Additional fail-open relative to the original: if HARNESS_CODEX_AGENTS_DIR /
 HARNESS_CODEX_CONFIG_PATH do not exist in the target project, the TOML
@@ -100,6 +97,13 @@ def validate_toml() -> None:
 
 
 def main() -> int:
+    codex_present = CODEX_CONFIG_PATH.exists() or CODEX_AGENTS_DIR.exists()
+    if (codex_present or SKILL_DIR.exists()) and not REQUIRED_SKILLS:
+        fail("HARNESS_REQUIRED_SKILLS must declare the installed contract skills")
+    if codex_present and not COUNCIL_SKILL_NAME:
+        fail("HARNESS_COUNCIL_SKILL_NAME is required when Codex configuration is present")
+    if COUNCIL_SKILL_NAME and COUNCIL_SKILL_NAME not in REQUIRED_SKILLS:
+        fail("HARNESS_COUNCIL_SKILL_NAME must also be listed in HARNESS_REQUIRED_SKILLS")
     for skill in REQUIRED_SKILLS:
         validate_skill(skill)
     validate_openai_yaml()

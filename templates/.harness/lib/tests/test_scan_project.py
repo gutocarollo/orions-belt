@@ -76,6 +76,22 @@ class ScanProjectFixtureTest(unittest.TestCase):
         self.assertFalse(facts["has_frontend_ui"], "fastapi is backend, must not count as frontend UI")
         self.assertIn("pytest", facts["test_frameworks"])
 
+    def test_auxiliary_child_manifest_does_not_override_tooling_sources(self) -> None:
+        fixture = Path(tempfile.mkdtemp(prefix="harness-init-tooling-"))
+        try:
+            (fixture / "video").mkdir()
+            (fixture / "video/package.json").write_text('{"name":"video"}\n')
+            (fixture / "engine").mkdir()
+            for index in range(12):
+                (fixture / "engine" / f"tool_{index}.py").write_text("pass\n")
+            facts = _run_scan("scan", fixture)
+            self.assertEqual(facts["primary_language"], "python")
+            self.assertIsNone(facts["primary_manifest"])
+            self.assertEqual(facts["repository_role"], "tooling-framework")
+            self.assertEqual(facts["source_inventory"]["confidence"], "high")
+        finally:
+            shutil.rmtree(fixture, ignore_errors=True)
+
     def test_classify_marks_ui_evidence_and_ds_gate_not_applicable(self) -> None:
         report = _run_scan("classify", self.tmpdir)
         self.assertEqual(_status_of(report["components"], "hook.ui-evidence-gate"), "NAO_APLICAVEL")

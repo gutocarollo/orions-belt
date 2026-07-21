@@ -5,6 +5,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
 INSTALLER="$REPO_ROOT/harness-install.sh"
+EXPECTED_SOURCE="$(git -C "$REPO_ROOT" config --get remote.origin.url 2>/dev/null || basename "$REPO_ROOT")"
 WORK="$(mktemp -d /tmp/harness-install-fail-closed.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 FAIL=0
@@ -86,7 +87,7 @@ assert "same-input reinstall is a byte no-op" \
 assert "reinstall reuses omitted managed answers instead of resetting defaults" \
   'grep -Fqx "HARNESS_DEV_WEB_PORT=4321" "$TARGET4/.harness/harness.conf"'
 assert "answers metadata uses stable installer provenance" \
-  'grep -Fq "_src_path: '\''https://github.com/gutocarollo/orions-belt.git'\''" "$TARGET4/.harness/answers.yml"'
+  'grep -Fqx "_src_path: '\''$EXPECTED_SOURCE'\''" "$TARGET4/.harness/answers.yml"'
 
 # 5. Dry-run emits a plan but leaves an existing empty target empty.
 TARGET5="$WORK/dry-run"

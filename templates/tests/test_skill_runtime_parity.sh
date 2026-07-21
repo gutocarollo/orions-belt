@@ -84,6 +84,20 @@ assert "codex-only: .claude/ does NOT exist (use_claude=false)" \
   '[ ! -d "$CODEX_ONLY/.claude" ]'
 assert "codex-only: the council's companion openai.yaml exists (.agents/skills/$COUNCIL_SKILL/agents/openai.yaml)" \
   '[ -f "$CODEX_ONLY/.agents/skills/$COUNCIL_SKILL/agents/openai.yaml" ]'
+assert "codex-only: installed skill validator exists" \
+  '[ -f "$CODEX_ONLY/.harness/lib/validate_skills.py" ]'
+assert "codex-only: installed ledger exists" \
+  '[ -f "$CODEX_ONLY/.harness/lib/agent_swarm_ledger.py" ]'
+assert "codex-only: required skills default includes the generated council" \
+  'grep -q "^HARNESS_REQUIRED_SKILLS=.*$COUNCIL_SKILL" "$CODEX_ONLY/.harness/harness.conf"'
+assert "codex-only: installed validator passes inside the rendered destination" \
+  '(cd "$CODEX_ONLY" && python3 .harness/lib/validate_skills.py >/dev/null)'
+assert "codex-only: installed ledger records a request" \
+  '(cd "$CODEX_ONLY" && python3 .harness/lib/agent_swarm_ledger.py append --run-id render-e2e --loop execution --round 1 --event fix-request --status CORRIGIR --payload-json '\''{"gap":"g"}'\'' >/dev/null)'
+assert "codex-only: installed ledger links the consumed event to its request" \
+  '(cd "$CODEX_ONLY" && python3 .harness/lib/agent_swarm_ledger.py append --run-id render-e2e --loop execution --round 1 --event fix-consumed --status CORRIGIR --payload-json '\''{"source_review_round":1}'\'' >/dev/null && grep -q '\''"parent_seq": 1'\'' .harness/runs/agent-swarm/render-e2e/loop.jsonl)'
+assert "codex-only: installed ledger summary validates the persisted stream" \
+  '(cd "$CODEX_ONLY" && python3 .harness/lib/agent_swarm_ledger.py summary --run-id render-e2e | grep -q '\''"execution:fix-consumed": 1'\'')'
 assert "EN adversarial-review keeps heading and prose on separate lines" \
   '! grep -q "Adversarial ReviewA reviewer" "$CODEX_ONLY/.agents/skills/adversarial-review/SKILL.md"'
 assert "EN council keeps prose and arguments heading separated" \
@@ -130,6 +144,12 @@ assert "rendered council has the real sentinels (not an empty stub)" \
   'grep -q "PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | SABATINAR | BLOQUEADO" "$BOTH/.claude/skills/$COUNCIL_SKILL/SKILL.md"'
 assert "rendered adversarial-review has the real protocol (not an empty stub)" \
   'grep -q "ADVERSARIAL-VERIFICATION" "$BOTH/.claude/skills/adversarial-review/SKILL.md"'
+assert "both-runtime: installed validator passes inside the rendered destination" \
+  '(cd "$BOTH" && python3 .harness/lib/validate_skills.py >/dev/null)'
+assert "both-runtime: rendered council cites the installed ledger path" \
+  'grep -q "python3 .harness/lib/agent_swarm_ledger.py append" "$BOTH/.agents/skills/$COUNCIL_SKILL/SKILL.md"'
+assert "both-runtime: no rendered council cites the author-only engine path" \
+  '! grep -R -q "engine/contract/scripts/agent_swarm_ledger.py" "$BOTH/.agents/skills/$COUNCIL_SKILL" "$BOTH/.claude/skills/$COUNCIL_SKILL"'
 assert "core skills do not hardcode donor apps/api or apps/web topology" \
   '! grep -Eq "apps/(api|web)" "$BOTH/.claude/skills/$COUNCIL_SKILL/SKILL.md" "$BOTH/.claude/skills/adversarial-review/SKILL.md"'
 

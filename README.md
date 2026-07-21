@@ -4,7 +4,7 @@
 
 <p>
   <img alt="license" src="https://img.shields.io/badge/license-CC%20BY--SA%204.0-3b82f6">
-  <img alt="version" src="https://img.shields.io/badge/version-v1.5.0-6f42c1">
+  <img alt="version" src="https://img.shields.io/badge/version-v1.6.3-6f42c1">
   <img alt="runtimes" src="https://img.shields.io/badge/runtimes-Claude%20Code%20%2B%20Codex-111827">
   <img alt="install" src="https://img.shields.io/badge/install-Copier-1f6feb">
   <img alt="instructions" src="https://img.shields.io/badge/instructions-EN%20%7C%20PT-3fb950">
@@ -26,12 +26,16 @@ temporal wiki into *any* repo — so an agent stays aligned, verifiable and anti
 Coding agents are strong but drift: they overclaim "done", report UI from a diff instead of a
 pixel, invent facts, and skip verification. Orion's Belt is the **operating discipline** that
 keeps them honest — extracted and generalized from a private production harness run for months
-on a live software project, then made installable into any codebase.
+on a live software project, then made installable into any codebase. It is built under its own
+rules: one agent executes a round, another audits the next, and the council runs of this very
+repository materialize control-graph events whose deterministic replay must reproduce the final
+state.
 
 It is **not** a wiki (despite its origins) and **not** a prompt pack. It is a parametrized
 [Copier](https://copier.readthedocs.io/) template that installs a coherent system of
 **deterministic hooks + agent skills + an adversarial delivery council + evidence gates**, all
-driven by one central config and serving **Claude Code and Codex from a single source of truth**.
+driven by one central config and serving **Claude Code and Codex through shared core contracts**.
+Runtime-specific capabilities remain explicit rather than being presented as full parity.
 
 <div align="center"><img src="assets/demo.svg" alt="orions-belt install" width="88%"></div>
 
@@ -56,6 +60,14 @@ git clone --depth 1 --branch "$ORIONS_BELT_REF" \
 > failures. Use repeatable `--preserve <exact-path>` only after reviewing a collision. Raw
 > `copier update` remains prohibited when managed instruction files are git-ignored; update by
 > rerunning `harness-install.sh` from a pinned newer release. See [chapter 14](docs/manual/14-instalacao-e-update.md).
+>
+> Installs through `harness-install.sh` (the path `harness-init` also uses) emit
+> **`.harness/INSTALL-REPORT.md`** — an audit trail of what was installed, what was skipped, and
+> the reason for each decision. Evaluated on a real 120 GB brownfield
+> (1,647 tracked files): every tracked byte preserved, 3 merge surfaces touched, zero deletions
+> ([eval findings](eval/whatsapp-brownfield-2026-07-20/FINDINGS.md)). Living files such as
+> `tasks/lessons.md` use a **seed strategy** — harness updates never overwrite what your project
+> learned.
 
 The deterministic installer runs a platform preflight, renders to scratch, emits `--dry-run`/
 `--plan-json`, and applies a stateful ownership plan. The four shared surfaces (`AGENTS.md`,
@@ -70,13 +82,13 @@ and applicability classification belong to the separate, agent-guided `harness-i
 | 🧭 | **Delivery council** | Orchestrates a task from `EXECUTION` / `PLANNING` / `PLAN_REVIEW` / `AUTO` with automatic trade-off decisions and adversarial loops. |
 | 🔬 | **Adversarial review** | Evidence-based verifier that must confirm or refute each gap with proof — runs in a subagent, never self-review. |
 | 🎯 | **Grill-me** | Interviews you on a plan one decision at a time (behavior, ≥2 real good/bad examples, Option C) — before code is written. |
-| ✅ | **Completion gate** | A Stop hook that **blocks any "done" claim** without a proof-of-completion block of this-session evidence (the `PROVA-DE-CONCLUSAO` sentinel). |
+| ✅ | **Completion claim gate** | Blocks plan-level "done" claims unless the sentinel points to a fresh manifest bound to HEAD and the worktree, produced by executed proof commands. Local evidence is not a cryptographic trust boundary; an independent executor is optional and provider-specific. |
 | 🖼️ | **UI-evidence** | Playwright before/after full-page PNGs + console + manifest; a Stop hook blocks shipping UI changes seen only as a diff. |
-| 📚 | **Karpathy wiki** | Temporal doc indexing; a pre-commit lint fails on orphaned docs or dead references. |
-| 🧠 | **Understand graph** | Incremental knowledge-graph refresh, triggered from the maintenance loop by a change threshold. |
+| 📚 | **Karpathy wiki** | Temporal doc indexing with executable orphan/reference lints; a repo-wide stray-doc sweep routes scattered markdown into a curator inbox; pre-commit runs docs policy before reference integrity. |
+| 🧠 | **Knowledge provider** | Provider contract for external Understand graphs: stable IDs, typed/provenanced edges, tombstones and incremental-versus-clean parity. Orion deliberately does not duplicate Understand's parser. |
 | ♻️ | **Self-improvement loop** | `/loop` maintenance pass: lessons capture → inject → promote, wiki lint, ref-integrity, graph freshness. |
-| 🛡️ | **Deterministic hooks** | 15 event hooks: completion/UI/design-system gates, subagent throttle, leak reaper, git-doctor. |
-| 🌐 | **Dual runtime** | Claude Code (`.claude/`) and Codex (`.agents/`, `.codex/`) generated byte-identically from one source. |
+| 🛡️ | **Deterministic hooks** | 18 hook scripts shipped (14 install by default, 4 are stack-conditional): completion/UI/design-system gates, subagent throttle, leak reaper, git-doctor. |
+| 🌐 | **Dual runtime core** | The council and core operational skills share one source across Claude Code and Codex; optional and runtime-native capabilities are tracked as an explicit compatibility matrix. |
 
 ## How it works
 
@@ -104,6 +116,49 @@ REPLANEJAR | SABATINAR | BLOQUEADO`, `GATE-GRILL`, severities. They are byte-ide
 language (English *and* Portuguese instructions emit the same tokens), so the deterministic layer
 never depends on prose. Think of them as enum values, not words to translate.
 
+## Canonical architecture: three connected graphs
+
+The implemented foundation is not a larger prompt pack. It is a small graph-engineering kernel
+whose decisions, knowledge and evidence can be validated independently:
+
+```mermaid
+flowchart LR
+    T["task + policy"] --> C["Control Graph\nstate, transitions, replay"]
+    K["Knowledge Graph\ncode/docs, provenance, tombstones"] --> C
+    C --> X["execution"]
+    X --> E["Evidence Graph\nclaims, commands, tests, artifacts"]
+    E --> C
+    R["raw external corpus"] --> Q["quarantine → manifest → validated → curated → canonical"]
+    Q --> K
+```
+
+- **Control Graph** makes council state explicit: typed events, legal transitions, checkpoints,
+  bounded review budgets, idempotent event dedupe and deterministic replay.
+- **Knowledge Graph** keeps stable entity IDs and typed edges, distinguishing deterministic,
+  compiler-resolved and inferred relationships. Every inferred edge carries provenance and
+  confidence; incremental builds must be equivalent to clean rebuilds.
+- **Evidence/Provenance Graph** connects each completion claim to the command, test, artifact and
+  source that support it, including hashes, Git revision, schema version and recorded/valid time.
+
+External corpora are untrusted input, never instructions. Promotion follows the explicit pipeline
+`raw → manifest → validated → curated → canonical`; raw content stays quarantined, and only reviewed,
+traceable facts enter canonical knowledge. Golden datasets, trajectory evals, JSONL traces and one
+fail-closed release check — currently 20 gates, all local — measure the system end to end.
+
+The canonical release entry point is local and provider-agnostic:
+`python3 engine/release_check.py`. GitHub Actions, Bitbucket Pipelines, GitLab CI,
+Jenkins or an isolated local runner may call that command, but none is required by
+the graph kernel. Provider adapters are opt-in; no hosted CI is enabled by default.
+
+The first real ingestion pass over `.firecrawl` preserved the raw corpus byte-for-byte and produced
+only manifest/validation evidence: 134 records (4,158,372 bytes), 80 validated, 54 quarantined,
+118 with an explicit source URL and 16 without one. Nothing was promoted automatically to curated
+or canonical knowledge; the machine-readable audit is under `engine/ingest/evidence/`.
+
+The implementation contract, current-versus-target matrix, runtime capability matrix, trust model
+and adoption sequence are canonical in
+**[docs/architecture/arquitetura-alvo.md](docs/architecture/arquitetura-alvo.md)**.
+
 ## English or Portuguese
 
 Instruction prose ships in **English (default) or Portuguese** via the `harness_language`
@@ -126,8 +181,11 @@ Full procedure, decision trees per component, and gotchas: **[chapter 14](docs/m
 
 - **[docs/manual/](docs/manual/README.md)** — the canonical product docs: 15 chapters on what
   the framework installs and how to configure every component.
+- **[docs/architecture/](docs/architecture/README.md)** — canonical current/target architecture,
+  graph contracts, trust boundaries and rollout order.
 - **[docs/planning/](docs/planning/)** — why it's built this way (construction archive).
-- **[SCHEMA.md](SCHEMA.md)** / **[llms.txt](llms.txt)** — repo organization and LLM routing.
+- **[SCHEMA.md](SCHEMA.md)** / **[llms.txt](llms.txt)** — framework-repository organization and
+  LLM routing. The root schema takes precedence over the dogfood wiki policy in `docs/SCHEMA.md`.
 
 ## Platform
 

@@ -43,7 +43,7 @@ Tabela com uma linha por item declarado:
 Última linha do veredito, literal (o Stop hook `completion-gate` procura por ela):
 
 ```
-PROVA-DE-CONCLUSAO: <x>/<y> PASS, gaps: [<ids> ou 'nenhum']
+PROVA-DE-CONCLUSAO: <x>/<y> PASS, gaps: [<ids> ou 'nenhum'], evidence: .harness/evidence/<run>.json
 ```
 
 `x` = itens PASS, `y` = total de itens do claim. Se `x < y`, o texto do veredito
@@ -64,6 +64,11 @@ NÃO pode conter "100%", "tudo", "completo" — declare os gaps.
 {%- endif %}
 5. Claim estático ("a regra existe", "o gate está lá") exige `grep` com
    **path + Linha** na saída.
+6. O manifesto deve ser produzido pelo runner, não escrito como prosa:
+   `python3 .harness/lib/proof_evidence.py run --id <ID> --type <test|static|endpoint|visual> --manifest .harness/evidence/<run>.json -- <comando>`.
+   O gate confere schema, HEAD, fingerprint do worktree, janela temporal e exit codes. Isto é atestação
+   local, não fronteira criptográfica. Quando o risco exigir separação, use um
+   executor independente; CI hospedada é um adapter opcional, não dependência do core.
 
 ## 4. Tipos de evidência aceitos
 

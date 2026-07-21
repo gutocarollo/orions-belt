@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orions-belt.dev/schemas/trajectory-eval-result.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "passed", "total", "failed", "transition_coverage", "cases"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "passed": {"type": "integer", "minimum": 0},
+    "total": {"type": "integer", "minimum": 0},
+    "failed": {"type": "integer", "minimum": 0},
+    "transition_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+    "cases": {"type": "array", "items": {"type": "object"}}
+  }
+}

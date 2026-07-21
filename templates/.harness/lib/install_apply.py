@@ -44,11 +44,22 @@ MANIFEST_REL = Path(".harness/install-manifest.json")
 JOURNAL_REL = Path(".harness/install-journal.json")
 BACKUP_ROOT_REL = Path(".harness/install-backups")
 RUN_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+PRUNABLE_REMOVED = {
+    "tests/test_codev_shared_memory.sh",
+    "tests/test_harness_freshness.sh",
+    "tests/test_install_report.sh",
+    "tests/test_set_hooks_path_precommit.sh",
+}
 SENSITIVE: dict[str, str] = {
     "AGENTS.md": "marked-block",
     ".claude/CLAUDE.md": "marked-block",
     ".claude/settings.json": "structured-json",
     ".gitignore": "marked-block",
+    # Living project knowledge is seeded by the harness, then owned by the
+    # project. Re-install/update must never overwrite or reject local learning.
+    "tasks/lessons.md": "seed",
+    "docs/SCHEMA.md": "seed",
+    "docs/log.md": "seed",
 }
 
 
@@ -291,6 +302,14 @@ def build_plan(
                 content = destination.read_bytes()
                 mode = stat.S_IMODE(destination.stat().st_mode)
                 action = "preserve"
+            elif strategy == "seed":
+                if exists:
+                    content = destination.read_bytes()
+                    mode = stat.S_IMODE(destination.stat().st_mode)
+                    action = "unchanged"
+                else:
+                    content = source.read_bytes()
+                    action = "create"
             elif strategy != "owned":
                 # Shared files belong partly to the project; preserve their
                 # existing permission mode while reconciling only content.
@@ -371,7 +390,7 @@ def manifest_for(plan: list[PlannedFile], previous: dict[str, Any], metadata: di
         files[item.rel] = file_entry
     # A removed template path is preserved until an explicit prune policy exists.
     for rel, entry in old_files.items():
-        if rel not in rendered and isinstance(entry, dict):
+        if rel not in rendered and rel not in PRUNABLE_REMOVED and isinstance(entry, dict):
             kept = dict(entry)
             kept["orphaned"] = True
             files[rel] = kept

@@ -1,0 +1,51 @@
+---
+name: understand-apps-incremental
+description: >-
+  Use whenever the task mentions /understand, Understand Anything,
+  .understand-anything, knowledge-graph, code graph, compute-batches or
+  incremental update of the {{ project_name }} graph.
+---
+
+# Understand Anything incremental in {{ harness_understand_apps_root }}/
+
+Before any action with Understand Anything in this repo, read `AGENTS.md` and
+the architecture document that governs this mechanism, when present.
+
+## Blocking rule
+
+The graph uses `PROJECT_ROOT={{ harness_understand_apps_root }}`, while Git uses
+the repository root. Incremental changed files must therefore be relative to
+`{{ harness_understand_apps_root }}/`.
+
+Use:
+
+```bash
+bash .harness/lib/understand-apps-changed-files.sh
+```
+
+or:
+
+```bash
+LAST=$(node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('{{ harness_understand_apps_root }}/.understand-anything/meta.json','utf8')); process.stdout.write(m.gitCommitHash)")
+git diff --relative={{ harness_understand_apps_root }} "$LAST"..HEAD --name-only -- {{ harness_understand_apps_root }} | rg -v '^\.understand-anything/'
+```
+
+Never hardcode the graph hash; read `gitCommitHash` from the provider metadata.
+
+## Forbidden
+
+```bash
+git diff <lastCommitHash>..HEAD --name-only
+git -C {{ harness_understand_apps_root }} diff <lastCommitHash>..HEAD --name-only
+```
+
+Those commands emit paths with the project-root prefix, but the provider expects
+paths relative to its own root.
+
+## Checklist
+
+1. Confirm `{{ harness_understand_apps_root }}/.understand-anything/meta.json` exists.
+2. Generate changed files with the canonical helper.
+3. Reject entries prefixed with `{{ harness_understand_apps_root }}/` or rooted in docs/tooling.
+4. Run incremental without `--full`.
+5. Validate the provider graph through the repository Knowledge Graph contract.

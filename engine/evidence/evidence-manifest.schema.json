@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orions-belt.dev/schemas/evidence-manifest.schema.json",
+  "title": "Orion's Belt evidence and provenance manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report_id", "title", "git_sha", "recorded_at", "valid_at", "agents", "activities", "entities", "claims"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "report_id": {"type": "string", "pattern": "^[a-zA-Z0-9._-]+$"},
+    "title": {"type": "string", "minLength": 1},
+    "git_sha": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+    "recorded_at": {"type": "string", "format": "date-time"},
+    "valid_at": {"type": "string", "format": "date-time"},
+    "agents": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "type", "name"],
+        "properties": {"id": {"type": "string"}, "type": {"enum": ["human", "software", "organization"]}, "name": {"type": "string"}, "version": {"type": "string"}}
+      }
+    },
+    "activities": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "type", "agent_id", "started_at", "ended_at", "used", "generated"],
+        "properties": {
+          "id": {"type": "string"}, "type": {"enum": ["command", "test", "capture", "transform", "review"]},
+          "agent_id": {"type": "string"}, "started_at": {"type": "string", "format": "date-time"}, "ended_at": {"type": "string", "format": "date-time"},
+          "command": {"type": "array", "items": {"type": "string"}}, "exit_code": {"type": "integer"},
+          "used": {"type": "array", "items": {"type": "string"}}, "generated": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "entities": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "type", "uri", "sha256", "media_type", "trust", "recorded_at"],
+        "properties": {
+          "id": {"type": "string"}, "type": {"enum": ["artifact", "source", "screenshot", "log", "test-result"]},
+          "uri": {"type": "string"}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "media_type": {"type": "string"}, "trust": {"enum": ["trusted", "validated", "untrusted", "quarantined"]},
+          "recorded_at": {"type": "string", "format": "date-time"}, "route": {"type": "string"}, "theme": {"type": "string"}
+        }
+      }
+    },
+    "claims": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "statement", "status", "recorded_at", "valid_at", "activities", "entities"],
+        "properties": {
+          "id": {"type": "string"}, "statement": {"type": "string", "minLength": 1},
+          "status": {"enum": ["PASS", "FAIL", "UNVERIFIED"]},
+          "recorded_at": {"type": "string", "format": "date-time"}, "valid_at": {"type": "string", "format": "date-time"},
+          "activities": {"type": "array", "items": {"type": "string"}}, "entities": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

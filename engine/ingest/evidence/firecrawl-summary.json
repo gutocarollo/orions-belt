@@ -1,0 +1,29 @@
+{
+  "accepted": 80,
+  "missing_source_url": 16,
+  "promotion_performed": false,
+  "quarantined": 54,
+  "reason_counts": {
+    "binary_or_nul_content": 4,
+    "invalid_utf8": 4,
+    "prompt_injection:system_prompt_request": 22,
+    "prompt_injection:tool_execution_request": 45,
+    "unsupported_file_type": 4
+  },
+  "schema_version": "1.0.0",
+  "source_stage": "validated",
+  "status_counts": {
+    "accepted": 80,
+    "quarantined": 54
+  },
+  "suffix_counts": {
+    ".jpg": 4,
+    ".json": 11,
+    ".md": 115,
+    ".txt": 4
+  },
+  "total_bytes": 4158372,
+  "total_records": 134,
+  "validated_sha256": "0db1421ca4fc740f7f3c1bb6979b32e326bfcff6e4dbc590ee6638bad4d91586",
+  "with_source_url": 118
+}

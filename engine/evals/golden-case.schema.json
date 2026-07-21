@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orions-belt.dev/schemas/golden-control-cases.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cases"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "cases": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "trajectory", "expected"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*$"},
+          "trajectory": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["type"],
+              "properties": {"type": {"type": "string"}, "payload": {"type": "object"}}
+            }
+          },
+          "expected": {
+            "type": "object", "additionalProperties": false,
+            "required": ["status", "current_node"],
+            "properties": {
+              "status": {"enum": ["RUNNING", "WAITING_HUMAN", "COMPLETED", "BLOCKED"]},
+              "current_node": {"type": "string"},
+              "visited": {"type": "array", "items": {"type": "string"}},
+              "plan_outcomes": {"type": "array", "items": {"enum": ["SATISFEITO", "REPLANEJAR", "SABATINAR", "BLOQUEADO"]}},
+              "execution_outcomes": {"type": "array", "items": {"enum": ["SATISFEITO", "CORRIGIR", "BLOQUEADO"]}}
+            }
+          }
+        }
+      }
+    }
+  }
+}

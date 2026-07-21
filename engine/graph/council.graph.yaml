@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "graph_id": "orions-belt-council",
+  "version": 1,
+  "start": "context",
+  "terminal": ["done", "blocked", "pending"],
+  "nodes": [
+    {"id": "context", "kind": "action"},
+    {"id": "risk_router", "kind": "router"},
+    {"id": "plan", "kind": "action"},
+    {"id": "plan_review", "kind": "review", "review_family": "plan"},
+    {"id": "human_input", "kind": "human"},
+    {"id": "execute", "kind": "action"},
+    {"id": "execution_review", "kind": "review", "review_family": "execution"},
+    {"id": "proof", "kind": "proof"},
+    {"id": "done", "kind": "terminal"},
+    {"id": "pending", "kind": "terminal"},
+    {"id": "blocked", "kind": "terminal"}
+  ],
+  "transitions": [
+    {"from": "context", "to": "risk_router", "on": "READY"},
+    {"from": "risk_router", "to": "plan", "on": "PLAN"},
+    {"from": "risk_router", "to": "execute", "on": "EXECUTE"},
+    {"from": "plan", "to": "plan_review", "on": "READY"},
+    {"from": "plan_review", "to": "execute", "on": "SATISFEITO"},
+    {"from": "plan_review", "to": "plan", "on": "REPLANEJAR"},
+    {"from": "plan_review", "to": "human_input", "on": "SABATINAR"},
+    {"from": "plan_review", "to": "blocked", "on": "BLOQUEADO"},
+    {"from": "plan_review", "to": "pending", "on": "BUDGET_EXHAUSTED"},
+    {"from": "human_input", "to": "plan_review", "on": "DECIDIDO"},
+    {"from": "human_input", "to": "blocked", "on": "BLOQUEADO"},
+    {"from": "execute", "to": "execution_review", "on": "READY"},
+    {"from": "execution_review", "to": "proof", "on": "SATISFEITO"},
+    {"from": "execution_review", "to": "execute", "on": "CORRIGIR"},
+    {"from": "execution_review", "to": "blocked", "on": "BLOQUEADO"},
+    {"from": "execution_review", "to": "pending", "on": "BUDGET_EXHAUSTED"},
+    {"from": "proof", "to": "done", "on": "PASS"},
+    {"from": "proof", "to": "execute", "on": "FAIL"},
+    {"from": "proof", "to": "blocked", "on": "BLOQUEADO"}
+  ],
+  "budgets": {"plan_review": 2, "execution_review": 3, "human_input": 5, "total_events": 1000}
+}

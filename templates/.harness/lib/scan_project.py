@@ -134,6 +134,37 @@ EXCLUDED_COMPONENT_PARTS = {
     "examples", "__pycache__",
 }
 
+SOURCE_LANGUAGE_SUFFIXES = {
+    ".py": "python", ".sh": "shell", ".bash": "shell",
+    ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript",
+    ".ts": "typescript", ".tsx": "typescript", ".go": "go", ".rs": "rust",
+}
+
+
+def _source_inventory(target: Path) -> dict:
+    """Multi-signal inventory so an auxiliary manifest cannot define the repo."""
+    counts: dict[str, int] = {}
+    files = 0
+    try:
+        paths = target.rglob("*")
+        for path in paths:
+            try:
+                rel = path.relative_to(target)
+                if any(part in EXCLUDED_COMPONENT_PARTS for part in rel.parts) or not path.is_file():
+                    continue
+            except OSError:
+                continue
+            language = SOURCE_LANGUAGE_SUFFIXES.get(path.suffix.lower())
+            if language:
+                counts[language] = counts.get(language, 0) + 1
+                files += 1
+    except OSError:
+        pass
+    ordered = sorted(counts.items(), key=lambda row: (-row[1], row[0]))
+    primary = ordered[0][0] if ordered else None
+    confidence = "high" if files >= 10 and ordered and ordered[0][1] / files >= 0.5 else "medium" if files else "none"
+    return {"counts": dict(ordered), "files": files, "primary_language": primary, "confidence": confidence}
+
 
 def _detect_package_manager(target: Path, language: str | None) -> str | None:
     if language == "javascript":
@@ -506,11 +537,17 @@ def scan(target: Path, explicit_component_roots: list[str] | None = None) -> dic
     representative = root_component or next((row for row in components if row["has_frontend_ui"]), None)
     representative = representative or (components[0] if components else None)
 
+    source_inventory = _source_inventory(target)
     manifest = representative["primary_manifest"] if representative else None
     language = representative["primary_language"] if representative else None
+    # A child utility is evidence of a component, not authority over a
+    # manifest-less polyglot framework repository.
+    if root_component is None and source_inventory["files"] >= 10:
+        manifest = None
+        language = source_inventory["primary_language"]
 
     docker = _detect_docker(target)
-    package_manager = representative["package_manager"] if representative else None
+    package_manager = representative["package_manager"] if representative and manifest else None
     frontend = next((row for row in components if row["has_frontend_ui"]), None)
     framework_component = frontend or next((row for row in components if row["web_framework"]), None)
     web_framework = framework_component["web_framework"] if framework_component else None
@@ -541,6 +578,8 @@ def scan(target: Path, explicit_component_roots: list[str] | None = None) -> dic
         "git_root": git_root,
         "primary_manifest": manifest,
         "primary_language": language,
+        "repository_role": "application" if root_component or web_framework else "tooling-framework",
+        "source_inventory": source_inventory,
         "package_manager": package_manager,
         "web_framework": web_framework,
         "has_frontend_ui": web_framework in FRONTEND_FRAMEWORKS,

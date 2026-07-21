@@ -260,18 +260,40 @@ REPLAN-REQUEST:
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("skill-contract-ok", result.stdout)
 
+    def test_skill_validation_does_not_fail_open_with_codex(self):
+        tmp_root = pathlib.Path(tempfile.mkdtemp(prefix="skill-contract-test."))
+        self.addCleanup(shutil.rmtree, tmp_root, True)
+        (tmp_root / ".codex").mkdir(parents=True)
+        (tmp_root / ".codex" / "config.toml").write_text("[agents]\nmax_threads = 1\n", encoding="utf-8")
+        (tmp_root / ".harness").mkdir()
+        (tmp_root / ".harness" / "harness.conf").write_text(
+            "HARNESS_REQUIRED_SKILLS=\nHARNESS_COUNCIL_SKILL_NAME=\n", encoding="utf-8"
+        )
+        result = subprocess.run(
+            ["python3", "scripts/validate_skills.py"], cwd=ROOT,
+            env={**os.environ, "HARNESS_PROJECT_ROOT": str(tmp_root)},
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("HARNESS_REQUIRED_SKILLS must declare", result.stdout)
+
     def test_json_schemas_parse_and_enforce_conditional_payloads(self):
         plan_schema = json.loads(read("schemas/plan-review-result.schema.json"))
         execution_schema = json.loads(read("schemas/execution-review-result.schema.json"))
         ledger_schema = json.loads(read("schemas/ledger-event.schema.json"))
 
-        self.assertEqual(plan_schema["properties"]["plan_adversarial_verification"]["enum"], ["SATISFEITO", "REPLANEJAR", "BLOQUEADO"])
+        self.assertEqual(plan_schema["properties"]["plan_adversarial_verification"]["enum"], ["SATISFEITO", "REPLANEJAR", "SABATINAR", "BLOQUEADO"])
+        self.assertIn("sabatinar", plan_schema["properties"]["proxima_acao"]["enum"])
+        self.assertIn("necessita_grill", plan_schema["properties"])
+        self.assertIn("decisoes_grill", plan_schema["properties"])
         self.assertEqual(execution_schema["properties"]["adversarial_verification"]["enum"], ["SATISFEITO", "CORRIGIR", "BLOQUEADO"])
         self.assertIn("then", json.dumps(plan_schema))
         self.assertIn("replan_request", json.dumps(plan_schema))
         self.assertIn("then", json.dumps(execution_schema))
         self.assertIn("fix_request", json.dumps(execution_schema))
         self.assertEqual(ledger_schema["properties"]["event"]["enum"], ["review", "replan-request", "replan-consumed", "fix-request", "fix-consumed", "validation", "final"])
+        self.assertIn("seq", ledger_schema["required"])
+        self.assertIn("parent_seq", ledger_schema["properties"])
 
     @unittest.skip(F15_REASON)
     def test_structured_schema_mirror_does_not_replace_markdown_sentinels(self):
@@ -436,6 +458,7 @@ REPLAN-REQUEST:
             ledger = run_dir / "loop.jsonl"
             entry = json.loads(ledger.read_text(encoding="utf-8").splitlines()[0])
             self.assertEqual(entry["loop"], "execution")
+            self.assertEqual(entry["seq"], 1)
             self.assertEqual(entry["event"], "fix-request")
             self.assertEqual(entry["payload"]["gap"], "g")
 
@@ -450,6 +473,34 @@ REPLAN-REQUEST:
             )
             self.assertEqual(summary.returncode, 0, summary.stdout)
             self.assertIn('"execution:fix-request": 1', summary.stdout)
+
+            consumed = subprocess.run(
+                [
+                    "python3", "scripts/agent_swarm_ledger.py", "append",
+                    "--run-id", run_id, "--loop", "execution", "--round", "1",
+                    "--event", "fix-consumed", "--status", "CORRIGIR",
+                    "--payload-json", '{"source_review_round":1,"gaps_corrigidos":["g"]}',
+                ],
+                cwd=ROOT, env=env, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, check=False,
+            )
+            self.assertEqual(consumed.returncode, 0, consumed.stdout)
+            entries = [json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(entries[1]["seq"], 2)
+            self.assertEqual(entries[1]["parent_seq"], 1)
+
+            duplicate = subprocess.run(
+                [
+                    "python3", "scripts/agent_swarm_ledger.py", "append",
+                    "--run-id", run_id, "--loop", "execution", "--round", "1",
+                    "--event", "fix-consumed", "--status", "CORRIGIR",
+                    "--payload-json", "{}",
+                ],
+                cwd=ROOT, env=env, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, check=False,
+            )
+            self.assertNotEqual(duplicate.returncode, 0)
+            self.assertIn("unconsumed fix-request", duplicate.stdout)
         finally:
             shutil.rmtree(run_dir, ignore_errors=True)
 

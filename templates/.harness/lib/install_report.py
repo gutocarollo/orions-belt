@@ -127,6 +127,7 @@ STRATEGY_DESC = {
     "marked-block": ("Your file was KEPT; the harness block was appended below an `orions-belt:begin` marker (append, never overwrite). Your original content survives verbatim above it.",),
     "structured-json": ("Structured merge (e.g. settings.json): your keys are preserved; the harness hooks are merged by identity, so re-installs never duplicate them.",),
     "preserve": ("A collision you explicitly chose to keep with --preserve: YOUR copy won and the harness did NOT write its version. To adopt the harness version instead, delete the path and reinstall.",),
+    "seed": ("Created from the harness on first install, then project-owned living knowledge. Updates preserve the project's bytes and never fail because the file evolved locally.",),
 }
 
 
@@ -176,18 +177,18 @@ def main() -> int:
     by_strategy: dict[str, list[str]] = {}
     for path, entry in files.items():
         by_strategy.setdefault(entry.get("strategy", "?"), []).append(path)
-    for strat in ("owned", "marked-block", "structured-json", "preserve"):
+    for strat in ("owned", "marked-block", "structured-json", "seed", "preserve"):
         paths = sorted(by_strategy.get(strat, []))
         if not paths:
             continue
         desc = STRATEGY_DESC.get(strat, ("",))[0]
         w(f"### {strat} — {len(paths)} file(s)")
         w(desc)
-        example_paths = paths if strat in {"marked-block", "preserve", "structured-json"} else paths[:3]
-        w("Applied example — " + ("these exact files" if strat in {"marked-block", "preserve", "structured-json"} else "e.g.") + ":")
+        example_paths = paths if strat in {"marked-block", "preserve", "structured-json", "seed"} else paths[:3]
+        w("Applied example — " + ("these exact files" if strat in {"marked-block", "preserve", "structured-json", "seed"} else "e.g.") + ":")
         for p in example_paths:
             w(f"- `{p}`")
-        if strat not in {"marked-block", "preserve", "structured-json"} and len(paths) > 3:
+        if strat not in {"marked-block", "preserve", "structured-json", "seed"} and len(paths) > 3:
             w(f"- …and {len(paths)-3} more.")
         w("")
 

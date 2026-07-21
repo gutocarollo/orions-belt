@@ -1,0 +1,8 @@
+{
+  "plan_adversarial_verification": "SABATINAR",
+  "gaps_criticos": 1,
+  "decisao_escolhida": "pendente de D1",
+  "proxima_acao": "executar",
+  "necessita_grill": true,
+  "decisoes_grill": ["D1 — escolher limite de custo mensal"]
+}

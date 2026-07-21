@@ -96,6 +96,10 @@ _exclude:
   - "/tests/test_contained_runtime_safety.sh"
   - "/tests/test_harness_install_fail_closed.sh"
   - "/tests/test_capability_readiness.sh"
+  - "/tests/test_codev_shared_memory.sh"
+  - "/tests/test_harness_freshness.sh"
+  - "/tests/test_install_report.sh"
+  - "/tests/test_set_hooks_path_precommit.sh"
   - "/verification/council-witness.json"
   # H3/A1 (fonte única de skills dual-runtime — grill-me,
   # prova-de-conclusao, marathon, repo-wiki-curator, ui-evidence, verify):
@@ -507,7 +511,7 @@ harness_codex_max_depth:
 harness_codex_project_doc_max_bytes:
     type: int
     help: "[Codex] Bytes máximos da cadeia AGENTS.md antes de truncar (`project_doc_max_bytes`)."
-    default: 32768
+    default: 65536
     when: "{{ use_codex }}"
 
 # =========================================================================
@@ -598,7 +602,7 @@ harness_required_skills:
         frontmatter `name`/`description`). Vazio = nenhuma skill obrigatória
         por padrão — cada projeto declara as suas (ex.: a skill do council,
         "{{ project_name }}-delivery-council").
-    default: ""
+    default: "{% if use_codex %}{{ project_name }}-delivery-council,adversarial-review,grill-me{% endif %}"
 
 harness_codex_agents_dir:
     type: str
@@ -618,7 +622,7 @@ harness_council_skill_name:
         Nome da skill do delivery council, SE este projeto tiver uma
         variante OpenAI/companion (agents/openai.yaml dentro da skill) a
         validar. Vazio = validação pulada (fail-open).
-    default: ""
+    default: "{% if use_codex %}{{ project_name }}-delivery-council{% endif %}"
 
 # =========================================================================
 # --- e2e (opcional) ---
@@ -721,10 +725,10 @@ harness_web_app_dir:
 use_github_ci:
     type: bool
     help: >-
-        [Reservado para R2 — distribuição de lint] Gerar workflow do GitHub
-        Actions rodando os lints do harness (docs-wiki-lint, ref-integrity)
-        em CI? Ainda não wired nesta versão; a flag existe para não precisar
-        re-perguntar o questionário quando R2 for implementado.
+        Gerar o adapter opcional do GitHub Actions para os lints do harness
+        (docs-wiki-lint, ref-integrity)? Ative somente em projetos que escolheram
+        GitHub Actions. O core e o release local não dependem desta flag;
+        projetos Bitbucket, GitLab ou sem CI hospedada devem mantê-la desligada.
     default: false
 
 use_pre_commit_framework:

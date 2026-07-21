@@ -125,6 +125,26 @@ class InstallApplyTests(unittest.TestCase):
         self.assertEqual(self.apply(), 0)
         self.assertEqual((self.target / "custom-skill.md").read_text(), "project edited\n")
 
+    def test_living_seed_is_created_then_local_edits_survive_updates(self) -> None:
+        self.source("tasks/lessons.md", "seed\n")
+        self.assertEqual(self.apply(), 0)
+        living = self.target / "tasks/lessons.md"
+        self.assertEqual(living.read_text(), "seed\n")
+        living.write_text("local learning\n")
+        self.source("tasks/lessons.md", "new upstream seed\n")
+        self.assertEqual(self.apply(), 0)
+        self.assertEqual(living.read_text(), "local learning\n")
+        self.assertEqual(self.manifest()["files"]["tasks/lessons.md"]["strategy"], "seed")
+
+    def test_retired_author_qa_is_pruned_from_manifest(self) -> None:
+        retired = "tests/test_install_report.sh"
+        self.source(retired, "old\n")
+        self.assertEqual(self.apply(), 0)
+        (self.scratch / retired).unlink()
+        (self.target / retired).unlink()
+        self.assertEqual(self.apply(), 0)
+        self.assertNotIn(retired, self.manifest()["files"])
+
     def test_preserve_path_missing_from_render_is_an_error(self) -> None:
         self.source("owned.txt", "v1\n")
         self.assertEqual(self.apply(preserve=["absent.txt"]), 2)

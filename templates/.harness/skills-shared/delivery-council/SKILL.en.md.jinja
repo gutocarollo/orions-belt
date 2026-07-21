@@ -114,7 +114,7 @@ Do not delegate raw ambiguity to the user. Explore code, docs and real data firs
    - run tests, typecheck, lint, queries, scripts or visual evidence according to the risk;
    - a visual claim requires rendered evidence when pixels matter;
    - a data claim requires a query or equivalent proof.
-10. When the `agent-swarm` package (or `engine/contract/scripts/agent_swarm_ledger.py` from orions-belt) is available in the workspace, record critical rounds with the ledger script; this is auxiliary evidence, it does not replace the review.
+10. Record critical rounds with the installed `.harness/lib/agent_swarm_ledger.py`; this is auxiliary evidence, it does not replace the review.
 11. Run the Adversarial Verification Loop for execution.
 12. Report without inflating conclusions:
     - state exactly what changed;
@@ -205,11 +205,11 @@ REPLAN-CONSUMED:
 
 Without a `REPLAN-REQUEST` from the reviewer and without a `REPLAN-CONSUMED` from the Council, the next loop round is invalid. Stop at `SATISFEITO`, `BLOQUEADO` or {{ harness_plan_review_max }} rounds.
 
-If `engine/contract/scripts/agent_swarm_ledger.py` (or `scripts/agent_swarm_ledger.py` in a standalone agent-swarm package) exists in the workspace, record:
+Record the handoff with the installed ledger:
 
 ```bash
-python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop planning --round <n> --event replan-request --status REPLANEJAR --payload-json '{"gap":"...","evidencia":"...","alteracao_obrigatoria":"..."}'
-python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop planning --round <n> --event replan-consumed --status REPLANEJAR --payload-json '{"source_review_round":1,"gaps_incorporados":["..."]}'
+python3 .harness/lib/agent_swarm_ledger.py append --run-id <id> --loop planning --round <n> --event replan-request --status REPLANEJAR --payload-json '{"gap":"...","evidencia":"...","alteracao_obrigatoria":"..."}'
+python3 .harness/lib/agent_swarm_ledger.py append --run-id <id> --loop planning --round <n> --event replan-consumed --status REPLANEJAR --payload-json '{"source_review_round":1,"gaps_incorporados":["..."]}'
 ```
 
 Gate rule: execution may only start from planning when the last plan review round returns `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO`. If the second round returns `REPLANEJAR`, the final status of the planning loop is `PENDENTE` and execution CANNOT start, even if the agent incorporates the gap right after. Incorporating a gap after a review counts as a new replanning; without a new satisfactory adversarial round, the plan remains unapproved.
@@ -284,11 +284,11 @@ FIX-CONSUMED:
 
 Without a `FIX-REQUEST` from the reviewer and without a `FIX-CONSUMED` from the Council, the next loop round is invalid.
 
-If `engine/contract/scripts/agent_swarm_ledger.py` (or `scripts/agent_swarm_ledger.py` in a standalone agent-swarm package) exists in the workspace, record:
+Record the handoff with the installed ledger:
 
 ```bash
-python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop execution --round <n> --event fix-request --status CORRIGIR --payload-json '{"gap":"...","evidencia":"...","alteracao_obrigatoria":"..."}'
-python3 scripts/agent_swarm_ledger.py append --run-id <id> --loop execution --round <n> --event fix-consumed --status CORRIGIR --payload-json '{"source_review_round":1,"gaps_corrigidos":["..."],"validacao_rodada":["..."]}'
+python3 .harness/lib/agent_swarm_ledger.py append --run-id <id> --loop execution --round <n> --event fix-request --status CORRIGIR --payload-json '{"gap":"...","evidencia":"...","alteracao_obrigatoria":"..."}'
+python3 .harness/lib/agent_swarm_ledger.py append --run-id <id> --loop execution --round <n> --event fix-consumed --status CORRIGIR --payload-json '{"source_review_round":1,"gaps_corrigidos":["..."],"validacao_rodada":["..."]}'
 ```
 
 Do not automatically fix:
@@ -320,6 +320,17 @@ In the final response, include:
 ADVERSARIAL-LOOP: <rounds>/{{ harness_execution_review_max }}, status: <SATISFEITO|PENDENTE|BLOQUEADO>
 REVISORES: [round 1: new subagent | round N: same subagent via SendMessage/continuation]
 ```
+
+Before final proof, when the graph-engineering kernel exists in this repository,
+materialize the real run from the ledger (never reconstruct events as prose):
+
+```bash
+python3 engine/integration/council_pipeline.py .harness/runs/agent-swarm/<run-id>/loop.jsonl \
+  --git-sha "$(git rev-parse HEAD)" --output-dir .harness/runs/<run-id>/graph
+```
+
+If an installed project does not ship the kernel, that capability is explicitly
+unavailable; it is not permission to fabricate evidence or replay.
 
 ## Mandatory Sources
 

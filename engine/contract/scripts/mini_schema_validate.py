@@ -74,6 +74,9 @@ def _validate_property(path: str, value: Any, subschema: dict, errors: list[str]
     if "enum" in subschema and value not in subschema["enum"]:
         errors.append(f"{path}: value {value!r} outside enum {subschema['enum']}")
 
+    if "const" in subschema and value != subschema["const"]:
+        errors.append(f"{path}: value {value!r} must equal const {subschema['const']!r}")
+
     if "minimum" in subschema and isinstance(value, (int, float)) and value < subschema["minimum"]:
         errors.append(f"{path}: {value} < minimum {subschema['minimum']}")
 
@@ -87,7 +90,13 @@ def _validate_property(path: str, value: Any, subschema: dict, errors: list[str]
     if expected_type == "array" and "items" in subschema and isinstance(value, list):
         item_schema = subschema["items"]
         for i, item in enumerate(value):
-            _validate_object(f"{path}[{i}]", item, item_schema, errors)
+            if item_schema.get("type") == "object":
+                _validate_object(f"{path}[{i}]", item, item_schema, errors)
+            else:
+                _validate_property(f"{path}[{i}]", item, item_schema, errors)
+
+    if "minItems" in subschema and isinstance(value, list) and len(value) < subschema["minItems"]:
+        errors.append(f"{path}: array shorter than minItems {subschema['minItems']}")
 
 
 def _validate_object(path: str, instance: Any, schema: dict, errors: list[str]) -> None:

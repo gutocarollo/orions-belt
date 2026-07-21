@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "project": {"name": "fixture", "root": "apps"},
+  "nodes": [
+    {"id": "file:web/main.ts", "type": "file", "name": "main.ts", "filePath": "web/main.ts", "summary": "Updated entry point", "tags": ["entry"]},
+    {"id": "file:web/config.ts", "type": "file", "name": "config.ts", "filePath": "web/config.ts", "summary": "Runtime configuration"}
+  ],
+  "edges": [
+    {"source": "file:web/main.ts", "target": "file:web/config.ts", "type": "imports", "direction": "forward", "weight": 0.7}
+  ],
+  "layers": [],
+  "tour": []
+}

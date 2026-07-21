@@ -4,10 +4,12 @@
   "title": "Agent Swarm Ledger Event",
   "type": "object",
   "additionalProperties": false,
-  "required": ["ts", "run_id", "loop", "round", "event", "status", "payload"],
+  "required": ["ts", "run_id", "seq", "loop", "round", "event", "status", "payload"],
   "properties": {
     "ts": { "type": "string", "pattern": "Z$" },
     "run_id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+    "seq": { "type": "integer", "minimum": 1 },
+    "parent_seq": { "type": "integer", "minimum": 1 },
     "loop": { "type": "string", "enum": ["planning", "execution"] },
     "round": { "type": "integer", "minimum": 1 },
     "event": {
