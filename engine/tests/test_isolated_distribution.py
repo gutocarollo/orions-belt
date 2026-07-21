@@ -21,9 +21,10 @@ class IsolatedDistributionTest(unittest.TestCase):
             diff = subprocess.run(
                 ["git", "diff", "--binary", "HEAD", "--"], cwd=ROOT, check=True, capture_output=True
             ).stdout
-            subprocess.run(
-                ["git", "apply", "--whitespace=nowarn"], cwd=checkout, input=diff, check=True
-            )
+            if diff.strip():  # git apply rejects an empty patch; a clean worktree has nothing to apply
+                subprocess.run(
+                    ["git", "apply", "--whitespace=nowarn"], cwd=checkout, input=diff, check=True
+                )
             untracked = subprocess.run(
                 ["git", "ls-files", "--others", "--exclude-standard", "-z"],
                 cwd=ROOT, check=True, capture_output=True,

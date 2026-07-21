@@ -24,5 +24,8 @@
 # core.hooksPath .githooks` manualmente se optou pelo framework `pre-commit`.
 {%- endif %}
 ROOT="$(git rev-parse --show-toplevel)"
+# Hook não pode ESCREVER na árvore: um __pycache__ nascido durante o commit (import de
+# _tooling_conf) deixa o worktree sujo e quebra `copier update` ("repository is dirty").
+export PYTHONDONTWRITEBYTECODE=1
 python3 "$ROOT/.harness/lib/docs_wiki_lint.py" --staged || exit $?
 exec python3 "$ROOT/.harness/lib/ref_integrity.py" --staged
