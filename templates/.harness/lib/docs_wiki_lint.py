@@ -278,6 +278,12 @@ def git_diff_name_status(diff_base: str | None, staged: bool, worktree: bool, fa
     return entries
 
 
+# The wiki's own indexing layer: these files ARE the index, so a fresh render's
+# bootstrap commit (which stages exactly the seeds log.md + SCHEMA.md) must not
+# demand a second index update that cannot exist yet.
+WIKI_INFRA_BASENAMES = {"log.md", "SCHEMA.md", "index.md", "README.md"}
+
+
 def check_diff_policy(diff_base: str | None, staged: bool, worktree: bool, failures: list[str]) -> None:
     entries = git_diff_name_status(diff_base, staged, worktree, failures)
     if not entries:
@@ -293,7 +299,7 @@ def check_diff_policy(diff_base: str | None, staged: bool, worktree: bool, failu
         if any(path.endswith(".md") for path in {old_path, new_path}) and status[0] in {"A", "D", "R"}:
             if not log_changed:
                 failures.append(f"{new_path}: new/removed/renamed markdown requires updating docs/log.md in the same diff")
-            if status.startswith(("A", "R")) and not index_changed:
+            if status.startswith(("A", "R")) and not index_changed and Path(new_path).name not in WIKI_INFRA_BASENAMES:
                 failures.append(f"{new_path}: new/renamed markdown requires updating the category index/README in the same diff")
 
 

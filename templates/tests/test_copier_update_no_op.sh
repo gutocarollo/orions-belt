@@ -71,7 +71,11 @@ if ! timeout 90 uvx copier copy --trust --defaults \
   echo "FAIL: copier copy --vcs-ref $HEAD_SHA failed -- $(tail -20 "$WORK/copy.log")"
   exit 1
 fi
-git add -A && git commit -qm "bootstrap HEAD" >/dev/null
+git add -A
+if ! git commit -qm "bootstrap HEAD" >/dev/null 2>"$WORK/bootstrap-commit.err"; then
+  echo "FAIL: bootstrap commit failed (pre-commit must pass on a fresh render) -- $(tail -5 "$WORK/bootstrap-commit.err")"
+  exit 1
+fi
 
 assert "answers.yml exists" '[ -f .harness/answers.yml ]'
 assert "answers.yml ALREADY carries harness_codex_max_threads on the 1st copy (the use_codex variable precedes the question)" \
