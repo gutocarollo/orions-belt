@@ -96,6 +96,15 @@
             "timeout": 20
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/request-reinject.py\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -104,6 +113,15 @@
           {
             "type": "command",
             "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/lei-zero-kickoff.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/request-ledger.py\"",
             "timeout": 10
           }
         ]

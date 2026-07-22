@@ -13,6 +13,11 @@
 # artifact, not history to preserve (chapter 08).
 {{ harness_runs_dir }}/
 
+# Original-request ledger (request-ledger.py) — verbatim user prompts per session,
+# re-injected on SessionStart to fight objective drift. Local-only working state,
+# and may hold sensitive prompt text; never committed.
+.harness/requests/
+
 # Python bytecode of the modules shipped under .harness/lib/ — the hooks import
 # _tooling_conf.py via `python3 .../script.py` on every fire (Edit/Write/Stop),
 # which materializes __pycache__/ on the very first commit if this .gitignore is

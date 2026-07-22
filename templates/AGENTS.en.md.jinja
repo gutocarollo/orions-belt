@@ -386,6 +386,8 @@ For implementations (code, configuration, pipeline):
 
 The literal request is the means. The optimal final result is the end. Criticism that loses sight of the final result is noise, not signal. Fidelity to the plan has no value if the plan was inferior.
 
+**Estimand fidelity — the original request is the anchor (executable, not prose).** The most recurring drift is the ORIGINAL objective getting paraphrased away by context compaction and buried under later affirmations, so reviews validate the DERIVED/intermediate plan instead of the request — "reviewing the wrong thing correctly". The harness anchors against it: `request-ledger.py` records every user prompt VERBATIM into `.harness/requests/` (immune to compaction); `request-reinject.py` re-surfaces the ANCHOR on SessionStart; the Delivery Council writes `.harness/requests/CURRENT-TASK.md` and hands it to the reviewer subagent (whose context is zeroed and otherwise never saw the request); and the adversarial reviewer's §1.0 axis judges estimand fidelity. **Rule:** every review/verification confronts the ORIGINAL request verbatim + explicitly-agreed amendments BEFORE the derived plan; a silent objective/scope substitution (a weakened quantifier, a swapped success criterion) is a **BLOQUEANTE** finding even when all local invariants are green; `terminalized`/`green`/`certified` is never "objective met" unless the anchor's real target was reached.
+
 Before criticizing execution, an unfulfilled plan, a violated contract, or a scope divergence, run internally:
 
 1. **Apparent objective** — what was literally requested? (e.g. "critique this AI that did not follow the plan.")

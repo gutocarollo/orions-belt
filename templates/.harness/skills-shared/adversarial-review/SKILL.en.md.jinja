@@ -55,6 +55,16 @@ An audit that ignores an applicable source is incomplete. Do not require a seed 
 
 ## 1. Mandatory sources
 
+### 1.0 The original request anchor — estimand fidelity (PRIMARY axis)
+
+Before ANY other source, read the user's ORIGINAL request VERBATIM: `.harness/requests/CURRENT-TASK.md` if present, otherwise the `ANCHOR` entry (+ later `amendment` entries) of the newest `.harness/requests/session-*.md`. If the Council did not hand it to you inline, load it yourself — a review that never saw the original objective is structurally incapable of judging the right thing (a subagent starts with a zeroed context; the request lives only in that file).
+
+The PRIMARY axis of this audit is **estimand fidelity**: does the plan/execution still serve the ORIGINAL objective + the explicitly-agreed amendments — not a derived/intermediate plan that silently drifted from it?
+
+- Reconstruct the estimand (the exact question the work must answer) from the ANCHOR, never from the derived plan.
+- Any objective/scope substitution the user did NOT explicitly agree to — a quantifier weakened (`ALL cases` → `the runnable cases`), a success criterion swapped (`target executed` → `case terminalized`), a deliverable narrowed — is a **BLOQUEANTE** finding by itself, even when every local invariant (tests, budget, ledger, ACL, hashes) passes. Reviewing the intermediate plan correctly while it drifted from the request is THE recurring failure this axis exists to catch.
+- `terminalized`/`classified`/`green`/`certified` is never "the objective was met" unless the ANCHOR's actual target was reached. Absence of the required evidence is absence, never approval.
+
 ### 1.1 Architecture
 
 Before evaluating architecture, discover contracts with `rg --files` and the scanner. If `docs/architecture/` exists, read its index/README and relevant documents. If it does not, declare the absence and use READMEs, manifests, Compose/deploy files, and code from detected components; absence of an arc42 layout never blocks the audit or authorizes invented paths.

@@ -55,6 +55,16 @@ Auditoria que ignora uma fonte aplicavel e incompleta. Nao exija path seed que o
 
 ## 1. Fontes obrigatorias
 
+### 1.0 A ancora do pedido original — fidelidade ao estimand (eixo PRIMARIO)
+
+Antes de QUALQUER outra fonte, leia o pedido ORIGINAL do usuario VERBATIM: `.harness/requests/CURRENT-TASK.md` se existir, senao a entrada `ANCHOR` (+ entradas `amendment` posteriores) do `.harness/requests/session-*.md` mais recente. Se o Council nao te entregou inline, carregue voce mesmo — uma review que nunca viu o objetivo original e estruturalmente incapaz de julgar a coisa certa (o subagent comeca com contexto zerado; o pedido so existe nesse arquivo).
+
+O eixo PRIMARIO desta auditoria e **fidelidade ao estimand**: o plano/execucao ainda serve ao objetivo ORIGINAL + as emendas explicitamente acordadas — nao a um plano derivado/intermediario que derivou em silencio?
+
+- Reconstrua o estimand (a pergunta exata que o trabalho precisa responder) a partir da ANCORA, nunca do plano derivado.
+- Qualquer substituicao de objetivo/escopo que o usuario NAO acordou explicitamente — um quantificador enfraquecido (`TODOS os casos` → `os casos executaveis`), um criterio de sucesso trocado (`alvo executado` → `caso terminalizado`), um entregavel estreitado — e um achado **BLOQUEANTE** por si so, mesmo com todos os invariantes locais (testes, orcamento, ledger, ACL, hashes) verdes. Revisar corretamente o plano intermediario enquanto ele derivou do pedido e A falha recorrente que este eixo existe para pegar.
+- `terminalizado`/`classificado`/`verde`/`certificado` nunca e "o objetivo foi cumprido" a menos que o alvo real da ANCORA tenha sido atingido. Ausencia da evidencia exigida e ausencia, nunca aprovacao.
+
 ### 1.1 Arquitetura
 
 Antes de avaliar arquitetura, descubra os contratos com `rg --files` e o scanner. Se `docs/architecture/` existir, leia seu indice/README e os documentos relevantes. Se nao existir, declare a ausencia e use os READMEs, manifests, arquivos Compose/deploy e codigo dos componentes detectados; ausencia de um layout arc42 nunca bloqueia a auditoria nem autoriza inventar paths.

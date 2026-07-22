@@ -50,6 +50,16 @@
             "statusMessage": "orions-belt: checking install freshness"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/request-reinject.py\"",
+            "timeout": 10,
+            "statusMessage": "orions-belt: re-anchoring the original request"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -58,6 +68,15 @@
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/lei-zero-kickoff.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/request-ledger.py\"",
             "timeout": 10
           }
         ]

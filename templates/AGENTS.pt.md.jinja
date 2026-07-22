@@ -387,6 +387,8 @@ Para implementações (código, configuração, pipeline):
 
 O pedido literal é meio. O resultado final ótimo é fim. Crítica que perde o resultado final de vista é ruído, não sinal. Fidelidade ao plano não tem valor se o plano era inferior.
 
+**Fidelidade ao estimand — o pedido original é a âncora (executável, não prosa).** A deriva mais recorrente é o objetivo ORIGINAL ser parafraseado pela compactação de contexto e soterrado por afirmações posteriores, fazendo o review validar o plano DERIVADO/intermediário em vez do pedido — "revisar corretamente a coisa errada". O harness ancora contra isso: `request-ledger.py` grava todo prompt do usuário VERBATIM em `.harness/requests/` (imune à compactação); `request-reinject.py` reinjeta a ÂNCORA no SessionStart; o Delivery Council escreve `.harness/requests/CURRENT-TASK.md` e entrega ao subagent revisor (cujo contexto é zerado e não viu o pedido); e o eixo 1.0 do revisor adversarial julga fidelidade ao estimand. **Regra:** todo review/verificação confronta o pedido ORIGINAL verbatim + emendas explicitamente acordadas ANTES do plano derivado; substituição silenciosa de objetivo/escopo (quantificador enfraquecido, critério de sucesso trocado) é achado **BLOQUEANTE** mesmo com todos os invariantes locais verdes; `terminalizado`/`verde`/`certificado` nunca é "objetivo cumprido" sem o alvo real da âncora atingido.
+
 Antes de criticar execução, plano não-cumprido, contrato violado ou divergência de escopo, executar internamente:
 
 1. **Objetivo aparente** — o que foi pedido literalmente? (ex: "critique esta IA que não seguiu o plano.")

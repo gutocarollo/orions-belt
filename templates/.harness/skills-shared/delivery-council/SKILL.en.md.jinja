@@ -87,9 +87,10 @@ Do not delegate raw ambiguity to the user. Explore code, docs and real data firs
 
 ## Mandatory Flow
 
+0. **Anchor the original request (estimand fidelity).** Before anything else, write/update `.harness/requests/CURRENT-TASK.md` with the user's ORIGINAL objective VERBATIM + any explicitly-agreed amendments, sourced from `.harness/requests/session-*.md` (the append-only ledger captured by `request-ledger.py`, immune to context compaction). Every plan-review and verification round MUST hand this file to the reviewer subagent, and the reviewer's §1.0 estimand-fidelity axis judges the work against it — not against the derived plan. This is the counter-measure to the most recurring drift: the objective gets paraphrased away by compaction and the review ends up validating an intermediate plan that silently substituted the request.
 1. Resolve the entry point (`START_AT`).
 2. Produce a Context Brief proportional to the entry point:
-   - real request and true objective;
+   - real request and true objective (quote the ANCHOR verbatim);
    - relevant docs read;
    - local patterns found with `rg`;
    - likely files;
@@ -171,7 +172,7 @@ Limit: maximum of {{ harness_plan_review_max }} rounds.
 1. Produce or revise the plan with options and trade-offs.
    - In `START_AT=PLANNING`, produce/structure the plan.
    - In `START_AT=PLAN_REVIEW`, treat the existing plan as the initial source; adjust only fixable critical gaps, without redoing broad discovery/planning.
-2. DISPATCH a `{{ project_name }}-adversarial-reviewer` subagent against the plan, docs and relevant real code (Claude Code: Agent tool; Codex: custom agent thread). MANDATORY in every round: the adversarial review NEVER runs inline in the main context — whoever produced the plan does not self-review. `$adversarial-review` is the CONTRACT the subagent follows, not a procedure for the main agent to execute. In the prompt, point to the artifacts by path (plan, files, decisions) instead of pasting large content.
+2. DISPATCH a `{{ project_name }}-adversarial-reviewer` subagent against the plan, docs and relevant real code (Claude Code: Agent tool; Codex: custom agent thread). MANDATORY in every round: the adversarial review NEVER runs inline in the main context — whoever produced the plan does not self-review. `$adversarial-review` is the CONTRACT the subagent follows, not a procedure for the main agent to execute. In the prompt, point to the artifacts by path (plan, files, decisions) instead of pasting large content — and ALWAYS hand over the ORIGINAL request anchor (`.harness/requests/CURRENT-TASK.md`, verbatim) so the reviewer can run its §1.0 estimand-fidelity axis: does the plan still serve the request, or did it silently drift?
 3. Require closure:
 
 ```md
@@ -247,8 +248,9 @@ Limit: maximum of {{ harness_execution_review_max }} rounds.
 ### Round
 
 1. DISPATCH a `{{ project_name }}-adversarial-reviewer` subagent (Claude Code: Agent tool; Codex: custom agent thread). MANDATORY in every round: the review NEVER runs inline in the main context. In round N+1 of the same loop, prefer to CONTINUE the same subagent (Claude Code: SendMessage; Codex: same thread) sending the applied corrections and requiring re-verification with new evidence.
-2. Require the review to compare:
-   - original request/plan;
+2. In the subagent prompt, MANDATORILY hand over the ORIGINAL request anchor (`.harness/requests/CURRENT-TASK.md`, verbatim) — the reviewer's §1.0 estimand-fidelity axis is structurally impossible without it (the subagent's context is zeroed and never saw the request).
+3. Require the review to compare:
+   - the ORIGINAL request anchor (estimand fidelity — PRIMARY axis) BEFORE the derived plan;
    - diff and changed files;
    - architecture docs when applicable;
    - design-system docs when applicable;
