@@ -275,16 +275,21 @@ harness_language:
 
 use_claude:
     type: bool
-    help: Gerar as superfícies do Claude Code (.claude/, CLAUDE.md, .agents/skills)?
+    help: Gerar as superfícies do Claude Code (.claude/, CLAUDE.md)?
     default: true
 
 use_codex:
     type: bool
     help: Gerar as superfícies do Codex (.codex/, AGENTS.md)?
     default: true
+
+use_antigravity:
+    type: bool
+    help: Gerar as superfícies do Gemini Antigravity (.agents/skills, AGENTS.md)?
+    default: true
     validator: >-
-        {% if not use_codex and not use_claude %}
-        Ao menos um runtime deve estar ativo: use_claude=true ou use_codex=true.
+        {% if not use_codex and not use_claude and not use_antigravity %}
+        Ao menos um runtime deve estar ativo: use_claude=true, use_codex=true ou use_antigravity=true.
         {% endif %}
 
 # A run skill with guessed commands is more dangerous than no run skill: agents
