@@ -146,7 +146,9 @@ flowchart LR
 External corpora are untrusted input, never instructions. Promotion follows the explicit pipeline
 `raw → manifest → validated → curated → canonical`; raw content stays quarantined, and only reviewed,
 traceable facts enter canonical knowledge. Golden datasets, trajectory evals, JSONL traces and one
-fail-closed release check — currently 20 gates, all local — measure the system end to end.
+fail-closed release check — currently 21 gates, all local, including a gate that recomputes this
+README's own numeric claims (hook/gate/corpus counts) against the real repo state — measure the
+system end to end.
 
 The canonical release entry point is local and provider-agnostic:
 `python3 engine/release_check.py`. GitHub Actions, Bitbucket Pipelines, GitLab CI,
