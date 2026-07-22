@@ -15,6 +15,15 @@ try:
 except ImportError:  # direct CLI execution from this directory
     from validate_graph import assert_valid_graph, read_graph
 
+# Deliberately does NOT include BUDGET_EXHAUSTED: these are real review verdicts
+# (REVIEW_RECORDED's outcome), and _consume_budget always raises rather than
+# returning a value. Graceful degradation when a round budget is exhausted is a
+# separate, orchestrator-initiated path: the caller checks its own budget before
+# attempting one more round and, if exhausted, emits NODE_ENTERED directly to
+# `pending` with on=BUDGET_EXHAUSTED (bypassing REVIEW_RECORDED entirely —
+# find_transition matches the declared council.graph.yaml transitions table
+# independent of this enum), then RUN_BLOCKED to close the run status. See
+# test_budget_exhausted_transition_is_reachable_via_direct_node_entered.
 PLAN_OUTCOMES = {"SATISFEITO", "REPLANEJAR", "SABATINAR", "BLOQUEADO"}
 EXECUTION_OUTCOMES = {"SATISFEITO", "CORRIGIR", "BLOQUEADO"}
 HUMAN_OUTCOMES = {"DECIDIDO", "BLOQUEADO"}

@@ -163,6 +163,16 @@ class KnowledgeContractTests(unittest.TestCase):
         self.assertTrue(all(edge["edge_class"] == "llm_inferred" for edge in clean["edges"]))
         self.assertTrue(all("confidence" in edge for edge in clean["edges"]))
 
+    def test_understand_adapter_reads_current_knowledge_graph_json_filename(self) -> None:
+        # Regression: the adapter used to look only for assembled-graph.json/graph.json,
+        # which are Understand Anything's OLD output names — it failed on every real graph
+        # (current output filename is knowledge-graph.json), verified against a real 7,962
+        # node / 19,459 edge graph on 2026-07-21 before the fix.
+        fixtures = Path(__file__).parent / "fixtures" / "understand"
+        graph = UnderstandAnythingProvider(fixtures / "v3-current-name").build_full(Path("apps"), "commit-v3")
+        self.assertEqual(validate(graph), [])
+        self.assertTrue(graph["nodes"])
+
 
 if __name__ == "__main__":
     unittest.main()

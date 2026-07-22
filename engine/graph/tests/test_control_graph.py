@@ -111,6 +111,24 @@ class ControlGraphTest(unittest.TestCase):
         with self.assertRaisesRegex(GraphError, "exhausted"):
             apply_event(state, event(6, "REVIEW_RECORDED", {"family": "plan", "outcome": "REPLANEJAR"}), self.graph)
 
+    def test_budget_exhausted_transition_is_reachable_via_direct_node_entered(self) -> None:
+        # council.graph.yaml declares plan_review/execution_review --BUDGET_EXHAUSTED--> pending.
+        # It is NOT reached through REVIEW_RECORDED (that event's outcome enum only has real
+        # review verdicts: SATISFEITO/REPLANEJAR/SABATINAR/BLOQUEADO — BUDGET_EXHAUSTED would fail that
+        # check, and _consume_budget always raises rather than returning a value). It is a
+        # PROACTIVE, orchestrator-initiated stop: the caller checks the budget itself BEFORE
+        # attempting one more review round and, if exhausted, emits NODE_ENTERED directly
+        # (bypassing REVIEW_RECORDED) — find_transition matches purely against the declared
+        # transitions table, independent of the review-outcome enum. RUN_BLOCKED is the
+        # required follow-up to close the run status (it requires
+        # current_node in {blocked, pending}).
+        state = replay(happy_events()[:5], self.graph)
+        state["budgets"]["plan_review"] = {"used": 2, "limit": 2}
+        state = apply_event(state, event(6, "NODE_ENTERED", {"node_id": "pending", "on": "BUDGET_EXHAUSTED"}), self.graph)
+        self.assertEqual(state["current_node"], "pending")
+        state = apply_event(state, event(7, "RUN_BLOCKED", {}), self.graph)
+        self.assertEqual(state["status"], "BLOCKED")
+
     def test_duplicate_event_id_is_idempotent(self) -> None:
         state = replay(happy_events()[:2], self.graph)
         duplicate = copy.deepcopy(happy_events()[1])

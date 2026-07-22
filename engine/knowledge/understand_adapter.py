@@ -38,7 +38,10 @@ class UnderstandAnythingProvider:
     def _load(self, project_root: Path) -> tuple[dict[str, Any], dict[str, Any], Path]:
         root = self._root(project_root)
         meta = self._read_object(root / "meta.json")
-        candidates = (root / "assembled-graph.json", root / "graph.json")
+        # knowledge-graph.json is the current Understand Anything output filename (checked
+        # against a real graph, 2026-07-21); assembled-graph.json/graph.json are older names
+        # kept for backward compatibility with graphs built by an earlier tool version.
+        candidates = (root / "knowledge-graph.json", root / "assembled-graph.json", root / "graph.json")
         graph_path = next((path for path in candidates if path.is_file()), None)
         if graph_path is None:
             raise ValueError(f"Understand graph not found under {root}")
