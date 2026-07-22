@@ -665,6 +665,45 @@ harness_docs_dir:
     help: Diretório raiz da wiki Karpathy de documentação do projeto.
     default: docs
 
+harness_docs_topology:
+    type: str
+    help: >-
+        Topologia inicial de categorias sob docs/ (D3-D6, grill-me 2026-07-22).
+        Só define o ESQUELETO greenfield e o valor inicial de
+        HARNESS_DOCS_CATEGORIES; brownfield usa o fluxo de proposta do
+        harness-init (inventário real vs. base vs. híbrido, escolha do
+        usuário) em vez deste preset. minimal = planning,architecture,decisions;
+        standard = + audits,qa-evidence,meetings. Infra da wiki (log.md,
+        SCHEMA.md, index.md, _arquivo/) nunca conta como categoria.
+    choices:
+        Mínima (planning, architecture, decisions): minimal
+        Padrão (+ audits, qa-evidence, meetings): standard
+    default: minimal
+
+harness_docs_topology_enforce:
+    type: str
+    help: >-
+        Ratchet do gate de topologia (D4): warn reporta docs/<dir>/ nao
+        declarado sem bloquear commit; fail promove a mesma lista a falha
+        bloqueante. Suba para fail só quando o projeto tiver a topologia
+        estabilizada — mesmo padrao do ds-gate.
+    choices:
+        Aviso (nao bloqueia): warn
+        Bloqueante: fail
+    default: warn
+
+harness_docs_categories_override:
+    type: str
+    help: >-
+        CSV explícito de categorias que SUBSTITUI o preset de
+        harness_docs_topology quando não-vazio. Fonte real: o passo de
+        proposta do harness-init (inventário do scan_project.py, D3) — o
+        agente inventaria docs/ existentes, propõe base × inferida ×
+        híbrida, e passa a escolha do usuário aqui via --data. Vazio
+        (default) = usa o preset minimal/standard sem alteração; nunca
+        inferido silenciosamente pelo installer determinístico.
+    default: ""
+
 harness_lessons_file:
     type: str
     help: Path do arquivo de lições do self-improvement loop.

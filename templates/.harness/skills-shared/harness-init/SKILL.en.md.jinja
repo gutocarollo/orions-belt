@@ -57,6 +57,34 @@ Operational contracts:
   `E2E_ADMIN_PASSWORD`). Never request, print, or persist the password value.
 - Never infer production, credentials, destructive commands, or public URLs.
 
+## 2b. Propose the docs topology
+
+`local_memory_surfaces.docs_categories_inferred` in the scan JSON lists the
+`docs/<dir>/` categories that already exist on the target (excluding the
+wiki's own indexing infra: `_arquivo`, `_archive`, `sources`, `assets`,
+`img`, `images`, `reports`). Compare it against the base preset
+(`minimal` = planning,architecture,decisions; `standard` = + audits,
+qa-evidence,meetings) and present the user exactly these options — never
+pick one silently:
+
+1. **Base preset** — use `minimal`/`standard` as-is (fits a project with
+   little or no existing `docs/` structure).
+2. **Inferred** — use `docs_categories_inferred` verbatim (fits a brownfield
+   project whose real categories already diverge from either preset — e.g. a
+   project with `docs/manual/` instead of `docs/decisions/`).
+3. **Hybrid** — union of the base preset and the inferred list, or another
+   explicit set the user names.
+4. **Other** — a category set the user dictates directly.
+
+Whatever is chosen becomes `--data harness_docs_categories_override=<csv>`
+in step 3 (empty string keeps the base preset; a non-empty CSV overrides it
+verbatim in `HARNESS_DOCS_CATEGORIES`). Do not skip this step because the
+inventory "looks close enough" to a preset — a silently wrong topology means
+every real category the project uses shows up as a docs-wiki-lint warning
+(or failure, if `HARNESS_DOCS_TOPOLOGY_ENFORCE=fail`) from the first commit
+on. This choice is data, not a one-time action: record it in the plan output
+and in any brownfield report so a future update does not re-ask.
+
 ## 3. Generate and review the plan
 
 Pass answers with `--data key=value`. First run a dry-run whose plan is outside

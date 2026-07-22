@@ -57,6 +57,34 @@ Contratos operacionais:
   `E2E_ADMIN_PASSWORD`). Nunca peça, imprima ou persista o valor da senha.
 - Não inferir produção, credenciais, comandos destrutivos ou URLs públicas.
 
+## 2b. Propor a topologia de docs
+
+`local_memory_surfaces.docs_categories_inferred` no JSON do scan lista as
+categorias `docs/<dir>/` que já existem no alvo (excluindo a infra própria
+da wiki: `_arquivo`, `_archive`, `sources`, `assets`, `img`, `images`,
+`reports`). Compare contra o preset base (`minimal` = planning,architecture,
+decisions; `standard` = + audits,qa-evidence,meetings) e apresente ao
+usuário exatamente estas opções — nunca escolha sozinho:
+
+1. **Preset base** — usar `minimal`/`standard` como está (cabe em projeto
+   com pouca ou nenhuma estrutura `docs/` existente).
+2. **Inferida** — usar `docs_categories_inferred` verbatim (cabe em projeto
+   brownfield cujas categorias reais já divergem de qualquer preset — ex.:
+   projeto com `docs/manual/` em vez de `docs/decisions/`).
+3. **Híbrida** — união do preset base com a lista inferida, ou outro
+   conjunto explícito que o usuário nomear.
+4. **Outra** — um conjunto de categorias que o usuário ditar diretamente.
+
+O que for escolhido vira `--data harness_docs_categories_override=<csv>` no
+passo 3 (string vazia mantém o preset base; um CSV não-vazio sobrescreve
+verbatim `HARNESS_DOCS_CATEGORIES`). Não pule este passo porque o
+inventário "parece próximo o bastante" de um preset — uma topologia errada
+em silêncio significa que toda categoria real do projeto vira warning (ou
+falha, se `HARNESS_DOCS_TOPOLOGY_ENFORCE=fail`) do docs-wiki-lint desde o
+primeiro commit. Esta escolha é dado, não ação pontual: registre-a na saída
+do plano e em qualquer relatório brownfield para uma atualização futura não
+perguntar de novo.
+
 ## 3. Gerar e revisar o plano
 
 Passe respostas por `--data chave=valor`. Primeiro execute dry-run com plano

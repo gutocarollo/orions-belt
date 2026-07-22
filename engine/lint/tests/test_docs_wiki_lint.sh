@@ -81,6 +81,64 @@ rm -rf "$STRAYFX"
 rm -f /tmp/lint-out-$$
 
 echo
+echo "=== Scenario 5: docs-topology ratchet (D3-D6) ==="
+TOPOFX="$(mktemp -d /tmp/lint-topo.XXXXXX)"
+mkdir -p "$TOPOFX/docs/architecture" "$TOPOFX/docs/planning" "$TOPOFX/docs/manual"
+printf '# log\n\n## [2026-07-22] chore · docs — seed\n' > "$TOPOFX/docs/log.md"
+printf '# SCHEMA\n\narchitecture and planning are documented here.\n' > "$TOPOFX/SCHEMA.md"
+TOPOCONF="$(mktemp)"
+
+# 5a. HARNESS_DOCS_CATEGORIES unset -> feature is a no-op (must not flag anything new)
+HARNESS_PROJECT_ROOT="$TOPOFX" python3 "$LINT" >/tmp/lint-out-$$ 2>&1
+rc=$?
+assert_exit "topology check is a no-op with HARNESS_DOCS_CATEGORIES unset" "$rc" 0
+if grep -q "docs-topology" /tmp/lint-out-$$; then
+  echo "FAIL: topology check fired without opting in — $(cat /tmp/lint-out-$$)"
+  FAIL=1
+else
+  echo "PASS: no topology output when the key is unset"
+fi
+
+# 5b. declared set missing docs/manual/ -> WARN only (default enforce), exit stays 0
+printf 'HARNESS_DOCS_CATEGORIES=architecture,planning\n' > "$TOPOCONF"
+HARNESS_PROJECT_ROOT="$TOPOFX" HARNESS_CONF_PATH="$TOPOCONF" python3 "$LINT" >/tmp/lint-out-$$ 2>&1
+rc=$?
+assert_exit "undeclared docs/manual/ is WARN-only by default (exit stays 0)" "$rc" 0
+if grep -q "docs/manual/ is not a declared category" /tmp/lint-out-$$; then
+  echo "PASS: undeclared category surfaced"
+else
+  echo "FAIL: undeclared category not reported — $(cat /tmp/lint-out-$$)"
+  FAIL=1
+fi
+
+# 5c. same gap, HARNESS_DOCS_TOPOLOGY_ENFORCE=fail -> blocks (ratchet promoted)
+printf 'HARNESS_DOCS_CATEGORIES=architecture,planning\nHARNESS_DOCS_TOPOLOGY_ENFORCE=fail\n' > "$TOPOCONF"
+HARNESS_PROJECT_ROOT="$TOPOFX" HARNESS_CONF_PATH="$TOPOCONF" python3 "$LINT" >/tmp/lint-out-$$ 2>&1
+rc=$?
+assert_exit "HARNESS_DOCS_TOPOLOGY_ENFORCE=fail promotes the gap to a failure" "$rc" 1
+
+# 5d. fully declared set -> OK
+printf 'HARNESS_DOCS_CATEGORIES=architecture,planning,manual\n' > "$TOPOCONF"
+HARNESS_PROJECT_ROOT="$TOPOFX" HARNESS_CONF_PATH="$TOPOCONF" python3 "$LINT" >/tmp/lint-out-$$ 2>&1
+rc=$?
+assert_exit "fully declared topology (architecture,planning,manual) is OK" "$rc" 0
+
+# 5e. D5 cross-check: a declared category the project's SCHEMA.md never mentions -> WARN
+printf 'HARNESS_DOCS_CATEGORIES=architecture,planning,manual,ghost\n' > "$TOPOCONF"
+HARNESS_PROJECT_ROOT="$TOPOFX" HARNESS_CONF_PATH="$TOPOCONF" python3 "$LINT" >/tmp/lint-out-$$ 2>&1
+rc=$?
+assert_exit "cross-check gap is WARN-only, not a failure" "$rc" 0
+if grep -q "declared category 'ghost' is not mentioned in SCHEMA.md" /tmp/lint-out-$$; then
+  echo "PASS: SCHEMA.md/topology drift surfaced"
+else
+  echo "FAIL: SCHEMA.md cross-check did not fire — $(cat /tmp/lint-out-$$)"
+  FAIL=1
+fi
+
+rm -rf "$TOPOFX" "$TOPOCONF"
+rm -f /tmp/lint-out-$$
+
+echo
 if [ "$FAIL" -eq 0 ]; then
   echo "RESULT: ALL SCENARIOS PASSED"
   exit 0
