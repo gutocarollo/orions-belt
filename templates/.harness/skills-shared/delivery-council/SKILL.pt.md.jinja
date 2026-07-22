@@ -316,6 +316,8 @@ Em `CORRIGIR` na rodada final:
 - nao declare `ADVERSARIAL-VERIFICATION: SATISFEITO`;
 - entregue o `FIX-REQUEST` final como proxima acao concreta para o proximo chamado, ou pare com a pendencia declarada.
 
+**Fechamento da âncora (obrigatório em status terminal).** Quando o loop termina `SATISFEITO` (ou a tarefa é entregue/abandonada), LIMPE `.harness/requests/CURRENT-TASK.md` (delete, ou arquive em `.harness/requests/done/`). Um objetivo concluído deixado ali reinjetaria no próximo SessionStart com autoridade bloqueante — o aviso de staleness do `request-reinject.py` é só backstop; o fechamento é o fix. O passo 0 do Fluxo da próxima tarefa escreve uma âncora nova.
+
 Na resposta final, inclua:
 
 ```md

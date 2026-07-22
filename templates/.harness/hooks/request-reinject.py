@@ -44,26 +44,48 @@ def anchor_from_ledger(reqdir: Path) -> str | None:
     if not ledgers:
         return None
     text = ledgers[0].read_text(encoding="utf-8", errors="replace")
-    # Blocks start at a "## [" heading; the ANCHOR block's heading ends with
-    # " ANCHOR". (The intro blockquote also contains the word "ANCHOR", so match
-    # the heading line, never a bare occurrence.)
-    for chunk in text.split("\n## ["):
-        head = chunk.split("\n", 1)[0]
-        if head.rstrip().endswith("ANCHOR"):
-            return ("## [" + chunk).strip()
-    return None
+    # Blocks start at a "## [" heading. Return the ANCHOR block AND every
+    # `amendment` block — the directive promises "original objective + explicitly
+    # agreed amendments", so it must actually carry them (G1). Skip the preamble
+    # blockquote (index 0, before the first heading), which also contains the word
+    # "ANCHOR" — match the heading line, never a bare occurrence.
+    blocks: list[str] = []
+    for i, chunk in enumerate(text.split("\n## [")):
+        if i == 0:
+            continue
+        head = chunk.split("\n", 1)[0].rstrip()
+        if head.endswith("ANCHOR") or head.endswith("amendment"):
+            blocks.append(("## [" + chunk).rstrip())
+    return "\n\n".join(blocks) if blocks else None
+
+
+def newest_ledger_mtime(reqdir: Path) -> float:
+    return max(
+        (p.stat().st_mtime for p in reqdir.glob("session-*.md")), default=0.0
+    )
 
 
 def main() -> int:
     try:
         reqdir = resolve_root() / ".harness" / "requests"
         current = reqdir / "CURRENT-TASK.md"
+        stale_note = ""
         if current.is_file():
             body = current.read_text(encoding="utf-8", errors="replace").strip()
             source = "CURRENT-TASK.md (agent-curated)"
+            # G2: a CURRENT-TASK.md left over from a finished task would re-inject a
+            # DEAD objective with blocking authority — the very drift this fights.
+            # If the ledger has materially newer activity, flag it as maybe-stale.
+            if newest_ledger_mtime(reqdir) - current.stat().st_mtime > 3600:
+                stale_note = (
+                    "\nSTALENESS WARNING: the request ledger has newer activity than this "
+                    "CURRENT-TASK.md — it may describe a PREVIOUS task. Re-confirm against "
+                    ".harness/requests/session-*.md, or let the Delivery Council rewrite it "
+                    "at Flow step 0. A finished task's anchor must be cleared, not re-injected.\n"
+                )
         else:
             body = anchor_from_ledger(reqdir) if reqdir.is_dir() else None
-            source = "request ledger ANCHOR"
+            source = "request ledger ANCHOR + amendments"
         if not body:
             return 0
         print(
@@ -72,7 +94,9 @@ def main() -> int:
             "paraphrased it away. Before any completion claim, plan review or adversarial\n"
             "verification, confront the work against THIS (original objective + explicitly\n"
             "agreed amendments) — never only against the derived/intermediate plan. Silent\n"
-            "objective or scope substitution is a BLOCKING defect.\n\n"
+            "objective or scope substitution is a BLOCKING defect.\n"
+            + stale_note
+            + "\n"
             + body
             + "\n</original-request-anchor>"
         )

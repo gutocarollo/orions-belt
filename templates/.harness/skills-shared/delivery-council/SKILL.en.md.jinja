@@ -316,6 +316,8 @@ On `CORRIGIR` in the final round:
 - do not declare `ADVERSARIAL-VERIFICATION: SATISFEITO`;
 - deliver the final `FIX-REQUEST` as a concrete next action for the next call, or stop with the declared pending item.
 
+**Anchor closure (mandatory on a terminal status).** When the loop ends `SATISFEITO` (or the task is otherwise delivered/abandoned), CLEAR `.harness/requests/CURRENT-TASK.md` (delete it, or archive it under `.harness/requests/done/`). A finished objective left there would re-inject at the next SessionStart with blocking authority — the `request-reinject.py` staleness warning is only a backstop; the closure is the fix. The next task's Flow step 0 writes a fresh anchor.
+
 In the final response, include:
 
 ```md

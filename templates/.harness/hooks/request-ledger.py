@@ -68,9 +68,13 @@ def main() -> int:
     prompt = (data.get("prompt") or data.get("user_prompt") or data.get("input") or "").strip()
     if not prompt or len(prompt) < MIN_LEN or TRIVIAL.match(prompt):
         return 0
-    session = str(
-        data.get("session_id") or os.environ.get("CLAUDE_SESSION_ID") or "current"
-    ).replace("/", "_")[:64]
+    # Session id keys the ledger. If the runtime omits it (unverified for Codex's
+    # UserPromptSubmit payload), fall back to a DATE-rotated id so the anchor does
+    # not fossilize as the first prompt ever typed (G6) — it rolls daily instead.
+    session = str(data.get("session_id") or os.environ.get("CLAUDE_SESSION_ID") or "").strip()
+    if not session:
+        session = "current-" + datetime.now(timezone.utc).strftime("%Y%m%d")
+    session = session.replace("/", "_")[:64]
     try:
         reqdir = resolve_root() / ".harness" / "requests"
         reqdir.mkdir(parents=True, exist_ok=True)

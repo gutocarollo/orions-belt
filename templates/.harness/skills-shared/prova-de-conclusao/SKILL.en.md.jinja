@@ -51,6 +51,7 @@ must NOT contain "100%", "everything", "complete" — declare the gaps.
 
 ## 3. Fixed percentage rules
 
+0. **The denominator comes from the ORIGINAL request, not from the agent's own claim.** Before counting, read the anchor VERBATIM (`.harness/requests/CURRENT-TASK.md`, else the ANCHOR + amendments of the newest `.harness/requests/session-*.md`). `y` = the items the USER's original objective + explicitly-agreed amendments require — never a derived/narrowed scope. Proving 5/5 of a plan that silently dropped the objective is the "certified 7/372" trap: `terminalized`/`green` is not "objective met" unless the anchor's real target was reached. A weakened quantifier or swapped success criterion vs. the anchor is a gap, not a PASS.
 1. **Denominator** = only items executable by the team.{% if has_prod_stack %} Client infra
    (Teams/Zoom, the client's SSO IdP, their network/DNS) stays OUT of the denominator —
    {{ owner_name }}'s rule ("what is client infra should not count toward our 100%").{% endif %}

@@ -45,7 +45,7 @@ Create `{{ harness_runs_dir }}/$SLUG/RUN.md` with EXACTLY this skeleton (hard ca
 
 ```markdown
 # RUN: <slug>
-goal: <1 sentence — the verifiable final state>
+goal: <1 sentence — the verifiable final state; it must match the ORIGINAL request anchor (.harness/requests/CURRENT-TASK.md / session-*.md ANCHOR), NOT a paraphrase of it. On resume/compact this line is what survives, so a drifted goal here silently substitutes the objective — quote the anchor's target verbatim.>
 started: <YYYY-MM-DD HH:MM>
 
 ## Checklist (source of truth — update after EACH item)

@@ -12,11 +12,11 @@ If the `adversarial-review` skill is invokable in your context, use it. If not, 
 You are read-only. Never use Edit, Write, NotebookEdit, or any Bash command that mutates the repo, the database, or an external service.
 
 You must compare, citing concrete paths and lines:
-1. Original request or plan.
-2. Actual execution and `git diff`.
-3. `docs/architecture` contracts.
-4. `docs/design-system` contracts.
-5. Real app code and tests (source modules, migrations, scripts).
+0. **The ORIGINAL request anchor — estimand fidelity, the PRIMARY axis.** Read the user's original request VERBATIM: `.harness/requests/CURRENT-TASK.md` if present, else the `ANCHOR` (+ `amendment`) entries of the newest `.harness/requests/session-*.md`. Judge the work against THIS (original objective + explicitly-agreed amendments), never only the derived plan. A silent objective/scope substitution — a weakened quantifier (`ALL` → `the runnable ones`), a swapped success criterion (`target executed` → `terminalized`), a narrowed deliverable — is a **BLOQUEANTE** finding by itself, even when every local invariant is green. `terminalized`/`green`/`certified` is never "objective met" unless the anchor's real target was reached.
+1. The derived plan and actual execution + `git diff`.
+2. `docs/architecture` contracts.
+3. `docs/design-system` contracts.
+4. Real app code and tests (source modules, migrations, scripts).
 
 Do not invent evidence. Every finding must be proven or refuted with something you actually read or ran — no speculative claims.
 

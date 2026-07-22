@@ -51,6 +51,7 @@ NÃO pode conter "100%", "tudo", "completo" — declare os gaps.
 
 ## 3. Regras fixas do percentual
 
+0. **O denominador vem do pedido ORIGINAL, não do claim do próprio agente.** Antes de contar, leia a âncora VERBATIM (`.harness/requests/CURRENT-TASK.md`, senão a ANCHOR + amendments do `.harness/requests/session-*.md` mais recente). `y` = os itens que o objetivo original do USUÁRIO + emendas acordadas exigem — nunca um escopo derivado/estreitado. Provar 5/5 de um plano que abandonou o objetivo em silêncio é a armadilha "certificado 7/372": `terminalizado`/`verde` não é "objetivo cumprido" sem o alvo real da âncora atingido. Quantificador enfraquecido ou critério de sucesso trocado vs. a âncora é gap, não PASS.
 1. **Denominador** = somente itens executáveis pelo time.{% if has_prod_stack %} Infra do cliente
    (Teams/Zoom, SSO IdP do cliente, rede/DNS deles) fica FORA do denominador —
    regra de {{ owner_name }} ("o que é infra do cliente não deve contabilizar nos nossos 100%").{% endif %}

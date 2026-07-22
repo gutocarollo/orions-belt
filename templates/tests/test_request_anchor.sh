@@ -49,13 +49,21 @@ OUT="$(python3 "$F/.harness/hooks/request-reinject.py")"
 assert "reinject emits the anchor block" 'printf "%s" "$OUT" | grep -q "original-request-anchor"'
 assert "reinject carries the verbatim objective" 'printf "%s" "$OUT" | grep -q "solta na mao do agente"'
 assert "reinject states silent substitution is BLOCKING" 'printf "%s" "$OUT" | grep -qi "BLOCKING"'
+# G1: the ledger-path reinjection carries the amendments too, not only the ANCHOR
+assert "reinject (ledger path) also carries the amendment (G1)" \
+  'printf "%s" "$OUT" | grep -q "sinteticos injetados"'
+# G2: a CURRENT-TASK.md older than newer ledger activity is flagged stale
+printf "# old\n\nfinished task X\n" > "$F/.harness/requests/CURRENT-TASK.md"
+touch -d "2 hours ago" "$F/.harness/requests/CURRENT-TASK.md"
+assert "stale CURRENT-TASK.md (older than ledger) emits a STALENESS warning (G2)" \
+  'python3 "$F/.harness/hooks/request-reinject.py" | grep -qi "STALENESS"'
 # CURRENT-TASK.md takes priority over the ledger
 printf "# obj\n\nprovar resposta no cutoff\n" > "$F/.harness/requests/CURRENT-TASK.md"
 assert "CURRENT-TASK.md overrides the ledger anchor" \
   'python3 "$F/.harness/hooks/request-reinject.py" | grep -q "provar resposta no cutoff"'
 unset CLAUDE_PROJECT_DIR
 
-# --- 4. Contract enforcement: the reviewer + council mandate estimand fidelity ---
+# --- 4. Contract enforcement across ALL objective-claiming surfaces ---
 REV="$F/.agents/skills/adversarial-review/SKILL.md"
 COU="$F/.agents/skills/anchor-delivery-council/SKILL.md"
 assert "adversarial-review has the §1.0 estimand-fidelity axis" \
@@ -64,8 +72,20 @@ assert "adversarial-review reads the request anchor file" \
   'grep -q "requests/CURRENT-TASK.md" "$REV" || grep -q "requests/session-" "$REV"'
 assert "adversarial-review calls silent substitution BLOQUEANTE" \
   'grep -qi "silently drift\|silently substituted\|substitution" "$REV" && grep -q "BLOQUEANTE" "$REV"'
-assert "council writes/handles CURRENT-TASK.md and hands it to the reviewer" \
-  'grep -q "CURRENT-TASK.md" "$COU"'
+assert "council writes/hands CURRENT-TASK.md to the reviewer" 'grep -q "CURRENT-TASK.md" "$COU"'
+# G2: the council clears the anchor on a terminal status
+assert "council has an anchor CLOSURE step (G2)" \
+  'grep -qi "closure\|clear\|archive" "$COU" && grep -q "CURRENT-TASK.md" "$COU"'
+# G3: the reviewer AGENT definitions (fallback path) name the anchor, both runtimes
+assert "Codex reviewer agent-def references the request anchor (G3)" \
+  'grep -q "requests/CURRENT-TASK.md\|requests/session-" "$F/.codex/agents/anchor-adversarial-reviewer.toml"'
+assert "Claude reviewer agent-def references the request anchor (G3)" \
+  'grep -q "requests/CURRENT-TASK.md\|requests/session-" "$F/.claude/agents/anchor-adversarial-reviewer.md"'
+# G4: the completion-claim + long-run surfaces also confront the anchor (no "ALL skills" narrowing)
+assert "prova-de-conclusao confronts the anchor for the denominator (G4)" \
+  'grep -qi "estimand\|requests/CURRENT-TASK\|original request" "$F/.agents/skills/prova-de-conclusao/SKILL.md"'
+assert "marathon goal is tied to the anchor, not a paraphrase (G4)" \
+  'grep -q "requests/CURRENT-TASK\|request anchor\|ancora do pedido\|âncora do pedido" "$F/.agents/skills/marathon/SKILL.md"'
 
 # --- 5. Anchor ledger is git-ignored (verbatim prompts, possibly sensitive) ---
 assert ".harness/requests/ is git-ignored in the seed" 'grep -q "\.harness/requests/" "$F/.gitignore"'
