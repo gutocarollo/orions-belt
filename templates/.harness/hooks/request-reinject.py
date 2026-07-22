@@ -17,9 +17,18 @@ never blocks. Fail-open: any error -> exit 0 with no output.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+# Real ledger headings only: "## [YYYY-MM-DD HH:MM:SSZ] ANCHOR|amendment". Matching
+# the timestamped heading (not a bare "## [") makes the block split fence-safe — a
+# prompt that pastes markdown starting with "## [" no longer truncates the anchor (N2).
+HEADING_RE = re.compile(r"(?m)^## \[\d{4}-\d{2}-\d{2} [\d:]+Z\] (ANCHOR|amendment)\s*$")
+# Bound the re-injected amendment text so a long session does not dump dozens of
+# blocks into every SessionStart (N1). The ANCHOR is always included in full.
+AMENDMENT_BUDGET = 4000
 
 
 def resolve_root() -> Path:
@@ -44,19 +53,36 @@ def anchor_from_ledger(reqdir: Path) -> str | None:
     if not ledgers:
         return None
     text = ledgers[0].read_text(encoding="utf-8", errors="replace")
-    # Blocks start at a "## [" heading. Return the ANCHOR block AND every
-    # `amendment` block — the directive promises "original objective + explicitly
-    # agreed amendments", so it must actually carry them (G1). Skip the preamble
-    # blockquote (index 0, before the first heading), which also contains the word
-    # "ANCHOR" — match the heading line, never a bare occurrence.
-    blocks: list[str] = []
-    for i, chunk in enumerate(text.split("\n## [")):
-        if i == 0:
-            continue
-        head = chunk.split("\n", 1)[0].rstrip()
-        if head.endswith("ANCHOR") or head.endswith("amendment"):
-            blocks.append(("## [" + chunk).rstrip())
-    return "\n\n".join(blocks) if blocks else None
+    # Slice blocks at REAL headings (fence-safe, N2). Carry the ANCHOR in full plus
+    # the user's later `amendment` entries newest-first within a char budget (N1),
+    # so the reviewer sees the objective + recent changes without an unbounded dump.
+    matches = list(HEADING_RE.finditer(text))
+    if not matches:
+        return None
+    anchor_block: str | None = None
+    amendments: list[str] = []
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        block = text[m.start():end].rstrip()
+        if m.group(1) == "ANCHOR" and anchor_block is None:
+            anchor_block = block
+        else:
+            amendments.append(block)
+    if anchor_block is None:
+        return None
+    kept: list[str] = []
+    budget, omitted = AMENDMENT_BUDGET, 0
+    for block in reversed(amendments):  # newest first
+        if len(block) <= budget:
+            kept.append(block)
+            budget -= len(block)
+        else:
+            omitted += 1
+    parts = [anchor_block]
+    if omitted:
+        parts.append(f"## (+{omitted} earlier amendment(s) omitted — see .harness/requests/)")
+    parts.extend(reversed(kept))  # back to chronological
+    return "\n\n".join(parts)
 
 
 def newest_ledger_mtime(reqdir: Path) -> float:
@@ -92,9 +118,10 @@ def main() -> int:
             "<original-request-anchor source=\"" + source + "\">\n"
             "Re-anchor to the user's ORIGINAL objective below. Context compaction may have\n"
             "paraphrased it away. Before any completion claim, plan review or adversarial\n"
-            "verification, confront the work against THIS (original objective + explicitly\n"
-            "agreed amendments) — never only against the derived/intermediate plan. Silent\n"
-            "objective or scope substitution is a BLOCKING defect.\n"
+            "verification, confront the work against THIS — the original objective (ANCHOR)\n"
+            "and the user's later messages (amendment entries: candidate clarifications/\n"
+            "changes; only user-confirmed ones are agreed) — never only against the derived\n"
+            "plan. Silent objective or scope substitution is a BLOCKING defect.\n"
             + stale_note
             + "\n"
             + body

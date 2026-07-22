@@ -52,6 +52,11 @@ assert "reinject states silent substitution is BLOCKING" 'printf "%s" "$OUT" | g
 # G1: the ledger-path reinjection carries the amendments too, not only the ANCHOR
 assert "reinject (ledger path) also carries the amendment (G1)" \
   'printf "%s" "$OUT" | grep -q "sinteticos injetados"'
+# N2: a prompt containing a literal "## [" line must NOT truncate the reinjected anchor
+printf '{"prompt":"paste this: ## [fake heading] blah then END-FENCE-TAIL","session_id":"n2"}' \
+  | python3 "$F/.harness/hooks/request-ledger.py"
+assert "reinjected anchor is fence-safe against an embedded '## [' (N2)" \
+  'python3 "$F/.harness/hooks/request-reinject.py" | grep -q "END-FENCE-TAIL"'
 # G2: a CURRENT-TASK.md older than newer ledger activity is flagged stale
 printf "# old\n\nfinished task X\n" > "$F/.harness/requests/CURRENT-TASK.md"
 touch -d "2 hours ago" "$F/.harness/requests/CURRENT-TASK.md"
