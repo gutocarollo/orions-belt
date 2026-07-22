@@ -310,6 +310,7 @@ class InstallApplyTests(unittest.TestCase):
         moved = self.root / "target-moved"
         original_identity = install_apply.target_identity(self.target)
         with install_apply.pinned_target(self.target) as anchored:
+            self.assertIsInstance(anchored, install_apply.TargetRoot)
             self.target.rename(moved)
             self.target.symlink_to(self.external, target_is_directory=True)
             manifest = install_apply.load_manifest(anchored)
@@ -323,6 +324,24 @@ class InstallApplyTests(unittest.TestCase):
         self.assertEqual((moved / "owned.txt").read_text(), "anchored\n")
         self.target.unlink()
         moved.rename(self.target)
+
+    def test_intermediate_directory_symlink_swap_is_rejected(self) -> None:
+        self.source("nested/owned.txt", "anchored\n")
+        manifest = install_apply.load_manifest(self.target)
+        plan = install_apply.build_plan(self.scratch, self.target, manifest)
+        nested = self.target / "nested"
+        moved = self.root / "nested-before-swap"
+        nested.mkdir()
+        nested.rename(moved)
+        nested.symlink_to(self.external, target_is_directory=True)
+
+        with self.assertRaises(install_apply.InstallError):
+            install_apply.apply_plan(
+                plan, self.target, install_apply.manifest_for(plan, manifest, {})
+            )
+
+        self.assertFalse((self.external / "owned.txt").exists())
+        self.assertEqual(list(moved.iterdir()), [])
 
     def test_tampered_journal_cannot_delete_external_backup_root(self) -> None:
         victim = self.root / "victim"

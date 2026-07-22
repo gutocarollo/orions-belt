@@ -68,9 +68,10 @@ TARGET4="$WORK/project-root"
 "$INSTALLER" "$TARGET4" "${COMMON[@]}" --data project_name=project-root \
   --data use_claude=false --data use_codex=true --data harness_dev_web_port=4321 \
   >"$WORK/project-root.log" 2>&1
+TARGET4_REAL="$(cd "$TARGET4" && pwd -P)"
 assert "successful install writes ownership manifest" '[ -f "$TARGET4/.harness/install-manifest.json" ]'
 assert "harness.conf PROJECT_ROOT is the canonical target" \
-  'grep -Fqx "PROJECT_ROOT=$TARGET4" "$TARGET4/.harness/harness.conf"'
+  'grep -Fqx "PROJECT_ROOT=$TARGET4_REAL" "$TARGET4/.harness/harness.conf"'
 assert "first install records a non-default answer" \
   'grep -Fqx "HARNESS_DEV_WEB_PORT=4321" "$TARGET4/.harness/harness.conf"'
 assert "rendered target contains no deleted scratch path" \
