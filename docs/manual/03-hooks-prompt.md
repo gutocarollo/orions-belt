@@ -1,8 +1,8 @@
 # 03. Hooks de cada prompt — injeção de regra no instante certo
 
-Antes de tudo, o vocabulário. Um **hook** é um alarme automático: um pequeno script que o runtime do agente dispara sozinho toda vez que um evento específico acontece — sem que ninguém precise lembrar de rodá-lo. É como uma secretária invisível que desliza um bilhete de lembrete por baixo da porta cada vez que alguém entra para falar com um consultor: o consultor lê o bilhete junto com a pergunta, antes de responder. Hooks de `UserPromptSubmit` rodam a **cada mensagem do usuário**, antes de o modelo responder — o bilhete desta seção. O que eles imprimem em stdout entra no contexto daquela resposta. O padrão de design aqui é o **post-it condicional**: o hook fica em silêncio na imensa maioria dos prompts e só injeta a regra quando o TEXTO do prompt indica que ela vai ser necessária — regra certa, na hora certa, custo zero no resto do tempo. Os dois hooks desta seção compartilham a mesma filosofia de segurança: **fail-open** — se o script quebrar por qualquer motivo (JSON ilegível, exceção não prevista), ele sai em silêncio e o prompt segue seu curso normal, sem travar o turno.
+Antes de tudo, o vocabulário. Um **hook** é um alarme automático: um pequeno script que o runtime do agente dispara sozinho toda vez que um evento específico acontece — sem que ninguém precise lembrar de rodá-lo. É como uma secretária invisível que desliza um bilhete de lembrete por baixo da porta cada vez que alguém entra para falar com um consultor: o consultor lê o bilhete junto com a pergunta, antes de responder. Hooks de `UserPromptSubmit` rodam a **cada mensagem do usuário**, antes de o modelo responder — o bilhete desta seção. O que eles imprimem em stdout entra no contexto daquela resposta. O padrão de design aqui é o **post-it condicional**: o hook fica em silêncio na imensa maioria dos prompts e só injeta a regra quando o TEXTO do prompt indica que ela vai ser necessária — regra certa, na hora certa, custo zero no resto do tempo. Os três hooks desta seção compartilham a mesma filosofia de segurança: **fail-open** — se o script quebrar por qualquer motivo (JSON ilegível, exceção não prevista), ele sai em silêncio e o prompt segue seu curso normal, sem travar o turno.
 
-O framework instala um hook incondicional e um condicional:
+O framework instala dois hooks incondicionais e um condicional:
 
 ## lei-zero-kickoff — o protocolo "não reinventar a roda"
 
@@ -27,6 +27,16 @@ flowchart TD
 
 **Como configurar** — Sem variáveis: a regex e o protocolo são fixos no script (deliberado — a LEI ZERO é o núcleo transversal do harness, igual em qualquer projeto). Fail-open: JSON malformado ou qualquer exceção ⇒ exit 0 sem output — o hook nunca bloqueia o prompt, mesmo quando falha por dentro.
 
+## request-ledger — a âncora do pedido original
+
+**O que é** — [templates/.harness/hooks/request-ledger.py](../../templates/.harness/hooks/request-ledger.py). Metade "gravar" do mecanismo de Original Request Anchor (a metade "restaurar" é o `request-reinject` do capítulo 02). Resolve a deriva mais recorrente: numa conversa longa, o objetivo original vai sendo lossy-comprimido pela compactação de contexto, e um subagent de review começa com contexto ZERADO — nunca viu o pedido real, só o plano derivado. A review acaba validando o plano intermediário, não o pedido — "revisou a coisa errada, corretamente".
+
+**Quando dispara** — Todo prompt não-trivial (acks como "continue"/"ok"/"sim"/"beleza" são ignorados — não são pedido novo, são confirmação).
+
+**O que faz** — Anexa o prompt VERBATIM + timestamp UTC em `.harness/requests/session-<id>.md`, append-only. A primeira entrada da sessão é a ÂNCORA; entradas seguintes são emendas (mudanças explicitamente acordadas pelo usuário). O hook nunca classifica intenção — só grava; o custo de um objetivo perdido é catastrófico, o de uma linha extra não é. As skills `delivery-council` e `adversarial-review` leem esse ledger para que toda review confronte o objetivo ORIGINAL, não o plano que foi mudando pelo caminho.
+
+**Como configurar** — Sem variáveis. Fail-open: qualquer erro ⇒ exit 0 sem output, nunca bloqueia o turno.
+
 ## understand-context-inject — a regra do diff relativo (condicional)
 
 **O que é** — [understand-context-inject.py](<../../templates/.harness/hooks/{% if harness_understand_apps_root %}understand-context-inject.py{% endif %}.jinja>), gerado **apenas** quando o projeto declarou `harness_understand_apps_root` no questionário — isto é, quando o projeto usa o grafo de código Understand Anything com um SUBDIRETÓRIO do monorepo (ex.: `apps/`) como raiz do grafo, e não a raiz do git. Essa combinação cria uma armadilha de paths silenciosa, explicada em detalhe no capítulo 13.
@@ -41,4 +51,4 @@ flowchart TD
 
 ## O que fica de lição
 
-Regra injetada a cada prompt disputa espaço de contexto com o trabalho real — por isso os dois hooks são condicionais por conteúdo (verbo de kickoff; vocabulário do grafo) e não incondicionais. Ao portar esse padrão para uma regra própria do seu projeto, a pergunta de design é sempre: "qual palavra no prompt indica que ESTA regra vai ser necessária AGORA?" — e usar as regras hookify de evento `prompt` (capítulo 07) antes de escrever um hook Python novo.
+Regra injetada a cada prompt disputa espaço de contexto com o trabalho real — por isso lei-zero-kickoff e understand-context-inject são condicionais por conteúdo (verbo de kickoff; vocabulário do grafo). O request-ledger é a exceção deliberada: incondicional, porque o custo de perder o pedido original é maior que o custo de gravar toda mensagem. Ao portar esse padrão para uma regra própria do seu projeto, a pergunta de design é sempre: "qual palavra no prompt indica que ESTA regra vai ser necessária AGORA?" (ou, para gravação de estado como o ledger: "o custo de NÃO gravar supera o custo de gravar sempre?") — e usar as regras hookify de evento `prompt` (capítulo 07) antes de escrever um hook Python novo.
