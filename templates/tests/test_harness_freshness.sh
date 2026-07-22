@@ -29,7 +29,8 @@ run() { CLAUDE_PROJECT_DIR="$1" bash "$1/.harness/hooks/harness-freshness.sh" 2>
 
 # --- ABSENT: no manifest, no surfaces -> warn ---
 A="$WORK/absent"; mkdir -p "$A/.harness/hooks"; git -C "$A" init -q; cp "$HOOK" "$A/.harness/hooks/"
-assert "absent -> warns STATE=absent" 'run "$A" | grep -q "STATE=absent"'
+ABSENT_OUT="$(run "$A")"
+assert "absent -> warns STATE=absent" 'grep -q "STATE=absent" <<<"$ABSENT_OUT"'
 
 # --- FRESH: manifest ref == current git describe -> silent ---
 FR="$WORK/fresh"; mk_repo "$FR"
@@ -40,8 +41,9 @@ assert "fresh (ref == describe) -> silent (no output)" '[ -z "$(run "$FR")" ]'
 # --- STALE: manifest ref behind current describe -> warn ---
 ST="$WORK/stale"; mk_repo "$ST"
 manifest "$ST" "v0.0.1-OLD"
-assert "stale (ref behind, origin==source) -> warns STATE=stale" 'run "$ST" | grep -q "STATE=stale"'
-assert "stale warning shows both refs" 'run "$ST" | grep -q "v0.0.1-OLD"'
+STALE_OUT="$(run "$ST")"
+assert "stale (ref behind, origin==source) -> warns STATE=stale" 'grep -q "STATE=stale" <<<"$STALE_OUT"'
+assert "stale warning shows both refs" 'grep -q "v0.0.1-OLD" <<<"$STALE_OUT"'
 
 # --- ACK silences the stale nag ---
 CLAUDE_PROJECT_DIR="$ST" bash "$ST/.harness/lib/freshness-ack.sh" acknowledged >/dev/null 2>&1

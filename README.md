@@ -8,7 +8,7 @@
   <img alt="runtimes" src="https://img.shields.io/badge/runtimes-Claude%20Code%20%2B%20Codex-111827">
   <img alt="install" src="https://img.shields.io/badge/install-Copier-1f6feb">
   <img alt="instructions" src="https://img.shields.io/badge/instructions-EN%20%7C%20PT-3fb950">
-  <img alt="platform" src="https://img.shields.io/badge/platform-GNU%2FLinux-e05d44">
+  <img alt="platform" src="https://img.shields.io/badge/platform-GNU%2FLinux%20%7C%20macOS-e05d44">
 </p>
 
 **A portable, self-configuring discipline harness for AI coding agents.**
@@ -189,8 +189,9 @@ Full procedure, decision trees per component, and gotchas: **[chapter 14](docs/m
 
 ## Platform
 
-GNU/Linux with Bash ≥4, GNU coreutils, `flock` and `python3`. Run
-`bash .harness/lib/check-platform.sh` for a preflight. macOS needs Homebrew coreutils/util-linux;
+GNU/Linux or macOS with Bash ≥4, GNU coreutils, `flock` and Python ≥3.14 (`python3` must resolve
+to that runtime). Run `bash .harness/lib/check-platform.sh` for a preflight. macOS needs Homebrew
+`bash`, `coreutils`, `util-linux` and `python@3.14`; keep Homebrew ahead of `/usr/bin` in `PATH`.
 Windows needs WSL. See [chapter 15](docs/manual/15-limitacoes-conhecidas.md).
 
 ## License & provenance

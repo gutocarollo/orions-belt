@@ -28,6 +28,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import stat
 import sys
 import tempfile
@@ -35,6 +36,14 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+
+MIN_PYTHON = (3, 14)
+if sys.version_info < MIN_PYTHON:
+    version = ".".join(str(part) for part in sys.version_info[:3])
+    raise SystemExit(
+        f"install_apply.py requires Python 3.14 or newer; current interpreter is {version}"
+    )
 
 
 MANIFEST_VERSION = 1
@@ -371,28 +380,12 @@ class TargetRoot:
         with self._parent_fd(rel) as (parent_fd, name):
             os.rmdir(name, dir_fd=parent_fd)
 
-    def _remove_tree_fd(self, directory_fd: int) -> None:
-        for name in os.listdir(directory_fd):
-            info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
-            if stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode):
-                child_fd = os.open(name, self._dir_flags(), dir_fd=directory_fd)
-                try:
-                    self._remove_tree_fd(child_fd)
-                finally:
-                    os.close(child_fd)
-                os.rmdir(name, dir_fd=directory_fd)
-            else:
-                os.unlink(name, dir_fd=directory_fd)
-
     def remove_tree(self, rel: Path, *, ignore_errors: bool = False) -> None:
         try:
             with self._parent_fd(rel) as (parent_fd, name):
-                child_fd = os.open(name, self._dir_flags(), dir_fd=parent_fd)
-                try:
-                    self._remove_tree_fd(child_fd)
-                finally:
-                    os.close(child_fd)
-                os.rmdir(name, dir_fd=parent_fd)
+                if not shutil.rmtree.avoids_symlink_attacks:
+                    raise InstallError("safe fd-based directory removal is unavailable")
+                shutil.rmtree(name, dir_fd=parent_fd)
         except (FileNotFoundError, _MissingTargetPath, OSError):
             if not ignore_errors:
                 raise
@@ -408,6 +401,7 @@ class TargetRoot:
 
 
 Target = Path | TargetRoot
+ManifestState = tuple[bool, str | None, int | None]
 
 
 def _display_path(target: Target, rel: Path | None = None) -> Path:
@@ -415,23 +409,27 @@ def _display_path(target: Target, rel: Path | None = None) -> Path:
     return root if rel is None else root / rel
 
 
-def load_manifest(target: Target) -> dict[str, Any]:
+def load_manifest_state(target: Target) -> tuple[dict[str, Any], ManifestState]:
     if not isinstance(target, TargetRoot):
         with pinned_target(target) as pinned:
-            return load_manifest(pinned)
-    info = target.inspect_file(MANIFEST_REL)
-    if info is None:
-        return {"version": MANIFEST_VERSION, "files": {}}
+            return load_manifest_state(pinned)
+    exists, content, mode = target.read_state(MANIFEST_REL)
+    if not exists or content is None:
+        return {"version": MANIFEST_VERSION, "files": {}}, (False, None, None)
     path = _display_path(target, MANIFEST_REL)
     try:
-        manifest = json.loads(target.read_bytes(MANIFEST_REL).decode("utf-8"))
+        manifest = json.loads(content.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise InstallError(f"ownership manifest is unreadable or invalid JSON: {path}: {exc}") from exc
     if not isinstance(manifest, dict):
         raise InstallError(f"ownership manifest must be a JSON object: {path}")
     if manifest.get("version") != MANIFEST_VERSION or not isinstance(manifest.get("files"), dict):
         raise InstallError(f"unsupported ownership manifest schema: {path}")
-    return manifest
+    return manifest, (True, sha256_bytes(content), mode)
+
+
+def load_manifest(target: Target) -> dict[str, Any]:
+    return load_manifest_state(target)[0]
 
 
 def target_identity(target: Target) -> tuple[int, int]:
@@ -841,14 +839,20 @@ def apply_plan(
     manifest: dict[str, Any],
     fail_after: int | None = None,
     expected_identity: tuple[int, int] | None = None,
+    expected_manifest_state: ManifestState | None = None,
 ) -> None:
     if not isinstance(target, TargetRoot):
         with pinned_target(target) as pinned:
-            apply_plan(plan, pinned, manifest, fail_after, expected_identity)
+            apply_plan(
+                plan, pinned, manifest, fail_after, expected_identity,
+                expected_manifest_state,
+            )
             return
     if expected_identity is None:
         expected_identity = target_identity(target)
     assert_target_identity(target, expected_identity)
+    if expected_manifest_state is None:
+        expected_manifest_state = target.snapshot(MANIFEST_REL)
 
     # Revalidate the exact plan snapshot before creating backup infrastructure.
     # The journal must never silently adopt an edit made between planning and apply.
@@ -862,6 +866,8 @@ def apply_plan(
             or current_mode != item.previous_mode
         ):
             raise InstallError(f"target changed after planning and before backup: {item.destination}")
+    if target.snapshot(MANIFEST_REL) != expected_manifest_state:
+        raise InstallError(f"ownership manifest changed after planning: {_display_path(target, MANIFEST_REL)}")
 
     created_dirs: set[str] = set()
     destination_rels = [validate_rel(item.rel) for item in plan] + [MANIFEST_REL, JOURNAL_REL]
@@ -878,28 +884,41 @@ def apply_plan(
 
     manifest_path = _display_path(target, MANIFEST_REL)
     manifest_bytes = (json.dumps(manifest, indent=2, ensure_ascii=False, sort_keys=True) + "\n").encode()
-    all_backups: list[tuple[Path, bool, int, bytes, int]] = []
+    all_backups: list[tuple[Path, bool, str | None, int, bytes, int]] = []
     for item in plan:
         if item.action in {"unchanged", "preserve"}:
             continue
         old_mode = item.previous_mode if item.previous_exists else item.mode
         assert old_mode is not None
-        all_backups.append((validate_rel(item.rel), item.previous_exists, old_mode, item.content, item.mode))
-    manifest_exists, _manifest_hash, manifest_mode = target.snapshot(MANIFEST_REL)
+        all_backups.append((
+            validate_rel(item.rel), item.previous_exists, item.previous_hash,
+            old_mode, item.content, item.mode,
+        ))
+    manifest_exists, manifest_hash, manifest_mode = expected_manifest_state
     manifest_old_mode = manifest_mode if manifest_exists else 0o644
     assert manifest_old_mode is not None
     all_backups.append(
-        (MANIFEST_REL, manifest_exists, manifest_old_mode, manifest_bytes, 0o644)
+        (MANIFEST_REL, manifest_exists, manifest_hash, manifest_old_mode, manifest_bytes, 0o644)
     )
 
     before_states: dict[str, tuple[bool, str | None, int]] = {}
     try:
-        for rel, existed, old_mode, after_content, after_mode in all_backups:
+        for rel, existed, expected_hash, old_mode, after_content, after_mode in all_backups:
             rel_string = rel.as_posix()
-            before_hash = sha256_bytes(target.read_bytes(rel)) if existed else None
+            current_exists, before_content, current_mode = target.read_state(rel)
+            before_hash = sha256_bytes(before_content) if before_content is not None else None
+            if (
+                current_exists != existed
+                or before_hash != expected_hash
+                or (current_exists and current_mode != old_mode)
+            ):
+                raise InstallError(
+                    f"target changed after planning and before backup: {_display_path(target, rel)}"
+                )
             before_states[rel_string] = (existed, before_hash, old_mode)
             if existed:
-                target.atomic_write(backup_rel / rel, target.read_bytes(rel), old_mode)
+                assert before_content is not None
+                target.atomic_write(backup_rel / rel, before_content, old_mode)
             entries.append({
                 "path": rel_string,
                 "existed": existed,
@@ -1032,7 +1051,7 @@ def main(argv: list[str]) -> int:
             if recover(target, expected_identity):
                 print("install_apply: recovered an incomplete previous apply", file=sys.stderr)
 
-            manifest = load_manifest(target)
+            manifest, manifest_state = load_manifest_state(target)
             preserve_paths = {validate_rel(raw).as_posix() for raw in args.preserve}
             rendered_paths = {
                 validate_rel(path.relative_to(scratch).as_posix()).as_posix()
@@ -1056,7 +1075,7 @@ def main(argv: list[str]) -> int:
                 injected = os.environ.get("ORIONS_BELT_FAIL_AFTER")
                 apply_plan(
                     plan, target, next_manifest, int(injected) if injected else None,
-                    expected_identity,
+                    expected_identity, manifest_state,
                 )
             assert_target_identity(display_target, display_identity)
         return 0

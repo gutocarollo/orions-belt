@@ -21,6 +21,10 @@ from pathlib import Path
 SCHEMA_VERSION = 1
 
 
+def _is_python_executable(name: str) -> bool:
+    return re.fullmatch(r"python(?:3(?:\.\d+)?)?", name) is not None
+
+
 def _sha(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -74,7 +78,8 @@ def run(args: argparse.Namespace) -> int:
         "endpoint": {"curl"},
         "visual": {"python", "python3", "npm", "pnpm", "yarn", "npx"},
     }
-    if executable not in allowed[args.type]:
+    python_allowed = args.type in {"test", "visual"} and _is_python_executable(executable)
+    if executable not in allowed[args.type] and not python_allowed:
         raise SystemExit(f"command {executable!r} is not valid for evidence type {args.type!r}")
     started = datetime.now(timezone.utc)
     proc = subprocess.run(command, cwd=root, capture_output=True, text=True)
@@ -126,7 +131,7 @@ def _semantic_valid(kind: str, command: list[str], output: str, exit_code: int) 
         return False
     if kind == "test":
         executable = Path(command[0]).name
-        is_unittest = executable in {"python", "python3"} and command[1:3] == ["-m", "unittest"] and not any(arg in {"-h", "--help"} for arg in command)
+        is_unittest = _is_python_executable(executable) and command[1:3] == ["-m", "unittest"] and not any(arg in {"-h", "--help"} for arg in command)
         if is_unittest and re.search(r"\bRan\s+[1-9]\d*\s+tests?\b", output) and re.search(r"^OK\b", output, re.M):
             return True
         is_pytest = executable in {"pytest", "py.test"} and not any(arg in {"-h", "--help"} for arg in command)
@@ -134,7 +139,7 @@ def _semantic_valid(kind: str, command: list[str], output: str, exit_code: int) 
             return True
         try:
             report = json.loads(output)
-            is_release = executable in {"python", "python3"} and len(command) > 1 and Path(command[1]).name == "release_check.py"
+            is_release = _is_python_executable(executable) and len(command) > 1 and Path(command[1]).name == "release_check.py"
             return is_release and report.get("schema_version") == "1.0" and report.get("status") == "PASS" and int(report.get("total", 0)) > 0 and int(report.get("failed", 1)) == 0 and len(report.get("gates", [])) == int(report["total"])
         except (ValueError, TypeError, json.JSONDecodeError):
             return False

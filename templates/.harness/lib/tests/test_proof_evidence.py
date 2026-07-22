@@ -16,6 +16,10 @@ SPEC.loader.exec_module(proof)
 
 
 class ProofEvidenceTests(unittest.TestCase):
+    def test_versioned_python_executable_is_allowed(self) -> None:
+        self.assertTrue(proof._is_python_executable("python3.14"))
+        self.assertFalse(proof._is_python_executable("python3.14-config"))
+
     def test_valid_command_manifest_and_reject_failed_record(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

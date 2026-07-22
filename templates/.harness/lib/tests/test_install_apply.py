@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 HERE = Path(__file__).resolve().parent
@@ -304,6 +305,58 @@ class InstallApplyTests(unittest.TestCase):
         with self.assertRaises(install_apply.InstallError):
             install_apply.apply_plan(plan, self.target, next_manifest)
         self.assertEqual(destination.read_text(), "user-after-plan\n")
+
+    def test_edit_between_revalidation_and_backup_is_not_adopted(self) -> None:
+        self.source("owned.txt", "v1\n")
+        self.assertEqual(self.apply(), 0)
+        self.source("owned.txt", "v2\n")
+        manifest = install_apply.load_manifest(self.target)
+        plan = install_apply.build_plan(self.scratch, self.target, manifest)
+        next_manifest = install_apply.manifest_for(plan, manifest, {})
+        destination = self.target / "owned.txt"
+        original_read_state = install_apply.TargetRoot.read_state
+        reads = 0
+
+        def racing_read_state(root, rel):
+            nonlocal reads
+            if rel == Path("owned.txt"):
+                reads += 1
+                if reads == 2:
+                    destination.write_text("user-during-backup\n")
+            return original_read_state(root, rel)
+
+        with mock.patch.object(
+            install_apply.TargetRoot, "read_state", new=racing_read_state
+        ):
+            with self.assertRaisesRegex(
+                install_apply.InstallError, "changed after planning and before backup"
+            ):
+                install_apply.apply_plan(plan, self.target, next_manifest)
+
+        self.assertEqual(destination.read_text(), "user-during-backup\n")
+        self.assertFalse((self.target / ".harness/install-journal.json").exists())
+
+    def test_manifest_edit_after_planning_is_not_overwritten(self) -> None:
+        self.source("owned.txt", "v1\n")
+        self.assertEqual(self.apply(), 0)
+        self.source("owned.txt", "v2\n")
+        manifest, manifest_state = install_apply.load_manifest_state(self.target)
+        plan = install_apply.build_plan(self.scratch, self.target, manifest)
+        next_manifest = install_apply.manifest_for(plan, manifest, {})
+        manifest_path = self.target / ".harness/install-manifest.json"
+        manifest_path.write_text(manifest_path.read_text() + "\n")
+        edited = manifest_path.read_bytes()
+
+        with self.assertRaisesRegex(
+            install_apply.InstallError, "ownership manifest changed after planning"
+        ):
+            install_apply.apply_plan(
+                plan, self.target, next_manifest,
+                expected_manifest_state=manifest_state,
+            )
+
+        self.assertEqual(manifest_path.read_bytes(), edited)
+        self.assertEqual((self.target / "owned.txt").read_text(), "v1\n")
 
     def test_pinned_root_cannot_be_redirected_by_parent_symlink_swap(self) -> None:
         self.source("owned.txt", "anchored\n")

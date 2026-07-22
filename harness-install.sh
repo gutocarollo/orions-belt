@@ -139,6 +139,17 @@ fi
 HERE="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 REPO_ROOT="$HERE"
 
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "harness-install.sh: 'python3' not found on PATH; Python 3.14 or newer is required." >&2
+  exit 1
+fi
+PYTHON_BIN="$(command -v python3)"
+if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 14) else 1)'; then
+  echo "harness-install.sh: Python 3.14 or newer is required; '$PYTHON_BIN' is $("$PYTHON_BIN" --version 2>&1)." >&2
+  echo "harness-install.sh: macOS: brew install python@3.14 and place Homebrew bin before /usr/bin in PATH." >&2
+  exit 1
+fi
+
 if ! command -v uvx >/dev/null 2>&1; then
   echo "harness-install.sh: 'uvx' not found on PATH -- install uv (https://docs.astral.sh/uv/) to run copier." >&2
   exit 1
@@ -146,7 +157,7 @@ fi
 
 # M3/H4 (adversarial review): PLATFORM preflight -- "portable" was not
 # declared anywhere, and the hooks/scripts (.harness/hooks|lib/) require
-# Bash>=4 + GNU coreutils + flock + python3 (see check-platform.sh for the
+# Bash>=4 + GNU coreutils + flock + Python>=3.14 (see check-platform.sh for the
 # detail of EACH dependency and its fix command). Runs BEFORE the render to
 # warn EARLY, but never blocks `copier copy` itself on its own (that is
 # platform-agnostic) -- only the behavior of the hooks after install degrades.
@@ -182,7 +193,7 @@ TARGET_REAL="$TARGET"
 MANAGED_ANSWERS="$TARGET_REAL/.harness/answers.yml"
 MANAGED_MANIFEST="$TARGET_REAL/.harness/install-manifest.json"
 if [ "$HAS_DATA_FILE" -eq 0 ] && [ -f "$MANAGED_ANSWERS" ] && [ -f "$MANAGED_MANIFEST" ]; then
-  if python3 - "$TARGET_REAL" "$MANAGED_ANSWERS" "$MANAGED_MANIFEST" <<'PY'
+  if "$PYTHON_BIN" - "$TARGET_REAL" "$MANAGED_ANSWERS" "$MANAGED_MANIFEST" <<'PY'
 import hashlib, json, os, pathlib, sys
 root = pathlib.Path(sys.argv[1]).resolve()
 answers = pathlib.Path(sys.argv[2])
@@ -239,7 +250,7 @@ if [ ! -f "$LIB/merge_docs.py" ] || [ ! -f "$LIB/install_apply.py" ]; then
   exit 1
 fi
 
-python3 - "$SCRATCH/.harness/answers.yml" "$TEMPLATE_SOURCE" "$TEMPLATE_REF" <<'PY'
+"$PYTHON_BIN" - "$SCRATCH/.harness/answers.yml" "$TEMPLATE_SOURCE" "$TEMPLATE_REF" <<'PY'
 from pathlib import Path
 import sys
 
@@ -266,7 +277,7 @@ PY
 # The rendered engine owns planning, containment, semantic merge and rollback.
 # It is loaded FROM SCRATCH so a pinned release always applies its matching
 # schema/merge behavior.  The target Git index is deliberately irrelevant.
-METADATA_JSON="$(python3 - "$TEMPLATE_SOURCE" "$TEMPLATE_REF" <<'PY'
+METADATA_JSON="$("$PYTHON_BIN" - "$TEMPLATE_SOURCE" "$TEMPLATE_REF" <<'PY'
 import json, sys
 print(json.dumps({"source": sys.argv[1], "ref": sys.argv[2]}))
 PY
@@ -284,9 +295,9 @@ for preserved in "${PRESERVE_PATHS[@]}"; do
 done
 
 echo "harness-install.sh: planning ownership/containment for $TARGET_REAL ..." >&2
-python3 "$LIB/install_apply.py" "${APPLY_ARGS[@]}" > "$WORK/install-plan.stdout.json"
+"$PYTHON_BIN" "$LIB/install_apply.py" "${APPLY_ARGS[@]}" > "$WORK/install-plan.stdout.json"
 
-python3 - "$PLAN_OUT" <<'PY'
+"$PYTHON_BIN" - "$PLAN_OUT" <<'PY'
 import json, sys
 plan = json.load(open(sys.argv[1], encoding="utf-8"))
 counts = plan.get("counts", {})
@@ -332,8 +343,8 @@ fi
 # (documented in docs/manual/05-hooks-posttooluse.md).
 if [ -f "$TARGET/.harness/hooks/ds-gate-posttool.sh" ] && [ -f "$TARGET/.harness/lib/ds-gate.sh" ]; then
   DS_WEB_APP_DIR="."
-  if command -v python3 >/dev/null 2>&1 && [ -f "$TARGET/.harness/lib/_tooling_conf.py" ]; then
-    DS_WEB_APP_DIR="$(HARNESS_PROJECT_ROOT="$TARGET" python3 "$TARGET/.harness/lib/_tooling_conf.py" get HARNESS_WEB_APP_DIR . 2>/dev/null || echo .)"
+  if [ -f "$TARGET/.harness/lib/_tooling_conf.py" ]; then
+    DS_WEB_APP_DIR="$(HARNESS_PROJECT_ROOT="$TARGET" "$PYTHON_BIN" "$TARGET/.harness/lib/_tooling_conf.py" get HARNESS_WEB_APP_DIR . 2>/dev/null || echo .)"
   fi
   DS_WEB_APP_DIR="${DS_WEB_APP_DIR%/}"
   [ -z "$DS_WEB_APP_DIR" ] && DS_WEB_APP_DIR="."
@@ -355,7 +366,7 @@ fi
 # from the manifest + answers. Non-blocking (the install already succeeded).
 REPORT_PATH=""
 if [ -f "$TARGET/.harness/lib/install_report.py" ]; then
-  if REPORT_PATH="$(python3 "$TARGET/.harness/lib/install_report.py" --target "$TARGET" \
+  if REPORT_PATH="$("$PYTHON_BIN" "$TARGET/.harness/lib/install_report.py" --target "$TARGET" \
       --timestamp "$(date '+%Y-%m-%d %H:%M:%S %Z')" 2>/dev/null)"; then
     :
   else

@@ -87,14 +87,13 @@ CLAUDE_PROJECT_DIR="$REAP_ROOT" bash "$REAP_ROOT/.harness/hooks/dev-doctor.sh" r
 assert "unregistered process remains alive" 'kill -0 "$CHILD_PID" 2>/dev/null'
 assert "missing registry is an explicit warning" 'grep -q "WARN no project PID registry" "$WORK/reap-unowned.out"'
 mkdir -p "$REAP_ROOT/.harness/pids"
-PROC_STAT="$(<"/proc/$CHILD_PID/stat")"; PROC_REST="${PROC_STAT##*) }"
-START_TICKS="$(awk '{print $20}' <<<"$PROC_REST")"
-printf '%s %s %s\n' "$CHILD_PID" "$START_TICKS" "$(( $(date +%s) + 60 ))" > "$REAP_ROOT/.harness/pids/evidence.pid"
+START_TOKEN="$(CLAUDE_PROJECT_DIR="$REAP_ROOT" bash "$REAP_ROOT/.harness/hooks/dev-doctor.sh" pid-token "$CHILD_PID")"
+printf '%s %s %s\n' "$CHILD_PID" "$START_TOKEN" "$(( $(date +%s) + 60 ))" > "$REAP_ROOT/.harness/pids/evidence.pid"
 CLAUDE_PROJECT_DIR="$REAP_ROOT" bash "$REAP_ROOT/.harness/hooks/dev-doctor.sh" reap \
   > "$WORK/reap-active-lease.out"
 assert "registered tooling with an active lease remains alive" 'kill -0 "$CHILD_PID" 2>/dev/null'
 assert "active lease is reported explicitly" 'grep -q "ownership lease is still active" "$WORK/reap-active-lease.out"'
-printf '%s %s %s\n' "$CHILD_PID" "$START_TICKS" "$(( $(date +%s) - 1 ))" > "$REAP_ROOT/.harness/pids/evidence.pid"
+printf '%s %s %s\n' "$CHILD_PID" "$START_TOKEN" "$(( $(date +%s) - 1 ))" > "$REAP_ROOT/.harness/pids/evidence.pid"
 CLAUDE_PROJECT_DIR="$REAP_ROOT" bash "$REAP_ROOT/.harness/hooks/dev-doctor.sh" reap \
   > "$WORK/reap-owned.out"
 for _ in 1 2 3 4 5; do kill -0 "$CHILD_PID" 2>/dev/null || break; sleep 0.1; done

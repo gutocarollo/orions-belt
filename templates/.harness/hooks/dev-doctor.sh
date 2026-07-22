@@ -46,9 +46,55 @@ RUNAWAY_CPU_PCT="$(_conf_int HARNESS_RUNAWAY_CPU_PCT 50)"
 RUNAWAY_MIN_AGE="$(_conf_int HARNESS_RUNAWAY_MIN_AGE_SECONDS 3600)"
 PID_REGISTRY_DIR="$(_conf_get HARNESS_PID_REGISTRY_DIR .harness/pids)"
 
+_pid_start_token() {
+  local stat_value rest started
+  if [ -r "/proc/$1/stat" ]; then
+    stat_value="$(<"/proc/$1/stat")"
+    rest="${stat_value##*) }"
+    awk '{print $20}' <<<"$rest"
+    return
+  fi
+  started="$(LC_ALL=C ps -p "$1" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+  [ -n "$started" ] || return 1
+  printf '%s\n' "$started" | cksum | awk '{print $1}'
+}
+
+_pid_cwd() {
+  local pid="$1"
+  if [ -e "/proc/$pid/cwd" ]; then
+    readlink -f "/proc/$pid/cwd" 2>/dev/null
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p'
+  fi
+}
+
+_pid_command() {
+  local pid="$1"
+  if [ -r "/proc/$pid/cmdline" ]; then
+    tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null
+  else
+    LC_ALL=C ps -ww -p "$pid" -o command= 2>/dev/null
+  fi
+}
+
 _warn_runaway() {
-  ps -eo pid=,pcpu=,etimes=,comm= 2>/dev/null | awk -v cpu="$RUNAWAY_CPU_PCT" -v age="$RUNAWAY_MIN_AGE" \
-    '($2+0)>cpu && ($3+0)>age {printf "  WARN runaway: pid %s  %.0f%% CPU  %.1fh  %s (check; not reaped)\n",$1,$2,$3/3600,$4}'
+  ps -eo pid=,pcpu=,etime=,comm= 2>/dev/null | awk -v cpu="$RUNAWAY_CPU_PCT" -v min_age="$RUNAWAY_MIN_AGE" '
+    function seconds(value, days, fields, parts, split_day) {
+      days = 0
+      if (index(value, "-") > 0) {
+        split(value, split_day, "-")
+        days = split_day[1] + 0
+        value = split_day[2]
+      }
+      fields = split(value, parts, ":")
+      if (fields == 3) return days * 86400 + parts[1] * 3600 + parts[2] * 60 + parts[3]
+      if (fields == 2) return days * 86400 + parts[1] * 60 + parts[2]
+      return days * 86400 + parts[1]
+    }
+    { elapsed = seconds($3) }
+    ($2+0)>cpu && elapsed>min_age {
+      printf "  WARN runaway: pid %s  %.0f%% CPU  %.1fh  %s (check; not reaped)\n",$1,$2,elapsed/3600,$4
+    }'
 }
 
 status() {
@@ -87,12 +133,14 @@ status() {
 reap() {
   # Ownership contract: launchers that want automatic cleanup create one
   # `$PID_REGISTRY_DIR/<name>.pid` containing
-  # `<pid> <start_ticks> <reap_after_epoch>`, where start_ticks is field 22
-  # of /proc/<pid>/stat. The explicit lease is also required: registration
+  # `<pid> <start_token> <reap_after_epoch>`, where start_token is the numeric
+  # token printed by `dev-doctor.sh pid-token <pid>` (Linux: /proc start ticks;
+  # macOS: checksum of the ps start time). The explicit lease is also required:
+  # registration
   # proves ownership, not abandonment, so a still-valid lease must survive a
   # Stop hook. A PID alone is insufficient because of reuse/cross-project risk.
   echo "dev-doctor reap:"
-  local n=0 pid recorded_start reap_after now actual_start proc_cwd cmd registry_real root_real stat rest
+  local n=0 pid recorded_start reap_after now actual_start proc_cwd cmd registry_real root_real
   root_real="$(cd "$ROOT" 2>/dev/null && pwd -P)" || {
     echo "  WARN project root is not resolvable; no process reaped"
     echo "  0 process(es) reaped"
@@ -140,20 +188,19 @@ reap() {
       echo "  WARN PID $pid ownership lease is still active; no process reaped"
       continue
     fi
-    [ -r "/proc/$pid/stat" ] || { echo "  WARN stale PID registry entry: ${entry##*/}"; continue; }
-    stat="$(<"/proc/$pid/stat")"
-    rest="${stat##*) }"
-    actual_start="$(awk '{print $20}' <<<"$rest")"
+    kill -0 "$pid" 2>/dev/null || { echo "  WARN stale PID registry entry: ${entry##*/}"; continue; }
+    actual_start="$(_pid_start_token "$pid" || true)"
+    [ -n "$actual_start" ] || { echo "  WARN cannot read PID start time for $pid; no process reaped"; continue; }
     if [ "$actual_start" != "$recorded_start" ]; then
       echo "  WARN PID start-time mismatch for $pid; no process reaped"
       continue
     fi
-    proc_cwd="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
+    proc_cwd="$(_pid_cwd "$pid" || true)"
     case "$proc_cwd/" in
       "$root_real/"*) ;;
       *) echo "  WARN PID $pid cwd is outside the project; no process reaped"; continue ;;
     esac
-    cmd="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)"
+    cmd="$(_pid_command "$pid" || true)"
     if ! grep -Eiq 'serena|mcp-server|chrome-devtools-mcp|playwright.*mcp|--headless|ms-playwright|headless_shell' <<<"$cmd"; then
       echo "  WARN PID $pid is not recognized agent tooling; no process reaped"
       continue
@@ -175,5 +222,9 @@ reap() {
 case "${1:-status}" in
   status) status ;;
   reap) reap ;;
-  *) echo "usage: $0 [status|reap]" >&2; exit 64 ;;
+  pid-token)
+    [[ "${2:-}" =~ ^[0-9]+$ ]] || { echo "usage: $0 pid-token <pid>" >&2; exit 64; }
+    _pid_start_token "$2" || exit 1
+    ;;
+  *) echo "usage: $0 [status|reap|pid-token <pid>]" >&2; exit 64 ;;
 esac

@@ -6,7 +6,7 @@
 # `mapfile`/`declare -A` (Bash >=4; macOS ships Bash 3.2 due to the GPLv3
 # license), `stat -c` (GNU coreutils; BSD/macOS uses `stat -f`), `date +%s%N`
 # (nanoseconds -- GNU date only; BSD date has no `%N`), `flock` (util-linux,
-# Linux -- no native equivalent on macOS) and `python3`. Before this script,
+# Linux -- no native equivalent on macOS) and Python >=3.14. Before this script,
 # "portable" was DECLARED nowhere and the failure of one of these deps was
 # SILENT -- a hook ran, an unknown `stat -c` turned into stray stderr or a
 # wrong value, and the corresponding gate failed/became a no-op with no
@@ -68,11 +68,15 @@ else
     "macOS: brew install util-linux (flock does not exist natively); without it, subagent-throttle.sh/subagent-release.sh cannot atomically acquire a slot"
 fi
 
-# --- python3 ---
-if command -v python3 >/dev/null 2>&1; then
-  pass "python3 ($(python3 --version 2>&1))"
+# --- Python >= 3.14 ---
+if command -v python3 >/dev/null 2>&1 && \
+   python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 14) else 1)' 2>/dev/null; then
+  pass "python3 ($(python3 --version 2>&1), required >=3.14)"
+elif command -v python3 >/dev/null 2>&1; then
+  fail "python3 ($(python3 --version 2>&1), required >=3.14)" \
+    "macOS: brew install python@3.14 and place Homebrew bin before /usr/bin in PATH"
 else
-  fail "python3" "install Python 3 (python.org, brew, or your distro's package manager) -- several hooks/scripts (.harness/lib/*.py) are pure Python stdlib"
+  fail "python3 >=3.14" "install Python 3.14 (macOS: brew install python@3.14) -- several hooks/scripts (.harness/lib/*.py) require it"
 fi
 
 # --- timeout (GNU coreutils) ---

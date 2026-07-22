@@ -92,6 +92,7 @@ _exclude:
   - "/tests/test_codex_parity.sh"
   - "/tests/test_copier_update_no_op.sh"
   - "/tests/test_check_platform.sh"
+  - "/tests/test_request_anchor.sh"
   - "/tests/test_skill_runtime_parity.sh"
   - "/tests/test_contained_runtime_safety.sh"
   - "/tests/test_harness_install_fail_closed.sh"
