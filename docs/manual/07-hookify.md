@@ -4,7 +4,18 @@ Criar um hook exige escrever um script e registrá-lo. O plugin **hookify** (plu
 
 No harness, o hookify tem um segundo papel estrutural: é o **destino de promoção** do ciclo de auto-melhoria (capítulo 12) — lição que se repete vira regra declarativa, sem escrever código.
 
-> **Dependência externa:** o motor é o plugin hookify instalado no runtime (Claude Code); o framework instala as REGRAS, não o motor. Ver capítulo 15 para o estado no Codex.
+> **Dependência externa, agora DECLARADA:** o motor é o plugin hookify instalado no runtime (Claude Code); o framework instala as REGRAS, não o motor. Instalar o plugin exigiria escrever em `~/.claude/plugins/`, fora da raiz do alvo — o instalador nunca faz isso (é a mesma invariante de confinamento POSIX do capítulo 14). O que ele faz, com `use_hookify=true` (default), é **declarar a dependência** no `.claude/settings.json` do projeto, pelo mecanismo oficial de *team marketplaces*:
+>
+> ```json
+> {
+>   "extraKnownMarketplaces": {
+>     "claude-plugins-official": { "source": { "source": "github", "repo": "anthropics/claude-plugins-official" } }
+>   },
+>   "enabledPlugins": { "hookify@claude-plugins-official": true }
+> }
+> ```
+>
+> Ao confiar na pasta do repositório, o Claude Code pede consentimento para instalar o plugin; enquanto isso não acontece ele reporta o plugin como não instalado e mostra o comando `claude plugin install`. **Declarar é do projeto, instalar é do usuário.** Sem a declaração — o comportamento até a v1.6.3 — as regras ficavam no disco como markdown inerte, sem nenhum sinal de que a guarda não existia. Com `use_hookify=false` nenhuma regra é gerada, justamente para não deixar artefato inerte. Ver capítulo 15 para o estado no Codex.
 
 ## O formato de uma regra
 
@@ -33,16 +44,16 @@ Critério para escolher entre as duas ações: `block` é para dano garantido e 
 
 ## As 12 regras que o framework instala
 
-Cinco regras de higiene de sessão/design são geradas incondicionalmente; as demais dependem da configuração do projeto (coluna "condição de geração"). Todas vivem em `.claude/hookify.*.local.md` no projeto instalado (fonte: [templates](<../../templates/{% if use_claude %}.claude{% endif %}/hookify.bare-python.local.md.jinja>) — um `.jinja` por regra, no mesmo diretório).
+Cinco regras de higiene de sessão/design são geradas sempre que `use_hookify=true` (default); as demais dependem da configuração do projeto (coluna "condição de geração"). Todas vivem em `.claude/hookify.*.local.md` no projeto instalado (fonte: [templates](<../../templates/{% if use_claude %}.claude{% endif %}/{% if use_hookify %}hookify.bare-python.local.md{% endif %}.jinja>) — um `.jinja` por regra, no mesmo diretório).
 
 | Regra | Evento | Ação | O que vigia | Condição de geração |
 |---|---|---|---|---|
-| `bare-python` | bash | **block** | `python` "pelado" como comando (máquinas onde só existe `python3` — falha 127 recorrente) | sempre |
-| `relative-cd` | bash | warn | `cd` para path relativo (o cwd reseta entre chamadas Bash do agente — o `cd` não vale na chamada seguinte) | sempre |
-| `mass-sed` | bash | warn | `sed -i` sobre código em lote (regex mal ancorada corrompe substrings sem diff visível); injeta o protocolo contar-antes/1-arquivo/contar-depois | sempre |
-| `web-dev-port` | bash | warn | `npm run dev`/`next dev` sem a porta canônica — cita `HARNESS_DEV_WEB_PORT` e as `HARNESS_RESERVED_PORTS` (portas de outra ferramenta local que o dev não pode ocupar) | sempre |
+| `bare-python` | bash | **block** | `python` "pelado" como comando (máquinas onde só existe `python3` — falha 127 recorrente) | com `use_hookify` (default true) |
+| `relative-cd` | bash | warn | `cd` para path relativo (o cwd reseta entre chamadas Bash do agente — o `cd` não vale na chamada seguinte) | com `use_hookify` (default true) |
+| `mass-sed` | bash | warn | `sed -i` sobre código em lote (regex mal ancorada corrompe substrings sem diff visível); injeta o protocolo contar-antes/1-arquivo/contar-depois | com `use_hookify` (default true) |
+| `web-dev-port` | bash | warn | `npm run dev`/`next dev` sem a porta canônica — cita `HARNESS_DEV_WEB_PORT` e as `HARNESS_RESERVED_PORTS` (portas de outra ferramenta local que o dev não pode ocupar) | com `use_hookify` (default true) |
 | `icones-lucide` | file | warn | import de biblioteca de ícones fora do cânon do projeto em arquivos de UI | só com `use_icon_guard` (default false; ative após confirmar frontend e biblioteca canônica) |
-| `no-scaley-dropdown` | file | warn | `scale-y-`/`scaleY(` em UI — anti-pattern de animação de overlay (distorce o texto); aponta o padrão canônico do projeto | sempre |
+| `no-scaley-dropdown` | file | warn | `scale-y-`/`scaleY(` em UI — anti-pattern de animação de overlay (distorce o texto); aponta o padrão canônico do projeto | com `use_hookify` (default true) |
 | `db-port-<n>` | bash | warn | comando de banco apontando a porta INTERNA do container no host — cita o mapeamento `HARNESS_DEV_DB_PORT`→`HARNESS_DEV_DB_INTERNAL_PORT` | só se as duas portas diferem |
 | `<prefixo>-prod-destroy` | bash | **block** | `docker service rm`/`stack rm`/`scale ...=0` tocando os serviços protegidos | só com `has_prod_stack` |
 | `<prefixo>-prod-image-source` | bash | **block** | `service update --image` em serviço de produção apontando imagem fora de `PROD_REGISTRY_URL` (3 condições em E) | idem |

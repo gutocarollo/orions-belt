@@ -101,6 +101,7 @@ _exclude:
   - "/tests/test_harness_freshness.sh"
   - "/tests/test_install_report.sh"
   - "/tests/test_set_hooks_path_precommit.sh"
+  - "/tests/test_hookify_dependency.sh"
   - "/verification/council-witness.json"
   # H3/A1 (fonte única de skills dual-runtime — grill-me,
   # prova-de-conclusao, marathon, repo-wiki-curator, ui-evidence, verify):
@@ -292,6 +293,28 @@ use_antigravity:
         {% if not use_codex and not use_claude and not use_antigravity %}
         Ao menos um runtime deve estar ativo: use_claude=true, use_codex=true ou use_antigravity=true.
         {% endif %}
+
+# As regras hookify eram geradas INCONDICIONALMENTE junto com `use_claude`,
+# mas o MOTOR que as executa é um plugin do runtime que o framework não
+# instalava nem declarava — regra no disco, guarda inerte, e nada no
+# INSTALL-REPORT dizendo isso (achado real: instalação num repo Python em
+# 2026-07-28, 5 regras `enabled: true` sem motor presente). Agora a
+# dependência é DECLARADA em `.claude/settings.json`
+# (`extraKnownMarketplaces` + `enabledPlugins`), que é o mecanismo oficial de
+# "team marketplaces": o Claude Code pede consentimento de instalação ao
+# usuário quando ele confia na pasta. O instalador continua sem escrever
+# NADA fora da raiz do alvo — declarar é do projeto, instalar é do usuário.
+use_hookify:
+    type: bool
+    help: >-
+        Instalar as regras declarativas hookify (.claude/hookify.*.local.md) e
+        DECLARAR o plugin `hookify@claude-plugins-official` como dependência do
+        projeto em .claude/settings.json? O motor é o plugin do Claude Code — a
+        declaração faz o runtime pedir consentimento de instalação; o
+        instalador nunca mexe em ~/.claude. Desligue se o projeto não pode
+        depender de um plugin de runtime (as regras não são geradas).
+    default: true
+    when: "{{ use_claude }}"
 
 # A run skill with guessed commands is more dangerous than no run skill: agents
 # treat registered skills as executable contracts. Empty keeps the capability

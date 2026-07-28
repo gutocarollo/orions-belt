@@ -122,6 +122,59 @@ class MergeSettingsJsonTest(unittest.TestCase):
         _run(["settings-json", "--existing", str(target), "--new", str(new)])
         self.assertEqual(target.read_bytes(), first)
 
+    def test_new_non_hook_key_reaches_a_brownfield_target(self) -> None:
+        """G-brownfield (real gap, 2026-07-28): a key the template introduces
+        outside `hooks` — the plugin-engine declaration for the hookify rules —
+        used to land ONLY on the greenfield `created` path. On any pre-existing
+        settings.json it was silently dropped, i.e. never on the installer's
+        primary use case, leaving the shipped rules with no declared engine."""
+        target = self.tmpdir / "settings.json"
+        target.write_text(json.dumps({
+            "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "echo user-own"}]}]},
+        }), encoding="utf-8")
+        new = self.tmpdir / "new.json"
+        new.write_text(json.dumps({
+            "hooks": {"Stop": [{"hooks": [{"type": "command", "command": "bash .harness/hooks/completion-gate.py"}]}]},
+            "enabledPlugins": {"hookify@claude-plugins-official": True},
+        }), encoding="utf-8")
+        result = _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        merged = json.loads(target.read_text(encoding="utf-8"))
+        self.assertEqual(merged.get("enabledPlugins"), {"hookify@claude-plugins-official": True})
+        self.assertIn("enabledPlugins", result["keys_added"])
+        self.assertIn("user-own", json.dumps(merged), "external hook must survive")
+
+    def test_new_key_merge_never_overwrites_a_local_decision(self) -> None:
+        """Additive, never destructive: an entry the project already declares
+        wins, and unrelated entries of the same object are preserved."""
+        target = self.tmpdir / "settings.json"
+        target.write_text(json.dumps({
+            "hooks": {},
+            "enabledPlugins": {"hookify@claude-plugins-official": False, "mine@my-market": True},
+        }), encoding="utf-8")
+        new = self.tmpdir / "new.json"
+        new.write_text(json.dumps({
+            "hooks": {},
+            "enabledPlugins": {"hookify@claude-plugins-official": True},
+        }), encoding="utf-8")
+        _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        merged = json.loads(target.read_text(encoding="utf-8"))
+        self.assertIs(merged["enabledPlugins"]["hookify@claude-plugins-official"], False)
+        self.assertIs(merged["enabledPlugins"]["mine@my-market"], True)
+
+    def test_new_key_merge_is_idempotent(self) -> None:
+        target = self.tmpdir / "settings.json"
+        target.write_text(json.dumps({"hooks": {}}), encoding="utf-8")
+        new = self.tmpdir / "new.json"
+        new.write_text(json.dumps({
+            "hooks": {},
+            "extraKnownMarketplaces": {"claude-plugins-official": {"source": {"source": "github", "repo": "anthropics/claude-plugins-official"}}},
+        }), encoding="utf-8")
+        _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        first = target.read_bytes()
+        second = _run(["settings-json", "--existing", str(target), "--new", str(new)])
+        self.assertEqual(target.read_bytes(), first)
+        self.assertEqual(second["keys_added"], [])
+
     def test_merges_preserving_external_user_hook_and_adds_owned_hooks(self) -> None:
         target = self.tmpdir / "settings.json"
         target.write_text(json.dumps({
