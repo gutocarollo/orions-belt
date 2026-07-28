@@ -23,6 +23,7 @@ Convenções: capítulos são classe **sequenced** (`NN-slug.md`, ordem de leitu
 | 13 | [Understand Anything: grafo de código em monorepo e o diff relativo](13-understand-anything.md) | Projetos com grafo de código cuja raiz é subdiretório do monorepo |
 | 14 | [Instalação e atualização: copier copy, harness-init e copier update](14-instalacao-e-update.md) | Instalar o framework num projeto; adaptar à stack; atualizar sem perder edições |
 | 15 | [Apêndice: limitações conhecidas](15-limitacoes-conhecidas.md) | O que o framework NÃO cobre hoje; contratos que o projeto preenche |
+| 16 | [Grafo de decisão de ferramentas de contexto (blast radius)](16-grafo-contexto.md) | Roteamento determinístico entre grafo de código, grep e LSP antes de mudar símbolo compartilhado; guardas hookify de núcleo e de contrato de dados |
 
 ## Roteamento para LLMs
 

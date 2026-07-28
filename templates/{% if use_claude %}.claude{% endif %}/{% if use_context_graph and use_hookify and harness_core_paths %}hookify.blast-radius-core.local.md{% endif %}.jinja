@@ -1,0 +1,18 @@
+---
+name: blast-radius-core
+enabled: true
+event: file
+action: warn
+conditions:
+  - field: file_path
+    operator: regex_match
+    pattern: {{ harness_core_paths.split(',') | map('trim') | reject('equalto', '') | join('|') }}
+---
+
+BLAST RADIUS OBRIGATÓRIO (⭐ grafo de decisão de contexto, AGENTS.md/CLAUDE.md): você está editando o NÚCLEO compartilhado (`{{ harness_core_paths }}`) — o que muda aqui tem raio N×. Antes do veredito/commit, rode o roteamento do grafo:
+
+1. **[PARALELO]** grafo de código (`codegraph node <símbolo>` ou equivalente — chamadores COM a função envolvente e detecção de definições homônimas) **+** `grep -rn "<símbolo>"` no código (pega passagem por REFERÊNCIA, que o grafo perde: função passada como callback/fixture não é uma aresta de chamada). Rodam juntos porque erram de formas diferentes; serializar é latência pura.
+2. **[JOIN → SEQUENCIAL]** LSP/serena `find_referencing_symbols` nas arestas que decidem o veredito. Vem depois porque só aqui se sabe *qual* aresta confirmar — grafos por tree-sitter resolvem callee por NOME e podem apontar o homônimo errado (ex.: um stub de teste em vez da API real).
+3. Se a saída do grafo trouxer **"Other definitions"** (predicado P4 — símbolo ambíguo), o passo 2 deixa de ser opcional: a aresta pode ter sido atribuída à definição errada.
+
+Índice velho mente: sincronize o grafo antes de confiar nele. Se este edit não altera comportamento (comentário, docstring, formatação), siga — mas declare isso no veredito.

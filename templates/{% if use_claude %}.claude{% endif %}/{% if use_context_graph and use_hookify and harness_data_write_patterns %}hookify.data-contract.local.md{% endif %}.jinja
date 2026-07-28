@@ -1,0 +1,18 @@
+---
+name: data-contract
+enabled: true
+event: file
+action: warn
+conditions:
+  - field: content
+    operator: regex_match
+    pattern: {{ harness_data_write_patterns }}
+---
+
+CONTRATO DE DADOS (⭐ grafo de decisão de contexto, predicado P3): este edit toca ESCRITA em banco. O diff sozinho não prova que o schema aceita o que o código passou a produzir — só o banco real prova. Rode em PARALELO com o blast radius (os inputs são independentes: nomes de tabela vêm do diff, não do grafo de código):
+
+1. **Schema** — descreva a tabela alvo pelo MCP de banco. Coluna que o código passou a produzir e a tabela não tem, ou tipo incompatível = achado **BLOQUEANTE** (append estoura; um `replace` mal configurado dropa a tabela). Se a tabela tiver espelhos/derivadas (snapshot `_latest`, views, tabelas de fato), confira TODAS — não só a que o código nomeia.
+2. **Valores reais** — distribuição/distinct das colunas que o parsing alterado produz, comparada ao que JÁ está gravado. Formato novo divergindo do histórico = achado **ALTA** (não quebra a carga, corrompe a série).
+3. **Ledger** — se o projeto registra cargas (tabela de log/auditoria), confirme que a execução do código alterado apareceu lá.
+
+Read-only sempre: nenhum DML/DDL em review. Se o match for falso positivo (o padrão apareceu em comentário ou string de teste), siga — mas declare no veredito.
