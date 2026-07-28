@@ -71,6 +71,56 @@ project — requirement: 100% generic product, zero donor content in the render)
 - **COLORED-PAIR CONTRACT** (structural rule, documented at the top of the brand theme block in the token file): a colored container (primary/destructive/success/info/premium) has `X-foreground` = INVARIANT WHITE; the theme chooses the TONE of `X`, obliged to carry white (≥4.5:1 ⇒ luminance ≤ ~0.18). Sole exception: `warning` (amber + dark label). Neutral surfaces (`bg-card`/`bg-muted`) co-vary with the pair `text-foreground`/`text-muted-foreground`. **Never** use raw `text-white` over neutral (breaks in light mode).
 - **Executable guards (the DTCG documents the convention; the project makes it enforced with WCAG):** validate the colored pairs at the DEFINITION (token file, all themes) and at the POINT OF USE (text × background pair), and keep an anti-hardcode color ratchet (baseline 0 — a new raw color is a violation). The hook `ds-gate-posttool` runs these guards — shipped by the harness in `.harness/lib/ds-gate.sh` + `.harness/lib/ds-pairs-check.py` (they are not project content) — when `use_ds_gate` is active.
 
+{% if use_context_graph %}
+## ⭐ CANONICAL REFERENCE — Context tooling decision graph (blast radius)
+
+**Which tool to use to find what breaks when a symbol changes, in what order, and what runs in parallel.** `grep` finds literal occurrences but does not separate same-named definitions, does not say which function contains the call, and does not follow indirect chains; a code graph solves that but misses pass-by-REFERENCE and resolves callees by name. **The layers fail in different ways — the value is in the routing between them.** Detail and rationale: manual chapter 16.
+
+**Deterministic predicates** — each one is a command, not a judgement call:
+
+| P | Question | Command that decides |
+|---|---|---|
+| **P1** | Does the diff touch the shared core? | `git diff --name-only <base>...HEAD` matches `{{ harness_core_paths | default('(not configured)', true) }}` |
+| **P2** | Is the diff multi-file? | `git diff --name-only <base>...HEAD` ≥ 3 code files |
+| **P3** | Does it touch a database write? | diff matches `{{ harness_data_write_patterns | default('(not configured)', true) }}` |
+| **P4** | Is the symbol ambiguous? | graph output reports more than one definition of the same name |
+
+```mermaid
+flowchart TD
+    A(["diff ready"]) --> B{"P1: touches the core ? OR P2: >= 3 files ?"}
+    B -- "no — leaf change" --> LEAF["LSP OR grep directly — graph optional"]
+    B -- "yes — high radius" --> FORK1(( ))
+    FORK1 --> CG["code graph<br/>callers + enclosing function + same-named defs"]
+    FORK1 --> GR["grep -rn symbol<br/>pass-by-reference the graph misses"]
+    CG --> JOIN1(( ))
+    GR --> JOIN1
+    JOIN1 --> P4{"P4: more than one definition of the name ?"}
+    P4 -- "yes" --> SO["LSP find_referencing_symbols — MANDATORY"]
+    P4 -- "no" --> SC["LSP on the edges that decide the verdict"]
+    A --> C{"P3: database write ?"}
+    C -- "yes" --> DB["DB MCP: schema + mirrors/_latest<br/>-> real values vs history -> load ledger"]
+    SO --> JOIN2(( ))
+    SC --> JOIN2
+    LEAF --> JOIN2
+    DB --> JOIN2
+    JOIN2 --> V{"is it a review with P1|P2|P3 ?"}
+    V -- "yes" --> ADV["adversarial loop in a subagent"]
+    V -- "no" --> OUT(["verdict: severity + path + Line + evidence"])
+    ADV --> OUT
+    FORK1:::bar
+    JOIN1:::bar
+    JOIN2:::bar
+    classDef bar fill:#334155,stroke:#334155,color:#fff
+```
+
+**The dark bar is the fork/join pair** (UML Activity / BPMN parallel gateway; fan-out/fan-in in a DAG): one arrow in and several out = **concurrent** branches; several in and one out = **synchronisation**. A grouping box would say "same topic", not "at the same time".
+
+- **The engine is an EXTERNAL dependency:** the harness installs the RULES and the routing, never the graph binary (it lives outside the target root — the same containment invariant as the hookify rules). Install it separately and index the repo before first use.
+- **A stale index lies:** sync the graph before trusting it; a desynced graph is worse than none, because it looks authoritative.
+- **Do not bureaucratise leaf changes:** a one-file change with no P1/P2/P3 does not pay for the graph — LSP or grep directly.
+- **Guards:** hookify rules `blast-radius-core`{% if harness_data_write_patterns %} and `data-contract`{% endif %} (Claude Code; on Codex this prose is the contract).
+{% endif %}
+
 ## ⭐ CANONICAL REFERENCE — {{ project_name }} Codex-native Council
 
 **For complex tasks in {{ project_name }}, the canonical operational flow in Codex is repo-native: `AGENTS.md` + `.agents/skills` + `.codex/agents` + explicit prompts. Do not use the Agents SDK, Codex MCP server, a Python runner, programmatic traces/evals, or `OPENAI_API_KEY` as the base of the MVP inside the Codex extension in VS Code.**

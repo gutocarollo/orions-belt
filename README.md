@@ -87,6 +87,7 @@ and applicability classification belong to the separate, agent-guided `harness-i
 | 📚 | **Karpathy wiki** | Temporal doc indexing with executable orphan/reference lints; a repo-wide stray-doc sweep routes scattered markdown into a curator inbox; pre-commit runs docs policy before reference integrity. |
 | 🧠 | **Knowledge provider** | Provider contract for external Understand graphs: stable IDs, typed/provenanced edges, tombstones and incremental-versus-clean parity. Orion deliberately does not duplicate Understand's parser. |
 | ♻️ | **Self-improvement loop** | `/loop` maintenance pass: lessons capture → inject → promote, wiki lint, ref-integrity, graph freshness. |
+| 🧭 | **Context decision graph** | Deterministic routing between a code graph, `grep` and the LSP before a shared symbol changes — measured on a real repo where each layer missed what the others caught. Fork/join topology, four command-shaped predicates, and hookify guards on core-path and DB-write edits. The graph CLI stays an external dependency the installer declares, never installs. |
 | 🛡️ | **Deterministic hooks** | 18 hook scripts shipped (14 install by default, 4 are stack-conditional): completion/UI/design-system gates, subagent throttle, leak reaper, git-doctor. |
 | 🌐 | **Dual runtime core** | The council and core operational skills share one source across Claude Code and Codex; optional and runtime-native capabilities are tracked as an explicit compatibility matrix. |
 

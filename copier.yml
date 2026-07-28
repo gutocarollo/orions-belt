@@ -102,6 +102,7 @@ _exclude:
   - "/tests/test_install_report.sh"
   - "/tests/test_set_hooks_path_precommit.sh"
   - "/tests/test_hookify_dependency.sh"
+  - "/tests/test_context_graph.sh"
   - "/tests/test_gitignore_runtime_state.sh"
   - "/verification/council-witness.json"
   # H3/A1 (fonte única de skills dual-runtime — grill-me,
@@ -686,6 +687,50 @@ e2e_admin_password_env_var:
 #     aplicabilidade; defaults false = nenhuma capability específica de UI é
 #     ativada sem stack detectada e confirmação explícita) ---
 # =========================================================================
+# --- grafo de decisão de ferramentas de contexto (blast radius) ---
+# Origem: adoção real num repo Python de 42k LOC (2026-07-28). O problema que
+# resolve não é "instalar mais uma ferramenta": é que `grep` não responde "o que
+# quebra se eu mudar isto" (não separa definições homônimas, não diz qual função
+# contém a chamada, não segue cadeia indireta), enquanto um grafo de código
+# sozinho perde passagem por referência e resolve callee por nome. As duas
+# camadas erram de formas DIFERENTES — por isso o valor está no ROTEAMENTO
+# determinístico entre elas, não em nenhuma isolada.
+#
+# O motor (um CLI de grafo de código, ex.: codegraph) é dependência EXTERNA: o
+# instalador declara e documenta, nunca instala — mesma invariante de
+# confinamento do hookify (o binário vive fora da raiz do alvo). Default false
+# porque a capability é inerte sem esse binário, e artefato inerte é exatamente
+# o defeito que o `use_hookify` corrigiu.
+use_context_graph:
+    type: bool
+    help: >-
+        Instalar o grafo de decisão de ferramentas de contexto (bloco ⭐ nas
+        instruções + regras hookify de blast radius)? Roteia determinísticamente
+        entre grafo de código, grep e LSP antes de mudar símbolo compartilhado.
+        Requer um CLI de grafo instalado à parte (o harness declara, não
+        instala). Desligue se o projeto não usa análise estática de raio.
+    default: false
+
+harness_core_paths:
+    type: str
+    help: >-
+        Paths do NÚCLEO compartilhado, CSV — o que, alterado, tem raio N× (ex.:
+        "src/lib/,packages/core/" ou "app/utils/"). É o predicado P1 do grafo e
+        o gatilho da regra hookify de blast radius. Vazio = P1 desligado (a
+        regra não é gerada).
+    default: ""
+    when: "{{ use_context_graph }}"
+
+harness_data_write_patterns:
+    type: str
+    help: >-
+        Alternação regex dos padrões de ESCRITA em banco, para o predicado P3
+        (ex.: "to_sql|INSERT INTO|\.save\(" ). Dispara a regra hookify de
+        contrato de dados, que manda conferir schema/valores reais via MCP de
+        banco antes do veredito. Vazio = P3 desligado.
+    default: ""
+    when: "{{ use_context_graph }}"
+
 use_ui_evidence:
     type: bool
     help: >-

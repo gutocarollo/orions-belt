@@ -665,6 +665,23 @@ def _rule_understand_apps_incremental(facts: dict) -> tuple[str, str]:
     )
 
 
+def _rule_context_graph(facts: dict) -> tuple[str, str]:
+    # The routing (graph + grep in parallel, LSP after) is language-agnostic, but
+    # the ENGINE is an external CLI the installer never installs — same
+    # containment invariant as the hookify engine. And P1 needs the project's
+    # shared-core paths, which no scan can infer reliably (a "utils/" dir is not
+    # automatically the hub). So this is never APLICAVEL by itself: it always
+    # needs the human to confirm the paths.
+    lang = facts.get("primary_language") or ""
+    detail = f" (primary language detected: {lang})" if lang else ""
+    return CONDICIONAL, (
+        "Deterministic routing between code graph, grep and LSP before changing a "
+        f"shared symbol{detail}. Requires (a) an external code-graph CLI installed "
+        "separately and (b) harness_core_paths confirmed by a human — a scan cannot "
+        "infer which directory is the project's hub."
+    )
+
+
 def _rule_prod_guards(facts: dict) -> tuple[str, str]:
     docker = facts["docker"]
     if docker["has_swarm_signal"]:
@@ -733,6 +750,8 @@ COMPONENTS: list[_ComponentRule] = [
     ("hookify.no-scaley-dropdown", "hookify", _rule_no_scaley_dropdown),
     ("hookify.web-dev-port", "hookify", _rule_web_dev_port),
     ("hookify.db-port-5432", "hookify", _rule_generic_always_on),
+    ("hookify.blast-radius-core", "hookify", _rule_context_graph),
+    ("hookify.data-contract", "hookify", _rule_context_graph),
     ("hookify.prod-destroy", "hookify-prod", _rule_prod_guards),
     ("hookify.prod-image-source", "hookify-prod", _rule_prod_guards),
     ("hookify.prod-prune", "hookify-prod", _rule_prod_guards),

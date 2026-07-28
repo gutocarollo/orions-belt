@@ -107,7 +107,12 @@ HARNESS_CODEX_PROJECT_DOC_MAX_BYTES={{ harness_codex_project_doc_max_bytes }}
 # =========================================================================
 # --- convenções (defaults = padrão das ferramentas; raramente mudar) ---
 # =========================================================================
-HARNESS_DOCS_DIR={{ harness_docs_dir }}
+{% if use_context_graph %}# Núcleo compartilhado: alterar aqui tem raio N× (predicado P1 do grafo de
+# decisão de contexto). Lido pela regra hookify blast-radius-core.
+HARNESS_CORE_PATHS={{ harness_core_paths }}
+# Padrões de escrita em banco (predicado P3) — alternação regex.
+HARNESS_DATA_WRITE_PATTERNS={{ harness_data_write_patterns }}
+{% endif %}HARNESS_DOCS_DIR={{ harness_docs_dir }}
 HARNESS_LESSONS_FILE={{ harness_lessons_file }}
 HARNESS_RUNS_DIR={{ harness_runs_dir }}
 HARNESS_EVIDENCE_DIR={{ harness_evidence_dir }}
