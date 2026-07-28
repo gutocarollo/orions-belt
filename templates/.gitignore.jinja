@@ -1,4 +1,4 @@
-# .gitignore — minimal Orion's Belt seed (G10, post-v1.0.0 adversarial review).
+# .gitignore — Orion's Belt seed (G10, post-v1.0.0 adversarial review).
 # Covers only what the harness ITSELF generates at runtime and should never be
 # committed — it does not try to be a generic language/stack .gitignore (that is
 # project content). First install: created from scratch. If the project already
@@ -17,6 +17,29 @@
 # re-injected on SessionStart to fight objective drift. Local-only working state,
 # and may hold sensitive prompt text; never committed.
 .harness/requests/
+
+# Proof-of-completion manifests (proof_evidence.py). The `prova-de-conclusao`
+# skill mandates `.harness/evidence/<run>.json` — a DIFFERENT directory from
+# `{{ harness_evidence_dir }}/` above, which is the ui-evidence PNG dir. Only the
+# latter was covered, so every verdict the completion gate demands produced an
+# untracked file that `git add -A` would commit. The manifest binds a claim to
+# HEAD + a worktree fingerprint: stale by construction on the next commit,
+# and worthless as history.
+.harness/evidence/
+
+# PID registry read by dev-doctor/reap-leaks (HARNESS_PID_REGISTRY_DIR — hardcoded
+# to .harness/pids in harness.conf.jinja, not a Copier question). Machine-local
+# PIDs and start tokens: meaningless on any other machine, and actively harmful
+# if a stale entry travels into someone else's checkout.
+.harness/pids/
+
+# Installer state (install_apply.py: BACKUP_ROOT_REL / JOURNAL_REL). The backup
+# tree holds VERBATIM COPIES of the target's pre-merge files — committing it
+# duplicates project content and can publish whatever a merged file contained.
+# The journal is transaction state for rollback; it survives a killed install
+# and is consumed by the next run.
+.harness/install-backups/
+.harness/install-journal.json
 
 # Python bytecode of the modules shipped under .harness/lib/ — the hooks import
 # _tooling_conf.py via `python3 .../script.py` on every fire (Edit/Write/Stop),
