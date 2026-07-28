@@ -210,5 +210,16 @@
         ]
       }
     ]
-  }
+  }{% if use_hookify %},
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "hookify@claude-plugins-official": true
+  }{% endif %}
 }

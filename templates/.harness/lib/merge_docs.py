@@ -45,7 +45,8 @@ CLI:
       [--owned-command EXACT_COMMAND ...]
       -> writes PATH with the merge applied; prints JSON
          {"action": "created"|"merged", "path": ..., "hooks_added": N,
-          "hooks_kept": N, "hooks_removed_stale_owned": N}
+          "hooks_kept": N, "hooks_removed_stale_owned": N,
+          "keys_added": [non-hook top-level keys the template contributed]}
   merge_docs.py gitignore --existing PATH --new PATH [--label TEXT]
       -> writes PATH with the merge applied (idempotent); prints JSON
          {"action": "created"|"appended"|"updated-block", "path": ...}
@@ -231,6 +232,7 @@ def merge_settings_json(
         return {
             "action": "created", "path": str(existing_path),
             "hooks_added": 0, "hooks_kept": 0, "hooks_removed_stale_owned": 0,
+            "keys_added": sorted(key for key in new_data if key != "hooks"),
         }
 
     existing_data = json.loads(existing_path.read_text(encoding="utf-8"))
@@ -298,6 +300,34 @@ def merge_settings_json(
 
     merged_data = dict(existing_data)
     merged_data["hooks"] = merged_hooks
+
+    # NON-HOOK KEYS (G-brownfield): the template may need settings.json keys
+    # other than `hooks` — today `enabledPlugins`/`extraKnownMarketplaces`,
+    # which declare the runtime plugin ENGINE a shipped rule set depends on
+    # (the hookify rules were installed with no way to state their engine).
+    # Before this, `merged_data = dict(existing_data)` plus rewriting only
+    # `hooks` meant a new top-level key landed exclusively on the greenfield
+    # `created` path and was SILENTLY DROPPED on every pre-existing file —
+    # i.e. never on brownfield adoption, which is the installer's whole reason
+    # to exist. The merge is strictly ADDITIVE and never destructive: a key
+    # (or a nested entry) the project already declares always wins, so the
+    # template can introduce a dependency without overwriting a local
+    # decision — same contract the four shared surfaces already promise.
+    keys_added: list[str] = []
+    for key, new_value in new_data.items():
+        if key == "hooks":
+            continue
+        current = merged_data.get(key)
+        if key not in merged_data:
+            merged_data[key] = new_value
+            keys_added.append(key)
+        elif isinstance(new_value, dict) and isinstance(current, dict):
+            # entry-level union; the project's own entries take precedence
+            merged_entry = {**new_value, **current}
+            if merged_entry != current:
+                merged_data[key] = merged_entry
+                keys_added.append(key)
+
     existing_path.write_text(
         json.dumps(merged_data, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -305,6 +335,7 @@ def merge_settings_json(
     return {
         "action": "merged", "path": str(existing_path),
         "hooks_added": added, "hooks_kept": kept, "hooks_removed_stale_owned": removed_stale_owned,
+        "keys_added": sorted(keys_added),
     }
 
 
