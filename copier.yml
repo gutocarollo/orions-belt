@@ -103,6 +103,7 @@ _exclude:
   - "/tests/test_set_hooks_path_precommit.sh"
   - "/tests/test_hookify_dependency.sh"
   - "/tests/test_context_graph.sh"
+  - "/tests/test_gitignore_runtime_state.sh"
   - "/verification/council-witness.json"
   # H3/A1 (fonte única de skills dual-runtime — grill-me,
   # prova-de-conclusao, marathon, repo-wiki-curator, ui-evidence, verify):
