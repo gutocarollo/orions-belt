@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ref_integrity.py — git-aware referential integrity (renames/deletes).
+"""ref_integrity.py — Git-aware referential integrity (renames/deletes).
 
 Port of `guto-wiki` (padronizacao-documentacao/artefatos/scripts/
 ref-integrity.py — see docs/planning/research/01-guto-wiki.md §b) into the
@@ -333,7 +333,7 @@ def selftest() -> int:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="git-aware referential integrity (renames/deletes).")
+    ap = argparse.ArgumentParser(description="Git-aware referential integrity (renames/deletes).")
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--staged", action="store_true", help="pre-commit: staged + index")
     g.add_argument("--range", metavar="A..B", help="skill: commit range")
