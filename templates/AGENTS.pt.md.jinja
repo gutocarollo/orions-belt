@@ -11,6 +11,17 @@ no projeto-alvo — requisito: produto 100% genérico, zero conteúdo do doador
 no render).
 -#}
 
+{#- FRONTEND-ONLY CANON, GATED (adopter report, 2026-07-30). These three blocks were emitted
+    UNCONDITIONALLY while every neighbouring block is gated (`use_ui_evidence`,
+    `harness_understand_apps_root`, `use_context_graph`). Measured in a real adopter: a pure-Python
+    backend with 675 `.py` files, zero frontend, `package.json`/`tailwind.config*`/`components.json`
+    all absent, and `use_ds_gate: false` in answers.yml still received ~4.2 KB of shadcn/OKLCH/
+    clip-path canon resident in EVERY session of both runtimes, and the terms `clip-path`, `oklch`,
+    `shadcn`, `text-white`, `pb-safe` appeared 0 times in the project's code. Inert instruction is
+    the defect `use_hookify` was introduced to prevent: it teaches the agent that the ⭐ blocks are
+    decoration. The gate is the union of the frontend flags — all four default to false and
+    harness-init already marks them NAO_APLICAVEL for backends. -#}
+{% if use_ui_skills or use_ds_gate or use_icon_guard or use_ui_evidence %}
 ## ⭐ REFERÊNCIA CANÔNICA — Dropdown / menu / flyout com expandir-colapsar animado
 
 **Defina UM componente canônico de dropdown/menu/flyout para o projeto e reuse-o em todo dropdown NOVO ou refatorado — nunca reimplementar por tela.** Quando o componente canônico existir, registre o path dele NESTE bloco (este arquivo é a fonte de verdade operacional do projeto).
@@ -26,6 +37,8 @@ no render).
 
 - **CLÁUSULA DE FALLBACK (honesta — "canônica exceto onde não existe"):** se a biblioteca canônica NÃO tiver o componente para um tipo de chart (ex.: **funnel**/drop-off, **heatmap**/matriz), a ordem é: (1) compor com as primitivas da MESMA base da biblioteca canônica (mantém coerência visual); (2) só então a lib de chart que o app já usa. **Toda exceção é documentada** (qual chart, por quê). Proibido introduzir uma biblioteca adicional de chart sem justificar.
 - **Protótipo ≠ produção:** protótipo descartável (ex.: HTML estático para validar a história de dados com stakeholders) NUNCA vira código de produção — o dashboard final é reimplementado na biblioteca canônica.
+
+{% endif %}
 
 {% if use_ui_evidence %}
 ## ⭐ REFERÊNCIA CANÔNICA — Evidência visual de UI (pixels, não diffs)
@@ -63,6 +76,7 @@ no render).
 - **Guardas:** skill `understand-apps-incremental`, hooks `.harness/hooks/understand-context-inject.py` e `.harness/hooks/understand-apps-diff-guard.sh`.
 {% endif %}
 
+{% if use_ui_skills or use_ds_gate or use_icon_guard or use_ui_evidence %}
 ## ⭐ REFERÊNCIA CANÔNICA — Design System Tokens = W3C DTCG (designtokens.org)
 
 **O padrão canônico de design system tokens é o W3C Design Tokens Community Group (DTCG) — `designtokens.org`** (spec "Design Tokens Format Module"). É a autoridade de FORMATO/semântica de tokens vendor-neutral. NÃO reinventar convenção de token; ancorar no DTCG.
@@ -71,6 +85,8 @@ no render).
 - **Implementação sobre o DTCG:** **shadcn/ui** (ui.shadcn.com) é a BASE de nomes semânticos (`--background`/`--foreground`, `:root`/`.dark`, `@theme inline`) e o **TweakCN** (tweakcn.com) é o gerador visual (OKLCH + contraste AA). Dois eixos além do shadcn base: MARCA (`data-theme` por marca do projeto) × MODO (classe `.dark`).
 - **CONTRATO DOS PARES COLORIDOS** (regra estrutural, documentada no topo do bloco do tema de marca no arquivo de tokens): container colorido (primary/destructive/success/info/premium) tem `X-foreground` = BRANCO INVARIANTE; o tema escolhe o TOM de `X`, obrigado a carregar branco (≥4,5:1 ⇒ luminância ≤ ~0,18). Exceção única: `warning` (âmbar + rótulo escuro). Superfícies neutras (`bg-card`/`bg-muted`) co-variam com o par `text-foreground`/`text-muted-foreground`. **Nunca** usar `text-white` cru sobre neutro (quebra no modo claro).
 - **Guardas executáveis (o DTCG documenta a convenção; o projeto a torna enforced com WCAG):** valide os pares coloridos na DEFINIÇÃO (arquivo de tokens, todos os temas) e no PONTO DE USO (par texto × fundo), e mantenha um ratchet anti-hardcode de cor (baseline 0 — cor crua nova é violação). O hook `ds-gate-posttool` roda esses guardas — shipados pelo harness em `.harness/lib/ds-gate.sh` + `.harness/lib/ds-pairs-check.py` (não são conteúdo do projeto) — quando `use_ds_gate` estiver ativo.
+
+{% endif %}
 
 {% if use_context_graph %}
 ## ⭐ REFERÊNCIA CANÔNICA — Grafo de decisão de ferramentas de contexto (blast radius)
@@ -570,6 +586,7 @@ Ciclo: **capturar → injetar → promover → consolidar**. O objetivo é a tax
 
 - **Capturar (obrigação do agente):** após QUALQUER correção de {{ owner_name }} (veredicto "Errado.", abordagem revertida, ponto cego apontado, review adversarial derrubando algo meu) → append IMEDIATO em `{{ harness_lessons_file }}` no formato `## [data] sintoma → regra` (2-4 linhas, padrão concreto, não desabafo). Não esperar o fim da sessão.
 - **Injetar (hook, determinístico):** SessionStart roda `.harness/hooks/lessons-inject.sh` → as lições entram no contexto de TODA sessão nova. Reler antes de tarefa do mesmo domínio.
+  **Teto de linhas:** o hook faz `tail -n {{ harness_lessons_inject_max_lines }}`, ou seja **o corte é no INÍCIO do arquivo — as lições MAIS ANTIGAS**. Passando do teto ele imprime um `WARNING` dizendo quantas linhas ficaram fora (truncar em silêncio seria um sinal que o agente não vê). Headroom: `echo $(( {{ harness_lessons_inject_max_lines }} - $(wc -l < {{ harness_lessons_file }}) ))`. Chegando perto de zero, **PROMOVA lição antiga a regra permanente e apague-a daqui** em vez de subir o teto: teto maior custa contexto em TODA sessão.
 - **Promover (anti-recorrência):** lição que se repete 2× → vira (a) regra permanente na seção apropriada deste CLAUDE.md, ou (b) hook executável via plugin `hookify` (guard determinístico > instrução em prosa). Lição promovida é marcada `[PROMOVIDA → destino]` no lessons.md.
 - **Consolidar (manutenção):** revisar este arquivo sob demanda (skills de manutenção de CLAUDE.md quando disponíveis); manter o lint de documentação (`.harness/lib/docs_wiki_lint.py`) e as lessons pendentes de promoção como parte da rotina de manutenção do repo.
 - **Iterar impiedosamente** (Boris §3): se a mesma correção aparecer 3×, o problema é a REGRA mal escrita — reescrever a regra, não re-anotar o sintoma.

@@ -53,13 +53,63 @@ git -C "$ROOT" diff --relative={{ harness_understand_apps_root }} "$LAST"..HEAD 
   | awk '!/^\.understand-anything\//' \
   > "$OUT"
 
-if grep -Eq '^({{ harness_understand_apps_root }}/|\.claude/|\.agents/|\.codex/|docs/|scripts/|infra/|docker/|\.github/)' "$OUT"; then
-  echo "UNDERSTAND-APPS-DIFF: invalid non-app-relative paths in $OUT." >&2
-  echo "The file must contain paths like api/... or web/..., never {{ harness_understand_apps_root }}/api/... or repo-root paths." >&2
-  grep -En '^({{ harness_understand_apps_root }}/|\.claude/|\.agents/|\.codex/|docs/|scripts/|infra/|docker/|\.github/)' "$OUT" | sed -n '1,20p' >&2
+# GUARD BY RESOLUTION, NOT BY DIRECTORY NAME (adopter report, 2026-07-30). The previous guard
+# rejected any line starting with `docs/`, `scripts/`, `infra/`, `docker/`, `.claude/`, `.agents/`,
+# `.codex/` or `.github/` — treating those names as proof of a repo-root path. But an app root
+# legitimately contains its own `docs/` and `scripts/`: measured in a real adopter whose graph root
+# holds both, EVERY commit that touched documentation made this script exit 2, and the failure was
+# read as "N files pending" because the script writes $OUT before the guard runs. A guard that
+# fires on a correct input is worse than no guard: it trains the operator to ignore the exit code.
+# The bug class the guard exists for is the DOUBLE PREFIX (`{{ harness_understand_apps_root }}/api/...`
+# emitted by a diff without --relative); that check stays, by name, because it is unambiguous.
+# Everything else is decided by RESOLUTION: an app-relative path resolves under $APP_ROOT in the
+# worktree or in HEAD; a repo-root path does not. Name-independent, so it cannot false-positive on
+# a directory that happens to share a name with a repo-root one.
+BAD_PREFIX="$(grep -En '^{{ harness_understand_apps_root }}/' "$OUT" | sed -n '1,20p' || true)"
+if [ -n "$BAD_PREFIX" ]; then
+  echo "UNDERSTAND-APPS-DIFF: double-prefixed paths in $OUT (diff ran without --relative)." >&2
+  echo "Paths must be relative to {{ harness_understand_apps_root }}/ — api/... not {{ harness_understand_apps_root }}/api/..." >&2
+  printf '%s\n' "$BAD_PREFIX" >&2
+  exit 2
+fi
+
+UNRESOLVED=""
+while IFS= read -r rel; do
+  [ -n "$rel" ] || continue
+  [ -e "$APP_ROOT/$rel" ] && continue
+  # A path present in the diff exists in at least ONE of the two endpoints by definition, so both
+  # must be consulted: checking only HEAD would flag every file DELETED between the seal and HEAD
+  # as unresolved — a legitimate app-relative path and a real regression caught while testing this.
+  git -C "$ROOT" cat-file -e "HEAD:{{ harness_understand_apps_root }}/$rel" 2>/dev/null && continue
+  git -C "$ROOT" cat-file -e "$LAST:{{ harness_understand_apps_root }}/$rel" 2>/dev/null && continue
+  UNRESOLVED="$UNRESOLVED$rel
+"
+done < "$OUT"
+if [ -n "$UNRESOLVED" ]; then
+  echo "UNDERSTAND-APPS-DIFF: paths in $OUT do not resolve under $APP_ROOT (neither in the worktree nor at HEAD)." >&2
+  echo "They are repo-root paths, not app-relative ones. The file must contain api/... or web/..., relative to {{ harness_understand_apps_root }}/." >&2
+  printf '%s' "$UNRESOLVED" | sed -n '1,20p' >&2
   exit 2
 fi
 
 COUNT="$(wc -l < "$OUT" | tr -d ' ')"
 echo "UNDERSTAND-APPS-DIFF: wrote $COUNT app-relative changed files to $OUT"
 echo "UNDERSTAND-APPS-DIFF: last analyzed commit $LAST"
+
+# CODE vs DOC-ONLY SPLIT (adopter report, 2026-07-30). The raw count above answers "how many files
+# changed", which is NOT the same question as "is the graph stale". Measured in a real adopter: the
+# script reported 48 pending while the graph held 676 file nodes and ZERO markdown — all 48 changes
+# were documentation, so the graph was semantically current and only its commit seal was behind.
+# A freshness signal that cannot reach zero by any amount of work teaches the agent to ignore it,
+# which is worse than no signal. The output file is deliberately NOT filtered: what a given graph
+# backend indexes is its business, and a JS/Python project may legitimately index more than this
+# default. Override the doc-only pattern with HARNESS_UNDERSTAND_DOC_ONLY_RE when your backend
+# indexes prose (a knowledge graph over a wiki, for instance).
+DOC_ONLY_RE="${HARNESS_UNDERSTAND_DOC_ONLY_RE:-\.(md|mdx|markdown|txt|rst|adoc|csv|pdf)$|^docs/}"
+DOC_COUNT="$(grep -Ec "$DOC_ONLY_RE" "$OUT" || true)"
+CODE_COUNT=$((COUNT - DOC_COUNT))
+echo "UNDERSTAND-APPS-DIFF: of these, $DOC_COUNT are documentation-only and $CODE_COUNT touch code"
+if [ "$COUNT" -gt 0 ] && [ "$CODE_COUNT" -eq 0 ]; then
+  echo "UNDERSTAND-APPS-DIFF: NO code changed since the seal — the graph is semantically CURRENT."
+  echo "UNDERSTAND-APPS-DIFF: only meta.json's gitCommitHash is behind HEAD. Do not read the $COUNT above as staleness."
+fi

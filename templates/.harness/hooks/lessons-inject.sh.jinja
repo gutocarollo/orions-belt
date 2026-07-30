@@ -34,7 +34,20 @@ LESSONS_FILE_REL="$(_conf_get HARNESS_LESSONS_FILE tasks/lessons.md)"
 MAX_LINES="$(_conf_int HARNESS_LESSONS_INJECT_MAX_LINES 80)"
 FILE="$ROOT/$LESSONS_FILE_REL"
 [ -f "$FILE" ] || exit 0
+TOTAL="$(wc -l < "$FILE" | tr -d ' ')"
 echo "<lessons-learned source=\"$LESSONS_FILE_REL\">"
 echo "Lessons from previous sessions (AGENTS.md/CLAUDE.md §16). Re-read the ones for the current task's domain; after a user correction, append immediately; 2nd recurrence → promote to a rule/hook."
+# TRUNCATION IS ANNOUNCED, NEVER SILENT (adopter report, 2026-07-30). `tail -n` drops the
+# BEGINNING of the file — the OLDEST lessons — and the instruction text in the donor CLAUDE.md
+# claimed the opposite ("cuts the end"), so an adopter at 84 lines against a cap of 80 was losing
+# the file header on every SessionStart and would have lost lesson #1 on the next append, while
+# the written rule told them to protect the wrong end of the file. A cap that trims without
+# saying so produces exactly the class of defect this harness exists to prevent: a signal the
+# agent cannot see. The warning names the direction, the count and the two ways out, so the
+# adopter chooses between promoting old lessons to permanent rules (preferred — a bigger cap
+# costs context in EVERY session) and raising the cap.
+if [ "$TOTAL" -gt "$MAX_LINES" ]; then
+  echo "WARNING — lessons truncated: this file has ${TOTAL} lines and the cap is ${MAX_LINES}, so the FIRST $((TOTAL - MAX_LINES)) line(s) (the OLDEST lessons) are NOT in this context. Fix by promoting old lessons to a permanent rule/hook and deleting them here (preferred), or by raising HARNESS_LESSONS_INJECT_MAX_LINES in .harness/answers.yml. Headroom check: echo \$(( ${MAX_LINES} - \$(wc -l < ${LESSONS_FILE_REL}) ))"
+fi
 tail -n "$MAX_LINES" "$FILE"
 echo "</lessons-learned>"

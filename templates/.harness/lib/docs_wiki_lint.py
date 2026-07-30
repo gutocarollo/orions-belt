@@ -106,13 +106,35 @@ def mentioned(rel: Path, corpus: str) -> bool:
 
 
 def collection_mentioned(rel: Path, corpus: str) -> bool:
-    """Accepts coverage by an explicit collection, without letting a generic top-level cover everything."""
+    """Accept coverage by an explicit collection, without letting a generic top-level cover everything.
+
+    DEPTH-1 COLLECTIONS COUNT (adopter report, 2026-07-30). The loop used to stop at ``i > 1``,
+    which made a file sitting directly inside a first-level directory under ``docs/`` impossible to
+    cover by collection: for ``docs/spec/01.md`` the ancestor tuple is ``('spec',)``, so
+    ``range(1, 1, -1)`` was empty and only an individual mention could clear it. Measured effect in
+    a real adopter: 36 files (14 eval CSVs, a PDF, a .sql, a .yaml, 8 research reports, 3 reviews)
+    stayed orphan even though each directory had a README explaining the collection, and the
+    adopter shipped two commits with ``--no-verify`` because of it. Routine bypass is how a gate
+    dies.
+
+    The guard against "one generic top-level covers the whole tree" is ``GENERIC_DIRS``, not an
+    off-by-one in the range — that is why ``docs``/``assets``/``img``/``reports`` are listed there.
+    At depth 1, however, ``ancestor == leaf`` and a bare substring test would be far too loose (a
+    collection named ``spec`` would be "covered" by the word *specification* anywhere in an index),
+    so depth 1 accepts ONLY the unambiguous forms: ``leaf/`` with the slash, or `` `leaf` `` in backticks in
+    backticks. Deeper ancestors keep the original, more permissive matching.
+    """
     parts = rel.parts[:-1]
-    for i in range(len(parts), 1, -1):
+    for i in range(len(parts), 0, -1):
         leaf = parts[i - 1]
         if leaf in GENERIC_DIRS:
             continue
         ancestor = "/".join(parts[:i])
+        if i == 1:
+            # top-level collection: require the slash or backtick form, never a bare substring
+            if f"{leaf}/" in corpus or f"`{leaf}`" in corpus:
+                return True
+            continue
         if (
             f"{ancestor}/" in corpus
             or ancestor in corpus
