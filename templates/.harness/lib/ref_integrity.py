@@ -238,14 +238,27 @@ def check_stale_citations(diff_args, cached, tracked_bases, allow) -> list[dict]
             if f.endswith(".md") and _in_fence(f, ln, cached):
                 continue
             # isolated token (not a suffix/prefix of a longer name, e.g. e01-leaderboard.png)
-            m2 = re.search(r"(?<![\w-])(" + PATH_TOKEN + re.escape(term) + PATH_TOKEN + r")(?![\w-])", content)
-            if not m2:
+            matches = list(re.finditer(r"(?<![\w-])(" + PATH_TOKEN + re.escape(term) + PATH_TOKEN + r")(?![\w-])", content))
+            if not matches:
                 continue
             # if the path around the match RESOLVES (was fixed to the new location, or is another file
             # that only contains the name as a substring), it is not stale.
-            tok = m2.group(1).lstrip("./")
-            cands = [os.path.join(os.path.dirname(f), tok), tok]
-            if any(path_exists(c, cached) for c in cands):
+            # ALL occurrences, not just the first: `[`x.md`](dir/x.md)` is ordinary
+            # markdown and the FIRST match is the display text — a bare basename that
+            # does not resolve from the citing file. Checking only that one reported
+            # live, correct links as broken.
+            # removeprefix semantics, NOT lstrip: lstrip takes a CHAR SET, so
+            # ".claude/x.md" became "claude/x.md" and every citation under a
+            # dot-directory (.claude/, .github/, .harness/) failed the check.
+            resolved = False
+            for m2 in matches:
+                tok = m2.group(1)
+                while tok.startswith("./"):
+                    tok = tok[2:]
+                if any(path_exists(c, cached) for c in (os.path.join(os.path.dirname(f), tok), tok)):
+                    resolved = True
+                    break
+            if resolved:
                 continue
             key = (f, ln, term)
             if key in seen:
