@@ -27,7 +27,7 @@ Rules (docs/SCHEMA.md of the target project):
   explicitly indexed in some index.md/log.md/README.md under docs/.
 - FAIL: a non-markdown file (json/png/pdf/...) must be cited by name or covered by a collection
   explicitly indexed (generic containers sources/assets/img/reports do not count).
-- WARN: Markdown naming outside the §2 standard (kebab-case; event=YYYY-MM-DD-slug; sequenced=NNNN-slug).
+- WARN: Markdown naming off the §2 pattern (kebab-case; event=YYYY-MM-DD-slug; sequenced=NNNN-slug).
   Does not block by default — name migration is incremental via the loop. Use --strict-naming to make it FAIL.
 
 Usage:
@@ -147,7 +147,7 @@ def check_no_foreign_live_links(base: Path) -> list[str]:
         for m in re.finditer(r"\]\(([^)]+)\)", idx.read_text(encoding="utf-8")):
             tgt = m.group(1).split("#")[0].strip().lstrip("./")
             if any(tok in tgt for tok in FOREIGN_LIVE_FORBIDDEN):
-                errs.append(f"live index links to an archived source: {rel} -> {m.group(1)}")
+                errs.append(f"live index links an archived source: {rel} -> {m.group(1)}")
     return errs
 
 
@@ -162,7 +162,7 @@ def check_log_format(base: Path) -> list[str]:
             errs.append(f"{log.relative_to(DOCS)}: no ## [YYYY-MM-DD] entries")
         for line in headings:
             if not LOG_HEADING_RE.match(line):
-                errs.append(f"{log.relative_to(DOCS)}: heading outside the temporal format: {line}")
+                errs.append(f"{log.relative_to(DOCS)}: heading off the temporal format: {line}")
                 continue
             date = line.split("]", 1)[0].removeprefix("## [")
             if date != "sem-data":
@@ -189,7 +189,7 @@ def check_frontmatter_updated(base: Path) -> list[str]:
         frontmatter = text[4:end]
         updated = re.search(r"^updated:\s*[\"']?([^\"'\n]+)[\"']?\s*$", frontmatter, flags=re.M)
         if updated and not DATE_RE.match(updated.group(1)):
-            errs.append(f"{path.relative_to(DOCS)}: updated outside YYYY-MM-DD: {updated.group(1)!r}")
+            errs.append(f"{path.relative_to(DOCS)}: updated off YYYY-MM-DD: {updated.group(1)!r}")
     return errs
 
 
@@ -307,7 +307,7 @@ def check_diff_policy(diff_base: str | None, staged: bool, worktree: bool, failu
             if not log_changed:
                 failures.append(f"{new_path}: new/removed/renamed markdown requires updating docs/log.md in the same diff")
             if status.startswith(("A", "R")) and not index_changed and Path(new_path).name not in WIKI_INFRA_BASENAMES:
-                failures.append(f"{new_path}: new/renamed markdown requires updating the category's index/README in the same diff")
+                failures.append(f"{new_path}: new/renamed markdown requires updating the category index/README in the same diff")
 
 
 def naming_ok(rel: Path) -> bool:
@@ -353,7 +353,7 @@ def main() -> int:
             failures.append(f"orphan (no mention in index/log): {rel}")
         # naming (§2)
         if f.suffix == ".md" and not naming_ok(rel):
-            naming_warns.append(f"naming outside the §2 standard: {rel}")
+            naming_warns.append(f"naming off the §2 pattern: {rel}")
 
     foreign_warns = check_no_foreign_live_links(base)
     stray_warns = check_stray_docs(corpus) if not scope else []
@@ -371,10 +371,10 @@ def main() -> int:
         for w in naming_warns[:60]:
             print(f"  ~ {w}")
         if len(naming_warns) > 60:
-            print(f"  ... +{len(naming_warns) - 60} more")
+            print(f"  ... +{len(naming_warns) - 60} others")
 
     if foreign_warns:
-        print(f"docs-wiki-lint: {len(foreign_warns)} live index(es) linking to _arquivo/ (WARN — check whether it is labeled wayfinding):")
+        print(f"docs-wiki-lint: {len(foreign_warns)} live index(es) linking _arquivo/ (WARN — check whether it is labeled wayfinding):")
         for w in foreign_warns:
             print(f"  ~ {w}")
 

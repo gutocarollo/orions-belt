@@ -103,6 +103,30 @@ def sha256_bytes(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+# Two marker syntaxes, because `.gitignore` has no comment form that starts with `<`: Markdown uses
+# `<!-- orions-belt:begin ... -->` and `.gitignore` uses `# orions-belt:begin ...` (merge_docs.py
+# BEGIN_RE/END_MARK and GITIGNORE_BEGIN_RE/GITIGNORE_END_MARK respectively). Handling only the HTML
+# form silently skipped `.gitignore` — measured on a real install: 2 of 3 marked-block files got a
+# block hash and the third got none, which would have left that file unguarded without any error.
+_MARKERS = (
+    (re.compile(rb"<!-- orions-belt:begin.*?-->", re.S), b"<!-- orions-belt:end -->"),
+    (re.compile(rb"^# orions-belt:begin.*$", re.M), b"# orions-belt:end"),
+)
+
+
+def marked_block_region(content: bytes) -> bytes | None:
+    """The bytes BETWEEN the orions-belt markers, or None when the file carries no block."""
+    for begin_re, end_mark in _MARKERS:
+        begin = begin_re.search(content)
+        if begin is None:
+            continue
+        end = content.find(end_mark, begin.end())
+        if end == -1:
+            continue
+        return content[begin.end():end]
+    return None
+
+
 def settings_hook_identities(path: Path) -> list[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     identities: set[str] = set()
@@ -636,6 +660,17 @@ def manifest_for(plan: list[PlannedFile], previous: dict[str, Any], metadata: di
             "last_applied_sha256": sha256_bytes(item.content),
             "mode": oct(item.mode),
         }
+        if item.strategy == "marked-block":
+            # BLOCK-LEVEL HASH (adopter report, 2026-07-30). The whole-file hash is useless as a
+            # drift signal here: a marked-block file is SUPPOSED to change above and below the
+            # markers (that region belongs to the project), so `last_applied_sha256` differs after
+            # any normal edit and cannot distinguish "project wrote its own prose" from "project
+            # edited inside the generated block, and the next apply will discard it". Recording the
+            # hash of the block REGION makes that distinction exact, and `harness-block-guard.py`
+            # consumes it to warn at authoring time instead of at install time.
+            block = marked_block_region(item.content)
+            if block is not None:
+                file_entry["last_applied_block_sha256"] = sha256_bytes(block)
         if item.rel == ".claude/settings.json":
             try:
                 file_entry["owned_hook_identities"] = settings_hook_identities(item.source)

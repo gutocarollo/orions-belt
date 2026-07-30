@@ -50,6 +50,58 @@ O comando roda o **questionário** — cada pergunta do copier.yml materializa u
 
 Se o projeto-alvo usa Husky, lefthook ou outro manager, `set_hooks_path.sh` **não sobrescreve**. A detecção considera tanto `core.hooksPath` quanto `.husky/pre-commit` — necessário porque Husky pode existir antes do `prepare` preencher o config. Para Husky, `--chain-hooks` adiciona um bloco idempotente que resolve a raiz com `git rev-parse` e chama `.githooks/pre-commit`; sem essa opção o instalador apenas avisa. Outros managers permanecem integração manual explícita.
 
+## Consentimento: o instalador não escreve nada sem aprovação explícita
+
+Adicionado em 2026-07-30 a partir de um relato de adoção. Antes, o fluxo planejava e aplicava no
+mesmo passo: `--dry-run` existia, mas era opt-in, e quem simplesmente rodou o instalador nunca viu
+o que ele ia escrever. Agora o plano é computado primeiro com `--dry-run` (o mesmo motor, que
+garante "target was not changed"), itemizado, e a aplicação só acontece depois de um sim explícito.
+
+**O default é RECUSAR.** Rodada não-interativa sem aprovação sai com **exit 65** e o alvo
+byte-intacto — "nenhuma resposta" nunca é lida como "sim". As formas de aprovar:
+
+| como | quando usar |
+|---|---|
+| digitar `apply` no prompt | uso interativo; qualquer outra coisa aborta |
+| `--yes` / `-y` | automação e CI |
+| `HARNESS_INSTALL_ASSUME_YES=1` | idem, por ambiente |
+| `--dry-run` | só inspecionar; não pede aprovação porque não escreve |
+
+O relatório separa duas classes, porque o risco delas é diferente:
+
+- **Escritas verificadas por propriedade** (`owned`, a grande maioria — 170 de 188 num alvo real):
+  o motor **já era** fail-closed aqui. Se o projeto editou o arquivo, o plano aborta com
+  `locally modified since the last harness apply` e nada é escrito. Aparecem agrupadas e resumidas.
+- **Escritas que SUBSTITUEM conteúdo do projeto** (`marked-block` e `structured-json` — tipicamente
+  `.claude/CLAUDE.md`, `AGENTS.md`, `.gitignore` e `.claude/settings.json`): listadas **uma por
+  uma**, porque não existe checagem de conflito para elas. Num `marked-block`, a região entre
+  `<!-- orions-belt:begin ... -->` e `<!-- orions-belt:end -->` é substituída inteira; o que está
+  acima e abaixo dos marcadores sobrevive. Era exatamente aqui que o adopter se queimou: ele havia
+  apagado um cânone de design tokens de dentro do bloco num backend puro, e uma reinstalação o
+  traria de volta sem avisar.
+
+O texto do relatório diz o que fazer em vez de só alertar: mover o que se quer preservar para fora
+dos marcadores, ou desligar a capability no `.harness/answers.yml` para o bloco deixar de ser
+renderizado.
+
+### O guard de bloco: pegar a edição na hora em que ela é feita
+
+O consentimento resolve no momento da instalação. O hook `SessionStart`
+[harness-block-guard.py](../../templates/.harness/hooks/harness-block-guard.py) resolve antes: ele
+compara o hash da **região do bloco** com o `last_applied_block_sha256` que o manifesto passou a
+gravar, e avisa na sessão em que a edição foi feita — quando a intenção ainda está fresca.
+
+A precisão é o ponto. Comparar o hash do arquivo INTEIRO dispararia a cada edição legítima da prosa
+do projeto acima dos marcadores, e sinal que grita sem motivo ensina o operador a ignorá-lo — o
+defeito que este guard existe para evitar, não para reproduzir. Comportamento medido: silencioso com
+o bloco intacto, silencioso numa edição abaixo dos marcadores, e ruidoso somente numa edição dentro
+do bloco, nomeando o arquivo. Vale para as duas sintaxes de marcador (`<!-- -->` no Markdown e
+`# comentário` no `.gitignore`, que não aceita comentário começando em `<`).
+
+Gate executável: `templates/tests/test_install_consent.sh` (22 asserções — fail-closed, itemização,
+`--yes`, reinstalação sobre bloco editado, precisão do guard nos três estados, hash nas três
+sintaxes, e `--dry-run` seguindo sem pedir aprovação).
+
 ## Adaptar: a skill `harness-init`
 
 `harness-install.sh` é determinístico e scriptável para respostas já conhecidas (`--data` explícito); ele não executa o scanner. A skill [harness-init](../../templates/.harness/skills-shared/harness-init/SKILL.md.jinja) é a camada guiada: usa `scan_project.py` para detectar componentes multi-root e confirmar itens condicionais, então chama o instalador pinado com as respostas finais. Ela não possui um segundo algoritmo de cópia/merge.

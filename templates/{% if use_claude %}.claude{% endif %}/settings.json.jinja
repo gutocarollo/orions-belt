@@ -55,6 +55,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/harness-block-guard.py\"",
+            "timeout": 15,
+            "statusMessage": "orions-belt: checking for edits inside the generated block"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/request-reinject.py\"",
             "timeout": 10,
             "statusMessage": "orions-belt: re-anchoring the original request"

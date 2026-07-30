@@ -64,6 +64,9 @@ installer options:
   --preserve PATH    explicitly preserve one existing unowned/modified path
                      (repeatable; exact project-relative path, no glob)
   --chain-hooks      explicitly chain .githooks/pre-commit into Husky
+  --yes, -y          pre-approve the write plan (same as HARNESS_INSTALL_ASSUME_YES=1).
+                     Without it, the installer prints the itemized plan and asks; a
+                     non-interactive run without approval ABORTS and writes nothing.
 
 examples:
   ./harness-install.sh ../my-project \
@@ -88,6 +91,10 @@ INSTALL_PLAN_JSON=""
 CHAIN_HOOKS=0
 HAS_DATA_FILE=0
 PRESERVE_PATHS=()
+# CONSENT (adopter report, 2026-07-30): the default is to ASK before writing. Approval may be
+# pre-granted for CI/automation, but never inferred from silence — a non-interactive run without
+# an explicit yes aborts with the target untouched.
+INSTALL_ASSUME_YES="${HARNESS_INSTALL_ASSUME_YES:-0}"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --dry-run)
@@ -101,6 +108,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --chain-hooks)
       CHAIN_HOOKS=1
+      shift
+      ;;
+    --yes|-y)
+      INSTALL_ASSUME_YES=1
       shift
       ;;
     --preserve)
@@ -245,7 +256,7 @@ uvx copier copy "$REPO_ROOT" "$SCRATCH" "${COPIER_ARGS[@]}" \
   --data "project_root=$TARGET_REAL" --trust -q
 
 LIB="$SCRATCH/.harness/lib"
-if [ ! -f "$LIB/merge_docs.py" ] || [ ! -f "$LIB/install_apply.py" ]; then
+if [ ! -f "$LIB/merge_docs.py" ] || [ ! -f "$LIB/install_apply.py" ] || [ ! -f "$LIB/install_consent.py" ]; then
   echo "harness-install.sh: render did not produce the merge/apply engine -- broken template or incomplete --data (see stderr above)." >&2
   exit 1
 fi
@@ -295,6 +306,61 @@ for preserved in "${PRESERVE_PATHS[@]}"; do
 done
 
 echo "harness-install.sh: planning ownership/containment for $TARGET_REAL ..." >&2
+
+# CONSENT GATE (adopter report, 2026-07-30) --------------------------------------------------------
+# `install_apply.py` plans AND applies in the same invocation, so consent has to be taken from a
+# throwaway planning pass first: the same engine with --dry-run guarantees "target was not changed".
+# Cost is one extra plan (the render already happened in SCRATCH), and the payoff is that no path is
+# ever written without a human having seen it itemized. Fail-closed by construction: the gate only
+# lets the real apply happen after an explicit yes, and a non-interactive caller that did not
+# pre-approve gets exit 65 with nothing written.
+# The tool's presence is guaranteed by the render-completeness check above — deliberately NOT
+# re-tested with `[ -f ... ]` here: a consent gate that skips itself when its own tool is missing
+# would be fail-OPEN, which is the defect this whole change exists to remove.
+if [ "$INSTALL_DRY_RUN" -eq 0 ]; then
+  CONSENT_PLAN="$WORK/consent-plan.json"
+  CONSENT_ARGS=(--scratch "$SCRATCH" --target "$TARGET_REAL" --plan-json "$CONSENT_PLAN"
+                --metadata-json "$METADATA_JSON" --dry-run)
+  for preserved in "${PRESERVE_PATHS[@]}"; do
+    CONSENT_ARGS+=(--preserve "$preserved")
+  done
+  if ! "$PYTHON_BIN" "$LIB/install_apply.py" "${CONSENT_ARGS[@]}" > "$WORK/consent-plan.stdout.json"; then
+    echo "harness-install.sh: the plan itself failed; target was not changed. See the error above." >&2
+    exit 1
+  fi
+  set +e
+  "$PYTHON_BIN" "$LIB/install_consent.py" "$CONSENT_PLAN" "$TARGET_REAL"
+  CONSENT_RC=$?
+  set -e
+  case "$CONSENT_RC" in
+    0) : ;;  # nothing would change — no approval needed
+    10)
+      if [ "$INSTALL_ASSUME_YES" = "1" ]; then
+        echo "harness-install.sh: plan pre-approved (--yes / HARNESS_INSTALL_ASSUME_YES=1)." >&2
+      elif [ -t 0 ]; then
+        printf 'Type "apply" to write these paths (anything else aborts): '
+        read -r CONSENT_REPLY || CONSENT_REPLY=""
+        if [ "$CONSENT_REPLY" != "apply" ]; then
+          echo "harness-install.sh: not approved; target was not changed." >&2
+          echo "  plan: $CONSENT_PLAN" >&2
+          exit 65
+        fi
+      else
+        echo "harness-install.sh: ABORTED -- the plan needs approval and stdin is not a terminal." >&2
+        echo "  Nothing was written. Re-run with --yes (or HARNESS_INSTALL_ASSUME_YES=1) to pre-approve," >&2
+        echo "  or with --dry-run to inspect the plan first." >&2
+        echo "  plan: $CONSENT_PLAN" >&2
+        exit 65
+      fi
+      ;;
+    *)
+      echo "harness-install.sh: could not itemize the plan for approval; target was not changed." >&2
+      exit 1
+      ;;
+  esac
+fi
+# ------------------------------------------------------------------------------------------------
+
 "$PYTHON_BIN" "$LIB/install_apply.py" "${APPLY_ARGS[@]}" > "$WORK/install-plan.stdout.json"
 
 "$PYTHON_BIN" - "$PLAN_OUT" <<'PY'
