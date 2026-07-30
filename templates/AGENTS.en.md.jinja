@@ -137,15 +137,28 @@ flowchart TD
 - **Guards:** hookify rules `blast-radius-core`{% if harness_data_write_patterns %} and `data-contract`{% endif %} (Claude Code; on Codex this prose is the contract).
 {% endif %}
 
-## ⭐ CANONICAL REFERENCE — {{ project_name }} Codex-native Council
+{#- RUNTIME-AGNOSTIC COUNCIL, CODEX BITS GATED (adopter report, 2026-07-30). This section was
+    emitted UNCONDITIONALLY and framed as "Codex-native", so a project with `use_codex=false` carried
+    ~6.2 KB (≈1.5k tokens) of Codex prose in EVERY session — paths under `.codex/agents/` and
+    `.agents/skills/` that the install never created. Prose naming artifacts that do not exist is
+    worse than absent: it sends the agent to read missing files.
+    A first cut gated the WHOLE section and was WRONG — `test_skill_runtime_parity.sh` caught it:
+    `claude-only: CLAUDE.md cites the council skill` failed, because the council, `$grill-me`,
+    `$adversarial-review`, the minimal flow and the Adversarial Verification Loop are runtime-AGNOSTIC
+    (the loop text itself says "Claude: Agent tool; Codex: custom agent thread"). Only four things are
+    Codex-specific: the framing sentence, the `.agents/skills/` path of the council, the
+    `.codex/agents/*.toml` custom agents and the `.codex/config.toml` knobs. Those are gated; the rest
+    stays, with the council path rendered per runtime so each project reads its own. -#}
+## ⭐ CANONICAL REFERENCE — {{ project_name }} Delivery Council
 
-**For complex tasks in {{ project_name }}, the canonical operational flow in Codex is repo-native: `AGENTS.md` + `.agents/skills` + `.codex/agents` + explicit prompts. Do not use the Agents SDK, Codex MCP server, a Python runner, programmatic traces/evals, or `OPENAI_API_KEY` as the base of the MVP inside the Codex extension in VS Code.**
+{% if use_codex %}**For complex tasks in {{ project_name }}, the canonical operational flow in Codex is repo-native: `AGENTS.md` + `.agents/skills` + `.codex/agents` + explicit prompts. Do not use the Agents SDK, Codex MCP server, a Python runner, programmatic traces/evals, or `OPENAI_API_KEY` as the base of the MVP inside the Codex extension in VS Code.**
 
-- **Orchestrating skill:** `${{ project_name }}-delivery-council` in `.agents/skills/{{ project_name }}-delivery-council/SKILL.md`.
+{% endif %}
+- **Orchestrating skill:** `${{ project_name }}-delivery-council` in {% if use_claude %}`.claude/skills/{{ project_name }}-delivery-council/SKILL.md`{% endif %}{% if use_claude and use_codex %} and {% endif %}{% if use_codex %}`.agents/skills/{{ project_name }}-delivery-council/SKILL.md`{% if use_claude %} (Codex){% endif %}{% endif %}.
 - **Supporting skills:** `$grill-me` to interrogate D[n] decisions with concrete trade-offs; `$adversarial-review` to verify plan × execution × docs × code × tests.
-- **Custom subagent agents:** `.codex/agents/{{ project_name }}-context-scout.toml`, `{{ project_name }}-implementer.toml`, `{{ project_name }}-adversarial-reviewer.toml`, `{{ project_name }}-test-auditor.toml`.
+{% if use_codex %}- **Custom subagent agents:** `.codex/agents/{{ project_name }}-context-scout.toml`, `{{ project_name }}-implementer.toml`, `{{ project_name }}-adversarial-reviewer.toml`, `{{ project_name }}-test-auditor.toml`.
 - **Project config:** `.codex/config.toml` keeps `project_doc_max_bytes = {{ harness_codex_project_doc_max_bytes }}` to avoid truncating the `~/.codex/AGENTS.md` + `AGENTS.md` chain (increase it if the chain grows beyond that — truncation is silent), and `[agents] max_threads = {{ harness_codex_max_threads }}` / `max_depth = {{ harness_codex_max_depth }}` to control fan-out. Do not increase depth without justification, because subagents consume more tokens/latency and can create recursive fan-out.
-
+{% endif %}
 Minimum flow for a medium/high-risk task:
 
 1. Produce a **Context Brief** before implementing.
