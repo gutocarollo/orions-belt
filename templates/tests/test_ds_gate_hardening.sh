@@ -12,6 +12,13 @@
 #
 # Requires `uvx`. Runs outside orions-belt (fixture in $TMPDIR).
 set -uo pipefail
+# PRE-APPROVED INSTALL (consent gate, 2026-07-30). `harness-install.sh` refuses to write without an
+# explicit yes, and a non-interactive caller that does not pre-approve exits 65 with the target
+# untouched. A test harness IS automation, so it declares the approval once here instead of adding
+# a flag to every invocation — this file drives the installer several times. Removing this line does
+# not weaken the suite: it makes every install in it abort, which is the gate working as designed.
+export HARNESS_INSTALL_ASSUME_YES=1
+
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
