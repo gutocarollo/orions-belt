@@ -10,6 +10,17 @@ variable; provenance lives in this Jinja comment (does NOT render in the target
 project — requirement: 100% generic product, zero donor content in the render).
 -#}
 
+{#- FRONTEND-ONLY CANON, GATED (adopter report, 2026-07-30). These three blocks were emitted
+    UNCONDITIONALLY while every neighbouring block is gated (`use_ui_evidence`,
+    `harness_understand_apps_root`, `use_context_graph`). Measured in a real adopter: a pure-Python
+    backend with 675 `.py` files, zero frontend, `package.json`/`tailwind.config*`/`components.json`
+    all absent, and `use_ds_gate: false` in answers.yml still received ~4.2 KB of shadcn/OKLCH/
+    clip-path canon resident in EVERY session of both runtimes, and the terms `clip-path`, `oklch`,
+    `shadcn`, `text-white`, `pb-safe` appeared 0 times in the project's code. Inert instruction is
+    the defect `use_hookify` was introduced to prevent: it teaches the agent that the ⭐ blocks are
+    decoration. The gate is the union of the frontend flags — all four default to false and
+    harness-init already marks them NAO_APLICAVEL for backends. -#}
+{% if use_ui_skills or use_ds_gate or use_icon_guard or use_ui_evidence %}
 ## ⭐ CANONICAL REFERENCE — Dropdown / menu / flyout with animated expand-collapse
 
 **Define ONE canonical dropdown/menu/flyout component for the project and reuse it in every NEW or refactored dropdown — never reimplement per screen.** Once the canonical component exists, record its path in THIS block (this file is the project's operational source of truth).
@@ -25,6 +36,8 @@ project — requirement: 100% generic product, zero donor content in the render)
 
 - **FALLBACK CLAUSE (honest — "canonical except where it doesn't exist"):** if the canonical library does NOT have the component for a chart type (e.g. **funnel**/drop-off, **heatmap**/matrix), the order is: (1) compose it with the primitives of the SAME base as the canonical library (keeps visual coherence); (2) only then the chart lib the app already uses. **Every exception is documented** (which chart, why). Introducing an additional chart library without justification is forbidden.
 - **Prototype ≠ production:** a throwaway prototype (e.g. static HTML to validate the data story with stakeholders) NEVER becomes production code — the final dashboard is reimplemented in the canonical library.
+
+{% endif %}
 
 {% if use_ui_evidence %}
 ## ⭐ CANONICAL REFERENCE — Visual UI evidence (pixels, not diffs)
@@ -62,6 +75,7 @@ project — requirement: 100% generic product, zero donor content in the render)
 - **Guards:** skill `understand-apps-incremental`, hooks `.harness/hooks/understand-context-inject.py` and `.harness/hooks/understand-apps-diff-guard.sh`.
 {% endif %}
 
+{% if use_ui_skills or use_ds_gate or use_icon_guard or use_ui_evidence %}
 ## ⭐ CANONICAL REFERENCE — Design System Tokens = W3C DTCG (designtokens.org)
 
 **The canonical standard for design system tokens is the W3C Design Tokens Community Group (DTCG) — `designtokens.org`** (spec "Design Tokens Format Module"). It is the vendor-neutral authority on token FORMAT/semantics. Do NOT reinvent a token convention; anchor on the DTCG.
@@ -70,6 +84,8 @@ project — requirement: 100% generic product, zero donor content in the render)
 - **Implementation on top of the DTCG:** **shadcn/ui** (ui.shadcn.com) is the BASE of semantic names (`--background`/`--foreground`, `:root`/`.dark`, `@theme inline`) and **TweakCN** (tweakcn.com) is the visual generator (OKLCH + AA contrast). Two axes beyond the shadcn base: BRAND (`data-theme` per project brand) × MODE (class `.dark`).
 - **COLORED-PAIR CONTRACT** (structural rule, documented at the top of the brand theme block in the token file): a colored container (primary/destructive/success/info/premium) has `X-foreground` = INVARIANT WHITE; the theme chooses the TONE of `X`, obliged to carry white (≥4.5:1 ⇒ luminance ≤ ~0.18). Sole exception: `warning` (amber + dark label). Neutral surfaces (`bg-card`/`bg-muted`) co-vary with the pair `text-foreground`/`text-muted-foreground`. **Never** use raw `text-white` over neutral (breaks in light mode).
 - **Executable guards (the DTCG documents the convention; the project makes it enforced with WCAG):** validate the colored pairs at the DEFINITION (token file, all themes) and at the POINT OF USE (text × background pair), and keep an anti-hardcode color ratchet (baseline 0 — a new raw color is a violation). The hook `ds-gate-posttool` runs these guards — shipped by the harness in `.harness/lib/ds-gate.sh` + `.harness/lib/ds-pairs-check.py` (they are not project content) — when `use_ds_gate` is active.
+
+{% endif %}
 
 {% if use_context_graph %}
 ## ⭐ CANONICAL REFERENCE — Context tooling decision graph (blast radius)
@@ -569,6 +585,7 @@ Cycle: **capture → inject → promote → consolidate**. The goal is for the e
 
 - **Capture (the agent's obligation):** after ANY correction from {{ owner_name }} (a verdict of "Wrong.", a reverted approach, a blind spot pointed out, an adversarial review knocking something of mine down) → IMMEDIATELY append to `{{ harness_lessons_file }}` in the format `## [date] symptom → rule` (2-4 lines, a concrete pattern, not a rant). Do not wait for the end of the session.
 - **Inject (hook, deterministic):** SessionStart runs `.harness/hooks/lessons-inject.sh` → the lessons enter the context of EVERY new session. Re-read before a task in the same domain.
+  **Line cap:** the hook runs `tail -n {{ harness_lessons_inject_max_lines }}`, so **the cut is at the START of the file — the OLDEST lessons**. Past the cap it prints a `WARNING` naming how many lines fell outside (silent trimming would be a signal the agent cannot see). Headroom: `echo $(( {{ harness_lessons_inject_max_lines }} - $(wc -l < {{ harness_lessons_file }}) ))`. As it approaches zero, **PROMOTE an old lesson to a permanent rule and delete it here** instead of raising the cap: a bigger cap costs context in EVERY session.
 - **Promote (anti-recurrence):** a lesson that repeats 2× → becomes (a) a permanent rule in the appropriate section of this CLAUDE.md, or (b) an executable hook via the `hookify` plugin (a deterministic guard > a prose instruction). A promoted lesson is marked `[PROMOTED → destination]` in lessons.md.
 - **Consolidate (maintenance):** review this file on demand (CLAUDE.md maintenance skills when available); keep the documentation lint (`.harness/lib/docs_wiki_lint.py`) and the lessons pending promotion as part of the repo's maintenance routine.
 - **Iterate mercilessly** (Boris §3): if the same correction appears 3×, the problem is the badly-written RULE — rewrite the rule, do not re-note the symptom.

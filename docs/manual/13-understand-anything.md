@@ -47,6 +47,32 @@ Mais a skill [understand-apps-incremental](<../../templates/{% if use_claude %}.
 
 O trio cobre os três lados: o lembrete torna a regra presente quando o assunto surge; o guard torna o erro impossível de executar; a skill torna o acerto o caminho de menor esforço.
 
+## Duas correções de 2026-07-30 (relato de adopter)
+
+**O guard validava por NOME de diretório e reprovava input correto.** Ele rejeitava qualquer linha
+começando por `docs/`, `scripts/`, `infra/`, `docker/`, `.claude/`, `.agents/`, `.codex/` ou
+`.github/`, tratando esses nomes como prova de path de raiz. Mas um subdiretório-raiz do grafo
+legitimamente tem o seu próprio `docs/` e `scripts/`: num adopter cujo `harness_understand_apps_root`
+contém os dois, **todo commit que tocava documentação fazia o script sair com `exit 2`** — e a falha
+era lida como "N arquivos pendentes", porque o script escreve o `changed-files.txt` ANTES de o guard
+rodar. Guard que dispara em input correto é pior que guard nenhum: ensina o operador a ignorar o
+código de saída. A checagem por nome sobrevive só para o **prefixo duplo**
+(`<subdir>/api/...`, a classe de erro que o guard existe para pegar, e essa é inequívoca); o resto
+passou a ser decidido por **resolução** — um path app-relativo resolve sob o subdiretório no
+worktree, no `HEAD` ou no commit do selo; um path de raiz não resolve em nenhum dos três. Consultar
+os dois endpoints do diff, e não só o `HEAD`, é obrigatório: arquivo DELETADO entre o selo e o `HEAD`
+é path app-relativo legítimo e seria reprovado por um teste que olhasse apenas o estado atual.
+
+**A contagem respondia a pergunta errada.** `wrote N app-relative changed files` responde "quantos
+arquivos mudaram", que não é "o grafo está velho". No mesmo adopter: 51 arquivos pendentes contra um
+grafo com 676 nós de arquivo e **zero markdown** — as 51 mudanças eram documentação, então o grafo
+estava semanticamente atual e só o `gitCommitHash` do `meta.json` estava atrás. Um sinal de frescor
+que não pode chegar a zero por nenhuma quantidade de trabalho treina o agente a ignorá-lo. O script
+passou a emitir o split código × doc-only e, quando nada de código mudou, a dizer explicitamente que
+o grafo está atual e que a contagem não deve ser lida como defasagem. O `changed-files.txt` NÃO é
+filtrado: o que cada backend de grafo indexa é decisão dele, e `HARNESS_UNDERSTAND_DOC_ONLY_RE`
+permite ajustar o padrão em projeto cujo grafo indexe prosa.
+
 ## O padrão a copiar: `meta.json{gitCommitHash}` como âncora de staleness
 
 Uma decisão de design do plugin vale generalizar para qualquer estado derivado do seu projeto (índices, caches, artefatos de build): **um arquivo pequeno com o commit hash da última geração, sempre lido na hora — nunca decorado**. Hash citado em prosa/instrução envelhece silenciosamente a cada regeneração; hash lido de `meta.json` é imune. É por isso que a mensagem injetada pelo hook manda montar o comando com `LAST=$(... meta.json ... gitCommitHash)` em vez de embutir um valor. O mesmo princípio norteia o `harness-init` (capítulo 14): estado deriva de arquivo-fonte, não de memória.
