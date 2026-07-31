@@ -28,4 +28,17 @@ ROOT="$(git rev-parse --show-toplevel)"
 # _tooling_conf) deixa o worktree sujo e quebra `copier update` ("repository is dirty").
 export PYTHONDONTWRITEBYTECODE=1
 python3 "$ROOT/.harness/lib/docs_wiki_lint.py" --staged || exit $?
+{%- if harness_pre_commit_extra_command %}
+# PONTO DE EXTENSÃO DO PROJETO (`harness_pre_commit_extra_command`). O gate do framework sabe se um
+# Markdown ficou órfão ou se uma referência quebrou; não sabe nada sobre o DOMÍNIO do projeto —
+# "este subsistema mudou sem documentação", "esta migration não tem par de rollback". Sem este
+# ponto, a única saída do projeto era EDITAR este arquivo, que é `owned`: a edição faz o próximo
+# install abortar com "locally modified", e o projeto congela fora do ciclo do template. Achado real
+# num projeto adotante (2026-07-31), que mantinha aqui um gate de documentação de subsistema.
+#
+# Interpolação VERBATIM dentro de `( ... )`, nunca `| tojson` — o filtro é HTML-safe e converte `'`
+# em `&#39;`, produzindo comando que `bash -n` ACEITA e que executa errado (bug medido na rodada do
+# `pre-push`). Por isso o questionário barra comando multi-linha.
+( {{ harness_pre_commit_extra_command }} ) || exit $?
+{%- endif %}
 exec python3 "$ROOT/.harness/lib/ref_integrity.py" --staged

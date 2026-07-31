@@ -365,6 +365,28 @@ harness_run_stop_command:
     default: ""
     when: "{{ harness_run_command != '' }}"
 
+# --- ponto de extensão do githook `pre-commit` ---
+# O `pre-commit` é `owned`: um projeto que precisava de um gate PRÓPRIO só podia editar o arquivo,
+# e a edição faz o install seguinte abortar com "locally modified" — o projeto sai do ciclo do
+# template para sempre. Achado real num adotante (2026-07-31) que mantinha ali um gate de
+# documentação de subsistema; era o único dos 4 arquivos `owned` divergentes sem saída limpa.
+# Mesma regra de interpolação verbatim do bloco de push abaixo, e mesmo motivo para ficar FORA do
+# `.harness/harness.conf` (o parser do .conf expande `${...}` e corta em `#`).
+harness_pre_commit_extra_command:
+    type: str
+    help: >-
+        Comando ADICIONAL de gate a rodar no `pre-commit`, entre o lint documental
+        e o de integridade referencial (ex.: "python3 scripts/check_subsystem_docs.py
+        --staged"). É o ponto de extensão do projeto sobre um arquivo que o harness
+        possui. Vazio = nenhuma etapa extra.
+    default: ""
+    validator: >-
+        {% if '\n' in harness_pre_commit_extra_command %}
+        harness_pre_commit_extra_command precisa ser um comando de UMA linha (ele é interpolado
+        verbatim dentro do githook gerado; uma quebra de linha corrompe o script). Encadeie com
+        '&&' ou aponte para um script.
+        {% endif %}
+
 # --- gate de push (githook `pre-push`) ---
 # Gating por PARÂMETRO, não por flag de capability: comando vazio = hook não é
 # gerado (mesma invariante do grafo de contexto — gate sem o que rodar é ruído).

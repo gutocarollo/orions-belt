@@ -126,6 +126,27 @@ Os três valores são interpolados **verbatim** no script gerado, e por isso pre
 
 Ativação: os dois githooks dependem de `core.hooksPath`, configurado pelo `_task` do Copier via `.harness/lib/set_hooks_path.sh` — que é fail-open e é **pulado** quando `use_pre_commit_framework=true`. Se o arquivo existe e não roda: `git config core.hooksPath .githooks`.
 
+## 17.4 O ponto de extensão do `pre-commit` (`harness_pre_commit_extra_command`)
+
+O `pre-commit` é `owned` — o harness o possui inteiro. Isso é correto para os dois lints do
+framework, e era um beco sem saída para o projeto: um gate de DOMÍNIO ("este subsistema mudou sem
+documentação", "esta migration não tem par de rollback") não cabe em nenhum dos dois, e a única
+forma de tê-lo era editar o arquivo. A edição faz o install seguinte abortar com `locally modified`,
+e o projeto sai do ciclo do template **para sempre**.
+
+Achado real (2026-07-31): num projeto adotante, esse era o único dos quatro arquivos `owned`
+divergentes **sem saída limpa** — os outros três eram absorvíveis por parâmetro. O gate extra agora
+roda entre o lint documental e o de integridade referencial, com `|| exit $?`, e o parâmetro vazio
+não emite etapa nenhuma.
+
+```bash
+./harness-install.sh <alvo> --defaults \
+  --data harness_pre_commit_extra_command='python3 scripts/check_subsystem_docs.py --staged'
+```
+
+Mesma regra de interpolação verbatim do gate de push (§17.3), mesmo `validator` contra comando
+multi-linha, e mesma razão para o valor não morar no `.harness/harness.conf`.
+
 ## O que fica de lição
 
 As três capabilities atacam o mesmo modo de falha por ângulos diferentes: **uma regra que depende de o agente lembrar dela não é uma regra, é uma esperança.** A rota vira injeção de prompt; o contrato de decisão vira precondição de ferramenta; a suite vira githook. Ao portar isso para uma regra própria, a pergunta de projeto é sempre: *qual é o momento mecânico em que essa regra precisa estar presente, e que evento do runtime corresponde a ele?*
