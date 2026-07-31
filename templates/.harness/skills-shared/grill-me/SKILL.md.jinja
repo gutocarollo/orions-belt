@@ -4,64 +4,73 @@
   {% raw %}{% include %}{% endraw %} pelos dois wrappers reais:
   `.claude/skills/grill-me/SKILL.md.jinja` (Claude Code, gerado quando
   use_claude=true) e `.agents/skills/{% raw %}{% if use_codex %}{% endraw %}grill-me{% raw %}{% endif %}{% endraw %}/SKILL.md.jinja`
-  (Codex, gerado quando use_codex=true). Substitui a antiga skill
-  `clarification-plan`: grill-me = a entrevista relentless + a disciplina de
-  trade-offs D[n] (2 exemplos aplicados bons + 2 ruins reais + Opção C) que
-  antes vivia na clarification-plan, agora fundidas numa skill só.
+  (Codex, gerado quando use_codex=true).
 
-  Skill 100% runtime-neutra e 100% genérica: sem hardcode de path/evento de
-  runtime, sem qualquer conteúdo de projeto e — deliberadamente — sem NENHUMA
-  regra do Delivery Council. O Council apenas INVOCA esta skill (via Gate
-  Condicional de Grill / status SABATINAR); a skill nunca conhece o Council.
+  Relação com a clarification-plan (2026-07-31): o CONTRATO dos blocos D[n]
+  (anti-superficialidade, argumentos numéricos, relatório único, Evidence/
+  Unblocks, recomendação obrigatória) tem UMA fonte — a skill
+  `clarification-plan` (i18n en/pt). grill-me NÃO duplica o contrato: ela o
+  invoca por referência obrigatória e adiciona o que é dela — o protocolo de
+  entrevista (uma pergunta por vez, ordem de dependência) e os gatilhos de
+  disparo. Duplicar o corpo aqui recria a linhagem dupla que causou a falha
+  de 2026-07-31 (duas versões do mesmo contrato divergindo). Editar contrato →
+  clarification-plan; editar entrevista/gatilhos → aqui.
+
+  Skill runtime-neutra e genérica: sem conteúdo de projeto e sem regras do
+  Delivery Council. O Council apenas INVOCA esta skill (via Gate Condicional
+  de Grill / status SABATINAR); a skill nunca conhece o Council.
   Editar SÓ aqui — os wrappers são 1 linha de include, nunca duplicar o corpo.
 -#}
 ---
 name: grill-me
-description: Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
+description: Interview the user relentlessly about a plan, design, or open decision queue until every material branch is resolved, one decision at a time, with concrete trade-offs and real applied examples. Use when the user wants to stress-test a plan, mentions "grill me" — or whenever a turn is about to end handing open D[n] decisions to the user. Every D[n] block follows the clarification-plan contract in full (numeric example arguments pass through, e.g. "4 2").
 ---
 
-Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+Interview me relentlessly about every aspect of this plan until we reach a
+shared understanding. Walk down each branch of the design tree, resolving
+dependencies between decisions one-by-one. **Ask the questions one at a time.**
 
-Ask the questions one at a time.
+If a question can be answered by exploring the codebase, docs, or real data —
+explore instead of asking.
 
-If a question can be answered by exploring the codebase, explore the codebase instead.
+## The contract lives in `clarification-plan` — load it, then interview
 
-For every question, explain the concrete trade-offs before asking it:
+Before writing any D[n] block, **invoke the `clarification-plan` skill and
+apply its contract in full**: the anti-shallowness gate (a bug requires root
+cause before options), the single decision report (MEASURED vs ESTIMATED
+progress, full inventory of every decision blocking execution), the
+`Evidence:`/`Unblocks:` lines, applied good/bad examples bound to real
+entities, mandatory Option C when A/B are insufficient, and a mandatory
+`Recommended answer` per block. Numeric arguments pass through unchanged
+(`/grill-me 4 2` ≡ `/clarification-plan 4 2`).
 
-- State the behavior of each option.
-- Give at least two real applied good examples and two real applied bad examples: one good and one bad example for each of Options A and B.
-- Each example must use the actual context: an entity, flow, table, column, file, command, endpoint, screen, job, metric, or plan scenario. Do not use generic analogies or invent facts.
-- State when to choose each option.
-- Include Option C when neither A nor B is sufficient; explain why and when to choose it.
+This skill does not restate that contract — it adds the interview protocol on
+top of it. If the two ever seem to disagree, `clarification-plan` wins.
 
-Use this format for each question:
+## When this skill fires (mandatory, not optional)
 
-```md
-### D[n] — [concrete decision]
+1. The user asks to be grilled ("grill me", "stress-test this plan").
+2. An orchestration gate requires clarification of a material decision.
+3. **A turn is about to end with any open D[n] queue handed to the user** —
+   including "decisions this plan does not make", audit pendencies, and
+   deferred choices. Dry questions ("A or B?") and dry handoffs ("awaiting
+   your decision" + one-line bullets) are both forbidden: they transfer raw
+   ambiguity. A reviewer verdict about the executable plan does NOT cover the
+   D[n] queue — that queue is material subjectivity by definition. The
+   `clarification-stop-gate.py` Stop hook enforces this mechanically on both
+   the question path and the handoff path.
 
-**Option A — [name]**
+## Interview protocol
 
-- **Behavior:** [concrete effect].
-- **Applied good example 1:** [real favorable result].
-- **Applied bad example 1:** [real cost, risk, or failure].
-- **When to choose:** [objective criterion].
-
-**Option B — [name]**
-
-- **Behavior:** [concrete effect].
-- **Applied good example 2:** [real favorable result].
-- **Applied bad example 2:** [real cost, risk, or failure].
-- **When to choose:** [objective criterion].
-
-**Option C — [hybrid, spike, or fallback]** *(only when A and B are insufficient)*
-
-- **Behavior:** [concrete effect].
-- **Why A and B are insufficient:** [concrete gap].
-- **When to choose:** [objective criterion].
-
-**Recommended answer:** [option and evidence-based reason].
-
-**Question:** [one question only].
-```
-
-After each answer, record the decision, its rationale, and the branches eliminated. Ask the next question only after resolving dependencies of the current branch. Finish only when every material branch is resolved or explicitly assumed; state residual risks and deferred decisions.
+- One question per turn, each carried by a complete D[n] block ending in
+  `**Recommended answer:**` and `**Question:** [one question only]`.
+- Order questions by dependency: ask first the decision whose answer can
+  eliminate branches of the others.
+- After each answer, record the decision, its rationale, and the branches
+  eliminated (in the active run state and/or the plan document). Never
+  re-ask what is recorded.
+- Ask the next question only after resolving dependencies of the current
+  branch.
+- Finish only when every material branch is resolved or explicitly assumed;
+  state residual risks and deferred decisions — each deferred decision as a
+  full D[n] block, never as a bare bullet.

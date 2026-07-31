@@ -219,6 +219,14 @@
             "timeout": 15,
             "statusMessage": "completion-gate: checking completion claim vs evidence"
           },
+          {%- if use_clarification_gate %}
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/clarification-stop-gate.py\"",
+            "timeout": 10,
+            "statusMessage": "clarification-stop-gate: choice/handoff sem bloco D[n]"
+          },
+          {%- endif %}
           {%- if use_ui_evidence %}
           {
             "type": "command",

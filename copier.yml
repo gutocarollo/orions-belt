@@ -331,14 +331,18 @@ use_hookify:
 # exemplo aplicado a entidade real e sem Opção C — com a skill listada e nunca
 # aberta. Prosa só é obedecida quando o agente lembra dela. Este gate torna a
 # skill `clarification-plan` PRECONDIÇÃO mecânica do AskUserQuestion.
-# Claude-only por construção: `AskUserQuestion` e o evento `PreToolUse` não
-# existem no Codex/Antigravity — lá vale a prosa da §6, que continua gerada.
+# O gate PreToolUse é Claude-only (`AskUserQuestion`/`PreToolUse` não existem
+# no Codex/Antigravity); o irmão Stop (`clarification-stop-gate.py`) roda nos
+# dois runtimes e cobre o caminho de prosa — pergunta seca E handoff seco.
 use_clarification_gate:
     type: bool
     help: >-
-        Instalar o gate PreToolUse que EXIGE a skill `clarification-plan`
-        carregada antes de perguntar uma decisão ao usuário (AskUserQuestion)?
-        A skill é sempre instalada; este flag controla só o gate mecânico.
+        Instalar os DOIS gates mecânicos da clarificação? (1) PreToolUse:
+        EXIGE a skill `clarification-plan` carregada antes de AskUserQuestion
+        (Claude-only); (2) Stop `clarification-stop-gate.py`: bloqueia turno
+        que termina em pergunta seca OU handoff de decisões abertas sem bloco
+        D[n] completo (Claude E Codex — cobre o caminho de prosa). A skill é
+        sempre instalada; este flag controla só os gates mecânicos.
         Desligue se preferir a §6 como prosa não-executável.
     default: true
     when: "{{ use_claude }}"

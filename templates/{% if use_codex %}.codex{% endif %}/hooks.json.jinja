@@ -215,6 +215,13 @@
             "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/completion-gate.py\"",
             "timeout": 15
           },
+          {%- if use_clarification_gate %}
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/clarification-stop-gate.py\"",
+            "timeout": 10
+          },
+          {%- endif %}
           {%- if use_ui_evidence %}
           {
             "type": "command",

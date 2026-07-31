@@ -15,10 +15,11 @@ says how to fix it. It cannot judge whether the D[n] blocks are good — that st
 following the contract — but it does guarantee the contract is IN CONTEXT at the moment the
 question is composed, which is the one mechanical precondition for following it.
 
-KNOWN LIMIT, stated so nobody reads a green hook as full coverage: decisions asked as PROSE in the
-final answer never call a tool, so this gate never sees them. §6 of the instruction files is what
-covers that path; this hook covers the tool path only. The measured incident that created the rule
-was, in fact, a prose one.
+KNOWN LIMIT, now covered by a sibling: decisions asked as PROSE in the final answer never call a
+tool, so this gate never sees them — that path is enforced by `clarification-stop-gate.py` (Stop
+hook, same `use_clarification_gate` flag), which blocks a turn ending in a bare choice question or
+a bare handoff of open decisions without a complete D[n] block. This hook covers the tool path;
+the Stop sibling covers the prose path. The measured incident that created the rule was a prose one.
 
 RUNTIME SCOPE: `AskUserQuestion` and the `PreToolUse` event are Claude Code surfaces. In Codex and
 Antigravity the same contract is carried by §6 prose alone — there is no tool to intercept.
