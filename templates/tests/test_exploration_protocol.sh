@@ -191,6 +191,42 @@ assert "the expensive stage is absent when its command is empty" \
 assert "the fast stage is still there" 'grep -Fq "npm test" "$NOSLOW/.githooks/pre-push"'
 
 # =============================================================================
+# 6b. pre-commit extension point — the escape hatch for an `owned` file.
+# Without it, a project needing its own gate had to EDIT the hook, and the edit makes the next
+# install abort with "locally modified" — the project leaves the template cycle permanently.
+# =============================================================================
+PCX="$WORK/pre-commit-extra"
+render "$PCX" --data use_claude=true --data use_codex=false \
+  --data harness_pre_commit_extra_command='python3 scripts/check_docs.py --staged' || exit 1
+assert "the extra gate lands between the two framework lints" \
+  'python3 -c "
+import sys
+lines = open(sys.argv[1]).read().splitlines()
+def idx(needle):
+    return next(i for i, l in enumerate(lines) if needle in l and not l.lstrip().startswith(\"#\"))
+sys.exit(0 if idx(\"docs_wiki_lint.py\") < idx(\"check_docs.py\") < idx(\"ref_integrity.py\") else 1)" "$PCX/.githooks/pre-commit"'
+# Both checks read the EXECUTABLE line only, never the whole file. Two reasons, both measured here:
+# the provenance comment above the line legitimately contains the string `&#39;` (it documents the
+# tojson bug), so a file-wide entity grep matches its own documentation; and `$?` inside a
+# double-quoted assert is expanded by the shell before grep ever sees it.
+assert "the extra gate is interpolated verbatim and propagates its exit code" \
+  'python3 -c "
+import sys
+line = next(l for l in open(sys.argv[1]).read().splitlines() if l.startswith(\"( \"))
+ok = line == \"( python3 scripts/check_docs.py --staged ) || exit \" + chr(36) + chr(63)
+sys.exit(0 if ok else 1)" "$PCX/.githooks/pre-commit"'
+assert "no html entity leaks into the executable line" \
+  'python3 -c "
+import sys
+line = next(l for l in open(sys.argv[1]).read().splitlines() if l.startswith(\"( \"))
+sys.exit(1 if \"&#\" in line else 0)" "$PCX/.githooks/pre-commit"'
+assert "pre-commit is still valid shell with the extension" 'bash -n "$PCX/.githooks/pre-commit"'
+assert "NO extra stage when the parameter is empty" \
+  '! grep -q "PONTO DE EXTENSAO\|PONTO DE EXTENSÃO" "$OFF/.githooks/pre-commit"'
+assert "the two framework lints survive an empty parameter" \
+  'grep -q "docs_wiki_lint.py" "$OFF/.githooks/pre-commit" && grep -q "ref_integrity.py" "$OFF/.githooks/pre-commit"'
+
+# =============================================================================
 # 7. The scanner classifies the new components, and never silently APLICAVEL.
 # =============================================================================
 SCAN="$(cd "$FULL" && python3 .harness/lib/scan_project.py classify 2>/dev/null)"
