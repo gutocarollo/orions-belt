@@ -1,0 +1,131 @@
+{#-
+  Single source (H3/A1, orions-belt) — see the full comment in
+  ../grill-me/SKILL.md.jinja (same include mechanism).
+
+  ORIGIN (real adoption, 2026-07-30/31): the ⭐ context-graph block answers
+  "what breaks if I change this symbol" — a DIFF-TIME question. The TASK-START
+  question was missing: "where do I read first". Without it every session
+  invents its own route, and the donor project's measurement was blunt: 23
+  living reference pages created in one commit, and grepping the main 16 across
+  the 6 entry points returned ZERO in all six — a doc nobody can find is a doc
+  that does not exist. This skill installs the ORDER; the ⭐ block still owns
+  the blast radius.
+-#}
+---
+name: exploration-protocol
+description: >-
+  Mandatory initial exploration standard for the repository — deterministic
+  routing across canonical docs, code graph, grep, architecture graph, database
+  and LSP BEFORE any plan, verdict or clarification question. Use when starting
+  ANY non-trivial task (implement, fix, audit, investigate, plan, review).
+---
+
+# Exploration protocol (task-start)
+
+This is the **task-start** standard: what order to read in, what runs in parallel, and what is only
+legitimate to consult afterwards. It does not replace — and does not repeat — the ⭐ context
+decision graph block, which answers the **diff-time** question ("what breaks if I change this
+symbol"). The two chain: **this protocol ends where the diff begins**, and there the handoff goes
+to ⭐.
+
+The order is mandatory. Skipping a phase is allowed only when it does not apply (the project has no
+database, no indexed graph) — and then **declare the skip** instead of omitting it.
+
+## F0 — the anchor
+
+The user's ORIGINAL request, not the paraphrase that survived compaction. `request-reinject.py`
+re-injects the anchor at every `SessionStart`; `.harness/requests/` keeps every prompt verbatim.
+Plans, reports and findings are DERIVED — never substitutes. Silent objective substitution is a
+BLOCKING defect even when every local invariant is green.
+{% if harness_entry_docs %}
+## F1 — canonical docs, IN THIS ORDER
+
+{% for doc in harness_entry_docs.split(',') if doc.strip() %}{{ loop.index }}. `{{ doc.strip() }}`
+{% endfor %}
+Reading out of order is the same as not reading: the first document is the router, and it is what
+tells you which of the others is authoritative for this task's subject.
+{% endif %}{% if harness_reference_index %}
+## F1-bis — the subsystem's LIVING reference
+
+Index: `{{ harness_reference_index }}`. **Read the subsystem page BEFORE touching its code.** A
+living reference page is worth more than reading the code, because it has already resolved the
+`path:line` citations and already separated what is current from what is genealogy.
+
+Two traps measured in the donor project, both expensive:
+
+- **A document banner-marked "historical" is not a source.** There, 22 pages marked that way
+  carried 110 MEASURED divergences against HEAD. Genealogy explains how we got here; it does not
+  state what is true now.
+- **A doc nobody can find is a doc that does not exist.** The pages were created and never routed;
+  the practical effect was zero until they entered this phase.
+{% endif %}
+## F2 — code: the fork is MANDATORY and PARALLEL, never sequential
+
+{% if use_context_graph %}Fire the **code graph** and **`grep`/`rg` for the same symbol** at the same time. Serialising is
+pure latency, and picking only one loses defects:
+
+| layer | gets right | LOSES |
+|---|---|---|
+| code graph | callers WITH the enclosing function; separates homonymous definitions; follows indirect chains | by-REFERENCE passage (callback, test fixture — not a call edge); resolves callees by NAME, so it may point at a test stub instead of the real API |
+| `grep`/`rg` | any literal occurrence, including the by-reference passages | never separates homonyms, never names the enclosing function, never follows an indirect chain |
+
+The two fail in **different, complementary ways**. The value is in the routing between them, never
+in either one alone.
+{% else %}With no code graph configured (`use_context_graph=false`), the sweep is `grep`/`rg` on the symbol
+plus targeted reads. Know what you are giving up: `grep` never separates homonymous definitions,
+never names the enclosing function and never follows an indirect chain — if the task hinges on
+"what breaks if I change this", promote the verdict to the LSP (F4) instead of trusting the sweep.
+{% endif %}{% if harness_understand_apps_root %}
+Architecture and module relationships: the Understand Anything graph at
+`{{ harness_understand_apps_root }}/.understand-anything/` — **scope `{{ harness_understand_apps_root }}/` only**,
+declare that before extrapolating. Freshness: `bash .harness/lib/understand-apps-changed-files.sh`.
+{% endif %}
+**NO code graph indexes Markdown.** Measured on both of the donor project's graphs: zero `.md` in
+either index. So **never conclude "there is no doc about X" because the graph query returned
+nothing** — documentation is found by the route{% if harness_entry_docs %} in F1/F1-bis{% endif %}, never by querying a graph.
+{% if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}
+## F3 — live state
+
+When the task involves state, persisted data, CRM, funnel or eval: query the database through the
+MCP before inferring behaviour. `DISTINCT`/counts of the REAL data beat any assumption about what
+the schema permits.
+
+Two rules that only cost you once they are learned the hard way:
+
+- **A permission error is NOT absence of data** — it is the wrong endpoint/role. Before writing
+  "not verifiable", re-run the SAME query under the role that can see the object.
+- **Declared config ≠ produced behaviour.** Measure the EFFECT in the database, not the flag in the
+  profile.
+{% endif %}
+## F4 — LSP, AFTER the join
+
+`find_referencing_symbols` (or your language server's equivalent) enters only **after** the F2 fork
+has closed: only there do you know WHICH edge decides the verdict. Running it earlier means running
+it blind on every symbol. It is **mandatory** when the graph reported more than one definition of
+the same name.
+
+## F5 — external library
+
+Current official documentation for the library/SDK/CLI, never training knowledge for API, version
+or configuration. Declare the source you consulted.
+
+## Only then: clarification
+
+A clarification question to the user is legitimate **only after F1-F3**. Asking before exploring
+hands the user work the repository's own data already answered. When the question really is
+necessary, its contract is the `clarification-plan` skill — loaded, not cited.
+
+## Handoff to the diff
+
+Once exploration closes, the question changes from "where do I read" to "what breaks if I change
+this".
+{% if use_context_graph %}From there the ⭐ **Context tooling decision graph** block in the project instructions takes over:
+predicates P1-P4, fork/join, and the adversarial loop in a subagent.{% else %}From there prefer LSP and regression tests over more reading — and consider enabling
+`use_context_graph` if the project has a shared core.{% endif %}
+
+## What this protocol does NOT authorise
+
+- A graph (code or architecture) is **never the final truth**: confirm in the live code, the
+  indexed documentation and the database whenever the conclusion involves runtime or state.
+- A stale graph index **lies with the face of authority**. Sync before trusting it.
+- No phase authorises reading a directory marked legacy/archive/foreign as a live source.

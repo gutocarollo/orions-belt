@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""PreToolUse gate on AskUserQuestion — the decision contract must be LOADED, not cited.
+
+WHY (real adoption, 2026-07-30). §6 of the generated instructions has forbidden the bare question
+("A or B?", "which do you prefer?") since the file existed, and it ends by pointing at the
+`clarification-plan` skill. Pointing was not enough: an agent closed a diagnosis with a section
+titled "two decisions that are yours", written as prose — no per-option behaviour, no applied
+good/bad example bound to a real entity, no Option C. It had the skill listed and never opened it.
+A rule that lives only in prose is obeyed only when the agent happens to remember it, which is
+exactly the failure mode the self-improvement loop exists to kill.
+
+WHAT IT ENFORCES. The gate is a session-scoped PRECONDITION, not a text linter: it refuses
+`AskUserQuestion` while the `clarification-plan` skill has not been invoked in this session, and
+says how to fix it. It cannot judge whether the D[n] blocks are good — that stays a matter of
+following the contract — but it does guarantee the contract is IN CONTEXT at the moment the
+question is composed, which is the one mechanical precondition for following it.
+
+KNOWN LIMIT, stated so nobody reads a green hook as full coverage: decisions asked as PROSE in the
+final answer never call a tool, so this gate never sees them. §6 of the instruction files is what
+covers that path; this hook covers the tool path only. The measured incident that created the rule
+was, in fact, a prose one.
+
+RUNTIME SCOPE: `AskUserQuestion` and the `PreToolUse` event are Claude Code surfaces. In Codex and
+Antigravity the same contract is carried by §6 prose alone — there is no tool to intercept.
+
+FAIL-OPEN by construction: unreadable payload, missing transcript or any unexpected error prints
+nothing and exits 0. A gate that can break a session teaches people to disable it.
+"""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+SKILL = "clarification-plan"
+# Rendered by the installer, NOT an f-string field: a Jinja `{%- raw -%}{%{%- endraw -%}` tag inside
+# an f-string is a Python syntax error (the `{` opens an interpolation), so the instruction path is
+# resolved here, as a plain literal, and only then interpolated below.
+INSTRUCTIONS = "{% if use_claude %}.claude/CLAUDE.md{% else %}AGENTS.md{% endif %}"
+
+MESSAGE = f"""BLOCKED — the `{SKILL}` skill has not been invoked in this session.
+
+Asking the user for a decision requires LOADING the contract first (§6 of `{INSTRUCTIONS}`).
+Citing the skill is not following it. Do this, then call AskUserQuestion again:
+
+  1. Invoke the skill: Skill(skill="{SKILL}")  — Codex: `${SKILL}`.
+  2. Follow its contract: if any decision touches a BUG, close the root cause FIRST (real
+     failure x success pairs, one mechanism explaining 100% of the separation, refutation test)
+     — options before that are forbidden.
+  3. Write each D[n] with behaviour + applied good example + applied bad example + when to choose,
+     plus the mandatory Option C, every example bound to a real entity/table/file/route/job.
+"""
+
+
+def skill_was_invoked(transcript_path: str) -> bool:
+    """True when this session already dispatched the skill.
+
+    Substring matching over each transcript line is deliberate: the skill name reaches the
+    transcript through several shapes (a `Skill` tool_use with `input.skill`, a `<command-name>`
+    slash invocation, the loaded skill body itself). Reconstructing every shape would make the gate
+    fail CLOSED on a shape it did not predict — for a precondition check a false block costs more
+    than a false pass, and the instruction files still carry the rule.
+    """
+    path = Path(transcript_path)
+    if not path.is_file():
+        raise FileNotFoundError(transcript_path)
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        return any(SKILL in line for line in handle)
+
+
+def main() -> int:
+    try:
+        payload = json.load(sys.stdin)
+        if payload.get("tool_name") != "AskUserQuestion":
+            return 0
+        if skill_was_invoked(str(payload.get("transcript_path") or "")):
+            return 0
+    except Exception:  # noqa: BLE001 - see FAIL-OPEN in the module docstring
+        return 0
+    print(MESSAGE, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

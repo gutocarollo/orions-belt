@@ -1,0 +1,270 @@
+{#-
+  Single source (H3/A1, orions-belt) — see the full comment in
+  ../grill-me/SKILL.md.jinja (same include mechanism).
+
+  PORTED from a donor project in the 2026-07-31 round with no adaptation
+  needed: the content was already 100% generic (zero references to the donor's
+  product, stack or paths). Pairs with `prova-de-conclusao`: this one writes the
+  plan ANOTHER executor carries out; that one proves it was carried out. The
+  original's PLAN_TEMPLATE.md resource was folded into section 7 here —
+  single-file is the pattern of the other shared skills, and an executor gets
+  lost navigating between files.
+-#}
+---
+name: master-plan
+description: >-
+  Produces a failure-proof, hyper-detailed, zero-ambiguity execution plan meant
+  to be carried out by a weaker and cheaper executor model (or a junior
+  agent/human with no project context) without it having to reason, infer or
+  decide. Use when the request is "write a plan for another model to execute",
+  "master plan", "failure-proof plan", "break this task down for another agent
+  to run" or "execution handoff". The planner does ALL the reasoning now; the
+  executor only transcribes.
+---
+
+# Master Plan — a failure-proof plan for a weak executor
+
+You (the **planner** — the strong model) are producing a plan that will be executed by a **weaker,
+cheaper executor model** (or by a junior agent/human with no project context). This skill defines
+HOW to write that plan. Read it in full before starting.
+
+## 0. The single principle
+
+**All the reasoning happens NOW, by you. The executor does not reason — it transcribes.**
+
+The executor fails when it has to: infer, choose, fill gaps, remember earlier context, or decide
+between alternatives. Every one of those operations in the plan is a failure point. The perfect plan
+has **zero decisions delegated to the executor**. If at any step the executor has to think "which one
+is it?", "where is that?", "I guess...", the plan failed — and the fault is yours, not its.
+
+Quality metric for the plan: **a junior human with no project context whatsoever could execute every
+step mechanically and reach the correct result.** If they could not, the step is underspecified.
+
+## 1. Mandatory pre-flight (you do this BEFORE writing the plan)
+
+NEVER write the plan with placeholders, assumptions or "find file X". Before drafting ONE line,
+collect the concrete facts. The executor will not explore — you explore for it and paste the results
+into the plan.
+
+Pre-flight checklist:
+
+1. **Read the real files** that will be touched. Paste the exact snippets (with line numbers) that
+   will change. Not "the login function" — paste the function.
+2. **Resolve every absolute path.** Not "the button component"; it is
+   `frontend/src/components/ui/Button.tsx`. Confirm each path exists.
+3. **Verify exact strings.** For every edit, the `old_string` must be literal and unique in the file.
+   You validate uniqueness now; the executor has no way to.
+4. **Resolve versions, package names, exact commands.** `pnpm add zod@3.23.8`, not "install zod".
+   Confirm the project's real package manager (manifest, lockfile).
+5. **Run the queries/reads that decide the path.** If the plan depends on a database value or a flag,
+   find the value now and write the single resulting path. Do not leave the branch to the executor.
+6. **Find out how success is verified.** Every step needs an objective command whose expected output
+   you write into the plan.
+
+If you lack access to resolve any of these, **declare the gap at the top of the plan** as a
+precondition for the human to resolve — never push it onto the executor.
+
+## 2. Executor failure modes → mandatory mitigation
+
+For every known executor weakness, the plan must ALREADY contain the antidote:
+
+| Executor failure | Mitigation the plan MUST carry |
+|---|---|
+| Infers the wrong path/file | Literal absolute path in every step. Never "the config file". |
+| Invents content (hallucinates) | Supply the complete content to paste. Not "add validation"; paste the exact block. |
+| `old_string` does not match / matches in several places | Paste the `old_string` verbatim with enough context to be unique. You verify uniqueness at pre-flight. |
+| Loses context between steps | Every step is self-contained. Repeat whatever is needed. "As in the previous step" is forbidden. |
+| Chooses between alternatives | Eliminate the choice. If a branch exists, turn it into a closed decision table (section 4) with no judgement. |
+| Skips verification and proceeds on an error | Mandatory checkpoint after each step, with command + expected output (section 5). |
+| Improvises when something is off-plan | STOP protocol (section 6): at the first deviation, stop and report, never "fix". |
+| "etc.", "and so on", "similar" | FORBIDDEN in the plan. Enumerate everything. If there are 7 files, list the 7. |
+| Wrong order of operations | Numbered steps, strictly sequential, with explicit dependency. |
+| Shell command from another platform | Use the project's real shell/OS. On Windows, give the exact PowerShell command; on POSIX, the exact bash. |
+
+## 3. Anatomy of a step (mandatory format)
+
+Every step uses EXACTLY this structure. No exceptions.
+
+```
+### Step N — <imperative verb + concrete object>
+
+GOAL (1 sentence): what this step delivers.
+
+PRECONDITION (verifiable): command to run + exact expected output proving the
+previous step worked and that it is safe to start this one.
+
+ACTION: one single literal instruction.
+  - File: <absolute path>
+  - Operation: create | edit | run command | delete
+  - If EDIT — old_string (verbatim, unique) and new_string (verbatim, complete):
+    <old block>
+    <new block>
+  - If CREATE — the entire file content, start to finish.
+  - If COMMAND — the exact, copyable line, in the right shell.
+
+EXPECTED RESULT: what must happen (file created, X lines changed, command exits
+0 and prints "<literal text>").
+
+CHECKPOINT (mandatory): verification command + exact expected output.
+  If the output matches → go to Step N+1.
+  If it does NOT match → go to the STOP protocol (section 6). Do NOT try to fix it.
+```
+
+Golden rule of a step: **one action per step.** "Create the file and import it elsewhere" is two
+steps. Atomicity shrinks the error surface and localises the failure.
+
+## 4. Decision tables (they eliminate judgement)
+
+Whenever the path depends on a condition, do NOT write "if it makes sense" or "depending on the
+case". Write a closed, exhaustive table. The executor only reads the row — it does not judge.
+
+```
+Look at the CHECKPOINT output of Step 3 and follow EXACTLY:
+
+| Observed output (literal)                  | Next action               |
+|--------------------------------------------|---------------------------|
+| "0 errors"                                 | Go to Step 4              |
+| Contains "Cannot find module 'zod'"        | Go to Step 3-FIX-A        |
+| Contains "TS2304"                          | Go to Step 3-FIX-B        |
+| Anything else                              | STOP protocol (section 6) |
+```
+
+Every table MUST carry the "Anything else → STOP" row. Unforeseen cases never become improvisation.
+
+## 5. Checkpoints — objective verification
+
+Subjective checkpoints are forbidden ("check it looks right", "make sure it is correct"). Every
+checkpoint is a command whose output you predicted and wrote down. Valid types:
+
+- **Compilation/types:** `pnpm tsc --noEmit` → expected: `Found 0 errors`.
+- **Test:** `pytest tests/test_x.py::test_y -q` → expected: `1 passed`.
+- **String presence:** `grep -n "export const Foo" path/file.ts` → expected: a line containing `export const Foo`.
+- **Lint:** the project's real lint command → expected: exit 0.
+- **Execution:** run the script → expected: prints `<literal text>`.
+
+If a step cannot be objectively verified, split it until it can, or mark it "manual verification by
+the human" — never ask the executor for judgement.
+
+## 6. STOP protocol (anti-improvisation)
+
+Include this LITERAL block at the top of the plan, addressed to the executor:
+
+```
+STOP PROTOCOL — read before starting.
+
+You are the executor. You do NOT improvise, do NOT fix, do NOT interpret.
+If at ANY step:
+  - a checkpoint does not match the expected output, OR
+  - an old_string is not found, OR
+  - a command errors in a way the decision table did not foresee, OR
+  - you are unsure about anything,
+THEN STOP IMMEDIATELY. Do not execute the next step. Report like this:
+
+  STOPPED AT STEP <N>
+  Expected: <paste the expected output from the plan>
+  Got: <paste the real output, verbatim>
+  Last action executed: <describe>
+
+Do not try alternatives. Do not skip the step. Do not continue. Wait for instructions.
+```
+
+## 7. Plan header (mandatory, before Step 1)
+
+```
+# EXECUTION PLAN — <title>
+
+MINIMUM CONTEXT (only what is needed): <2-4 sentences. The executor does not need
+the "why", it needs the "what". Give only what makes the steps make sense.>
+
+ENVIRONMENT PREREQUISITES (the human confirms these BEFORE handing over):
+  - <tool/version/credential/access> — how to confirm: <command> → expected: <output>
+  - ...
+
+GLOBAL RULES FOR THE EXECUTOR:
+  1. Execute the steps IN ORDER. Never skip, never reorder.
+  2. After each step, run the CHECKPOINT before moving on.
+  3. On any deviation, apply the STOP PROTOCOL.
+  4. Do not run anything that is not written in the plan.
+  5. Do not optimise, do not "improve", do not refactor beyond what was asked.
+
+<the STOP PROTOCOL block from section 6, pasted here>
+```
+
+## 8. Where to write the plan
+
+Write the plan as a **file** (e.g. `MASTER_PLAN.md` at the project root or in the indicated folder),
+not only in chat — the executor reads the file. If the plan is long, keep it in a single sequential
+file (the executor gets lost navigating between files). One file, top to bottom, step by step.
+
+## 9. Self-review before delivering (you run this against yourself)
+
+Before declaring the plan ready, answer YES to all of these. Any NO → fix it before delivering.
+
+- [ ] Is every file path absolute and confirmed to exist?
+- [ ] Was every `old_string` pasted verbatim and is it unique in the target file?
+- [ ] Is every content-to-create complete (no "...", no "rest unchanged")?
+- [ ] Does no step contain "etc.", "and so on", "similar to the previous", "if it makes sense", "probably", "should be"?
+- [ ] Does every step have an objective checkpoint with a literal expected output?
+- [ ] Is every branch a closed decision table with an "Anything else → STOP" row?
+- [ ] Does each step perform ONE action?
+- [ ] Are the commands from the project's real shell/OS?
+- [ ] Is the STOP protocol at the top?
+- [ ] Would a junior with no context execute every step mechanically without asking anything?
+
+## 10. Example — bad step vs. good step
+
+**BAD (delegates reasoning to the executor):**
+> Step 2: Add schema validation to the users endpoint using zod, like we did in the other endpoints.
+
+Problems: which file? which schema? "like the others" forces the executor to infer a pattern. No
+checkpoint.
+
+**GOOD (zero ambiguity):**
+```
+### Step 2 — Add zod validation to the POST /users body
+
+GOAL: validate the POST /users body with a zod schema before inserting.
+
+PRECONDITION: run `grep -n "zod" backend/package.json`
+  → expected: a line containing "zod": "3.23.8". If it does not appear, STOP.
+
+ACTION:
+  File: /proj/backend/src/routes/users.ts
+  Operation: edit
+  old_string (verbatim, unique):
+    router.post('/users', async (req, res) => {
+      const body = req.body;
+  new_string (verbatim, complete):
+    import { z } from 'zod';
+
+    const createUserSchema = z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+    });
+
+    router.post('/users', async (req, res) => {
+      const body = createUserSchema.parse(req.body);
+
+EXPECTED RESULT: file edited; the import and the schema now exist.
+
+CHECKPOINT: run `pnpm tsc --noEmit` in /proj/backend
+  → expected: "Found 0 errors."
+  Table:
+  | Output                         | Action            |
+  |--------------------------------|-------------------|
+  | "Found 0 errors."              | Go to Step 3      |
+  | Contains "Cannot find name 'z'"| Step 2-FIX-A      |
+  | Anything else                  | STOP PROTOCOL     |
+```
+
+## 11. Operational summary
+
+1. **Pre-flight:** explore and resolve ALL the concrete facts yourself (section 1).
+2. **Write the header** with prerequisites, global rules and the STOP PROTOCOL (section 7).
+3. **Write atomic steps** in the section 3 format — one per action, each with a checkpoint.
+4. **Close every branch** into a decision table (section 4) with the "Anything else → STOP" row.
+5. **Self-review** against the section 9 checklist. Fix every NO.
+6. **Save it as a single file** (section 8) and hand it over.
+
+The ready-to-fill skeleton is section 7 of this page: header, prerequisites, global rules and the
+STOP PROTOCOL, in that order, followed by the section 3 steps.

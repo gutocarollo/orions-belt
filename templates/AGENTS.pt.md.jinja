@@ -88,7 +88,21 @@ no render).
 
 {% endif %}
 
-{% if use_context_graph %}
+{% if use_exploration_protocol %}
+## ⭐ REFERÊNCIA CANÔNICA — Protocolo de exploração (task-start)
+
+**Em que ordem ler ANTES de planejar, opinar ou perguntar.** Complemento temporal do bloco de blast radius, não duplicata: aquele responde *"o que quebra se eu mudar este símbolo"* (diff-time); este responde *"onde eu leio primeiro"* (task-start). Protocolo completo: skill `exploration-protocol`. Detalhe e rationale: capítulo 17 do manual.
+
+- **F0 âncora** — o pedido ORIGINAL, não a paráfrase que sobreviveu à compactação (`.harness/requests/`, reinjetado a cada sessão). Plano e relatório são DERIVADOS; substituição silenciosa de objetivo é defeito BLOQUEANTE.
+{% if harness_entry_docs %}- **F1 docs canônicos, NESTA ordem:** {% for doc in harness_entry_docs.split(',') if doc.strip() %}`{{ doc.strip() }}`{% if not loop.last %} → {% endif %}{% endfor %}. O primeiro é o roteador; ler fora de ordem é o mesmo que não ler.
+{% endif %}{% if harness_reference_index %}- **F1-bis referência VIVA:** índice em `{{ harness_reference_index }}` — ler a página do subsistema ANTES de mexer no código dele. Página com banner de histórico é genealogia, nunca fonte.
+{% endif %}- **F2 código, fork OBRIGATÓRIO e PARALELO:** {% if use_context_graph %}grafo de código **∥** `rg` do mesmo símbolo. O grafo perde passagem por REFERÊNCIA (callback/fixture não é aresta de chamada) e resolve callee por NOME; o grep não separa homônimo nem diz a função envolvente. Serializar é latência pura.{% else %}`rg` do símbolo mais leitura dirigida — sabendo que grep não separa homônimo, não diz a função envolvente e não segue cadeia indireta.{% endif %}
+- **NENHUM grafo indexa Markdown** — nunca conclua "não existe doc sobre X" porque a consulta ao grafo não trouxe. Doc se acha pela rota, não por grafo.
+{% if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}- **F3 estado vivo:** MCP de banco antes de inferir comportamento. Erro de permissão NÃO é ausência de dado (é endpoint/papel errado); config declarada NÃO é comportamento produzido (meça o efeito, não a flag).
+{% endif %}- **F4 LSP DEPOIS do join** — só ali se sabe qual aresta decide o veredito; obrigatório quando o grafo reporta homônimos. **F5** docs oficiais de lib externa.
+- **Clarificação SÓ depois das fases acima**, e com o contrato da skill `clarification-plan` carregado — citar não é seguir.
+
+{% endif %}{% if use_context_graph %}
 ## ⭐ REFERÊNCIA CANÔNICA — Grafo de decisão de ferramentas de contexto (blast radius)
 
 **Qual ferramenta usar para descobrir o que quebra ao mudar um símbolo, em que ordem, e o que roda em paralelo.** `grep` acha ocorrência literal mas não separa definições homônimas, não diz qual função contém a chamada e não segue cadeia indireta; um grafo de código resolve isso mas perde passagem por REFERÊNCIA e resolve callee por nome. **As camadas erram de formas diferentes — o valor está no roteamento entre elas.** Detalhe e rationale: capítulo 16 do manual.

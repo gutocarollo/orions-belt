@@ -1,0 +1,169 @@
+{#-
+  Fonte única (H3/A1, orions-belt) — ver comentário completo em
+  ../grill-me/SKILL.md.jinja (mesmo mecanismo de include).
+
+  ORIGEM (adoção real, 2026-07-30): a §6 das instruções geradas já proibia a
+  pergunta seca e já publicava o template D[n] — e mesmo assim um agente
+  fechou um diagnóstico com uma seção "duas decisões que são suas" escrita em
+  prosa: sem comportamento por opção, sem exemplo aplicado a entidade real,
+  sem Opção C. A regra existia; o contrato não estava em contexto na hora de
+  escrever a pergunta. Esta skill é o §6 em formato CARREGÁVEL, e o hook
+  `clarification-plan-gate.py` a torna precondição mecânica do
+  AskUserQuestion. Prosa que só é obedecida quando o agente lembra dela é
+  exatamente o modo de falha que o self-improvement loop existe para matar.
+-#}
+---
+name: clarification-plan
+description: >-
+  Use quando uma tarefa, auditoria, plano de correção, decisão técnica ou
+  clarificação tiver mais de uma opção possível e o usuário precisar escolher
+  com base em consequências concretas. Obriga blocos D[n] com comportamento,
+  exemplo aplicado bom, exemplo aplicado ruim, quando escolher, e terceira via
+  quando A/B forem insuficientes. Aceita argumentos numéricos para a quantidade
+  de exemplos por opção (ex.: "4" = 4 bons + 4 ruins; "4 2" ou "bons=4 ruins=2").
+---
+
+# Clarification Plan
+
+Use esta skill sempre que houver mais de uma opção possível para resolver, planejar, corrigir,
+auditar ou clarificar qualquer coisa. Ela é o procedimento operacional da §6 de
+[`AGENTS.md`](../../../AGENTS.md) — aquela seção define a REGRA, esta skill entrega o CONTRATO
+que a cumpre.
+
+**Antes de montar D[n] para trabalho material**, confirme que a pergunta serve ao pedido ORIGINAL
+do usuário, não a um plano derivado. Opções e recomendações nunca substituem o pedido; mudança de
+escopo exige aceite explícito. O `request-reinject.py` reinjeta a âncora a cada sessão — leia-a.
+
+## Gate anti-superficialidade — bug exige causa-raiz ANTES de opções
+
+Quando a decisão em jogo referencia um BUG ou comportamento quebrado, é **PROIBIDO** montar blocos
+D[n] antes de fechar a investigação de causa-raiz:
+
+1. **Pares reais falha×sucesso lado a lado** — mensagens/bytes/linhas CRUS do caso concreto
+   (entrada exata, saída exata, campos de protocolo), não resumo nem taxa. Correlação estatística
+   ("falha 37% quando X=on") só aponta ONDE ler; nunca é causa.
+2. **Hipótese mecânica única que explica 100% da separação** entre as populações. Se sobra um
+   "às vezes", a hipótese está errada ou incompleta — voltar aos dados.
+3. **Teste de refutação executado** — a hipótese só vale depois de sobreviver à tentativa de
+   derrubá-la com os próprios dados (ex.: a hipótese "truncamento" morre se as falhas usam 465 de
+   4.096 tokens disponíveis).
+4. Só então as opções — e cada opção deve atacar O MECANISMO nomeado, não o sintoma. Se a
+   investigação não fechou, o entregável desta skill é um **PLANO DE INVESTIGAÇÃO** (quais dados
+   ler, qual hipótese testar), nunca um menu de correções.
+
+Princípio de fundo: capacidade do modelo (reasoning, tamanho, few-shot) nunca é explicação de
+falha nem substituto de contrato. Instabilidade de comportamento é déficit de
+contexto/instrução/contrato até prova em contrário.
+
+## Argumentos (quantidade de exemplos por opção)
+
+A skill aceita argumentos que definem QUANTOS exemplos reais aplicados cada opção deve ter.
+Interpretação, na ordem:
+
+1. **Sem argumento** → padrão: 1 exemplo bom + 1 exemplo ruim por opção.
+2. **Um número `N`** (ex.: `/clarification-plan 4`) → **pelo menos N exemplos bons E N ruins por
+   opção**, rotulados e numerados (`Exemplo aplicado bom 1..N`, `Exemplo aplicado ruim 1..N`).
+3. **Dois números `N M`** ou **`bons=N ruins=M`** (ex.: `/clarification-plan 4 2`) → pelo menos N
+   bons e M ruins por opção.
+
+Regras quando N ou M > 1:
+
+- Os números são MÍNIMOS ("pelo menos"), nunca tetos.
+- Cada exemplo deve cobrir uma **dimensão de trade-off DISTINTA** (correção, risco metodológico,
+  navegabilidade, viés, manutenção, borda temporal...). É proibido entregar N variações do mesmo
+  argumento — se só existirem K dimensões honestas, entregar K e declarar por que não há mais.
+- Todos continuam sendo exemplos REAIS e APLICADOS (entidade/tabela/arquivo/rota/job do contexto
+  analisado); numerar não autoriza genéricos.
+- A **terceira via (Opção C)** deve ter pelo menos N bons e `max(1, ⌈M/2⌉)` ruins — combinações bem
+  desenhadas costumam ter menos modos de falha, mas nunca zero; se C não tiver NENHUM exemplo ruim
+  honesto, isso é sinal de análise incompleta, não de opção perfeita.
+- O texto fora dos exemplos fica ENXUTO: Comportamento em 1-2 frases, Quando escolher em 1 frase;
+  a profundidade vai nos exemplos, não em prosa extra.
+- Se o usuário pedir os exemplos sem dizer de qual decisão se trata, aplicar os argumentos a TODAS
+  as decisões D[n] abertas da conversa atual.
+
+## Regra central
+
+É proibido fazer pergunta seca como "quer A ou B?", "qual você prefere?" ou listar opções sem
+consequências práticas.
+
+Antes de pedir a escolha, explique o comportamento concreto de cada opção e mostre exemplos reais
+aplicados ao contexto. O objetivo é NORTEAR a escolha, não transferir ambiguidade crua ao usuário.
+
+## Formato obrigatório
+
+```md
+### D[n] — R[x]/[item relacionado]: [pergunta concreta da decisão]
+
+**Opção A — [nome da opção]**
+
+- **Comportamento:** se escolhermos esta opção, o sistema/processo fará [efeito concreto].
+- **Exemplo aplicado bom:** no caso real [entidade/tabela/arquivo/comando/rota/job], acontecerá [resultado bom].
+- **Exemplo aplicado ruim:** no caso real [entidade/tabela/arquivo/comando/rota/job], acontecerá [risco/falha/custo].
+- **Quando escolher:** escolha esta opção se a prioridade for [critério].
+
+**Opção B — [nome da opção]**
+
+- **Comportamento:** ...
+- **Exemplo aplicado bom:** ...
+- **Exemplo aplicado ruim:** ...
+- **Quando escolher:** ...
+```
+
+Não há limite artificial de decisões. Em auditorias longas, se houver D1-D12, escreva D1-D12.
+
+Com argumentos numéricos, o par bom/ruim expande para listas numeradas no mesmo bloco — ex. `4 2`:
+
+```md
+- **Comportamento:** [1-2 frases]
+- **Exemplo aplicado bom 1..4:** ...
+- **Exemplo aplicado ruim 1..2:** ...
+- **Quando escolher:** [1 frase]
+```
+
+## Terceira via obrigatória
+
+Se nenhuma opção individual for boa, proponha uma **Opção C** — combinação, spike, fallback ou
+estratégia híbrida — explicando por que A e B isoladas são insuficientes.
+
+```md
+**Opção C — spike mínimo + fallback obrigatório**
+
+- **Comportamento:** manter o caminho atual, criar fixtures reais, testar a alternativa e só adotar se provar ganho.
+- **Exemplo aplicado bom:** se a lib nova cobrir os casos que o resolver manual erra, ela entra como camada auxiliar.
+- **Exemplo aplicado ruim:** se ela não gerar a forma que o caminho manual precisa, o spike foi custo sem substituição.
+- **Quando escolher:** quando A e B isoladas têm risco alto e a união/fallback pode cobrir mais casos.
+```
+
+## Exemplo aplicado
+
+Um exemplo aplicado deve citar uma entidade, fluxo, tabela, coluna, comando, arquivo, rota, job,
+dado, tela ou cenário **real do contexto analisado**. Analogia genérica não conta.
+
+Formato mínimo:
+
+```md
+Se escolhermos [opção], então no caso real [cenário concreto], o sistema fará [comportamento].
+Isso é bom porque [ganho]. Isso é ruim/perigoso quando [caso de falha].
+```
+
+## As 5 lacunas que o usuário NÃO declara
+
+Além das decisões que ele levantou, cada uma destas também vira um bloco D[n] quando existir:
+
+| Lacuna | Pergunta que ela responde |
+|---|---|
+| Conflito de estado | dois atributos do mesmo domínio divergem — qual vence? |
+| Borda temporal | a condição expira durante a operação? |
+| Concorrência | dois eventos simultâneos — quem ganha? |
+| Falha parcial | o que persiste se o passo N de M falhar? |
+| Estado inválido não tratado | qual combinação possível o fluxo feliz ignora? |
+
+## Auditorias e planos
+
+Quando a tarefa envolver auditoria com itens R1, R2, R3..., cada item separa: **veredito**
+(concordo/discordo/parcialmente) · **prova** (100% provado / parcialmente / não provado) ·
+**evidências concretas** · **plano de correção** · **decisões pendentes em D[n]**.
+
+Pode haver plano preliminar por item, mas **não feche implementação final de item que depende de
+escolha do usuário** — monte plano condicionado por opção, ou pare no bloco de clarificação.

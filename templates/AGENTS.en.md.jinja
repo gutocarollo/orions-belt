@@ -87,7 +87,21 @@ project — requirement: 100% generic product, zero donor content in the render)
 
 {% endif %}
 
-{% if use_context_graph %}
+{% if use_exploration_protocol %}
+## ⭐ CANONICAL REFERENCE — Exploration protocol (task-start)
+
+**What order to read in BEFORE planning, judging or asking.** Temporal complement to the blast-radius block, not a duplicate: that one answers *"what breaks if I change this symbol"* (diff-time); this one answers *"where do I read first"* (task-start). Full protocol: the `exploration-protocol` skill. Detail and rationale: chapter 17 of the manual.
+
+- **F0 anchor** — the ORIGINAL request, not the paraphrase that survived compaction (`.harness/requests/`, re-injected every session). Plans and reports are DERIVED; silent objective substitution is a BLOCKING defect.
+{% if harness_entry_docs %}- **F1 canonical docs, IN THIS ORDER:** {% for doc in harness_entry_docs.split(',') if doc.strip() %}`{{ doc.strip() }}`{% if not loop.last %} → {% endif %}{% endfor %}. The first one is the router; reading out of order is the same as not reading.
+{% endif %}{% if harness_reference_index %}- **F1-bis LIVING reference:** index at `{{ harness_reference_index }}` — read the subsystem page BEFORE touching its code. A page banner-marked historical is genealogy, never source.
+{% endif %}- **F2 code, MANDATORY PARALLEL fork:** {% if use_context_graph %}code graph **∥** `rg` for the same symbol. The graph loses by-REFERENCE passage (a callback/fixture is not a call edge) and resolves callees by NAME; grep never separates homonyms nor names the enclosing function. Serialising is pure latency.{% else %}`rg` for the symbol plus targeted reads — knowing grep never separates homonyms, never names the enclosing function and never follows an indirect chain.{% endif %}
+- **NO graph indexes Markdown** — never conclude "there is no doc about X" because the graph query returned nothing. Docs are found by the route, not by the graph.
+{% if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}- **F3 live state:** database MCP before inferring behaviour. A permission error is NOT absence of data (it is the wrong endpoint/role); declared config is NOT produced behaviour (measure the effect, not the flag).
+{% endif %}- **F4 LSP AFTER the join** — only there do you know which edge decides the verdict; mandatory when the graph reports homonyms. **F5** official docs for any external library.
+- **Clarification ONLY after the phases above**, and with the `clarification-plan` skill contract loaded — citing is not following.
+
+{% endif %}{% if use_context_graph %}
 ## ⭐ CANONICAL REFERENCE — Context tooling decision graph (blast radius)
 
 **Which tool to use to find what breaks when a symbol changes, in what order, and what runs in parallel.** `grep` finds literal occurrences but does not separate same-named definitions, does not say which function contains the call, and does not follow indirect chains; a code graph solves that but misses pass-by-REFERENCE and resolves callees by name. **The layers fail in different ways — the value is in the routing between them.** Detail and rationale: manual chapter 16.

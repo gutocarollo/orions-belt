@@ -24,6 +24,7 @@ Convenções: capítulos são classe **sequenced** (`NN-slug.md`, ordem de leitu
 | 14 | [Instalação e atualização: copier copy, harness-init e copier update](14-instalacao-e-update.md) | Instalar o framework num projeto; adaptar à stack; atualizar sem perder edições |
 | 15 | [Apêndice: limitações conhecidas](15-limitacoes-conhecidas.md) | O que o framework NÃO cobre hoje; contratos que o projeto preenche |
 | 16 | [Grafo de decisão de ferramentas de contexto (blast radius)](16-grafo-contexto.md) | Roteamento determinístico entre grafo de código, grep e LSP antes de mudar símbolo compartilhado; guardas hookify de núcleo e de contrato de dados |
+| 17 | [Protocolo de exploração (task-start), gate de clarificação e gate de push](17-protocolo-exploracao.md) | Por onde a leitura COMEÇA (antes do capítulo 16); exigir o contrato de decisão carregado antes de perguntar ao humano; rodar a suite antes do push |
 
 ## Roteamento para LLMs
 

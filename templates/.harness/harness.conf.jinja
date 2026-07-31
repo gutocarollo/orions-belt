@@ -112,6 +112,10 @@ HARNESS_CODEX_PROJECT_DOC_MAX_BYTES={{ harness_codex_project_doc_max_bytes }}
 HARNESS_CORE_PATHS={{ harness_core_paths }}
 # Padrões de escrita em banco (predicado P3) — alternação regex.
 HARNESS_DATA_WRITE_PATTERNS={{ harness_data_write_patterns }}
+{% endif %}{% if use_exploration_protocol %}# Rota F1 do protocolo de exploração: docs de entrada, NESTA ordem.
+HARNESS_ENTRY_DOCS={{ harness_entry_docs }}
+# Rota F1-bis: índice da referência viva por subsistema.
+HARNESS_REFERENCE_INDEX={{ harness_reference_index }}
 {% endif %}HARNESS_DOCS_DIR={{ harness_docs_dir }}
 HARNESS_LESSONS_FILE={{ harness_lessons_file }}
 HARNESS_RUNS_DIR={{ harness_runs_dir }}

@@ -105,6 +105,7 @@ _exclude:
   - "/tests/test_context_graph.sh"
   - "/tests/test_install_consent.sh"
   - "/tests/test_gitignore_runtime_state.sh"
+  - "/tests/test_exploration_protocol.sh"
   - "/verification/council-witness.json"
   # H3/A1 (fonte única de skills dual-runtime — grill-me,
   # prova-de-conclusao, marathon, repo-wiki-curator, ui-evidence, verify):
@@ -131,6 +132,11 @@ _exclude:
   # mesma regra de exclusão nominal.
   - "/.harness/skills-shared/delivery-council/SKILL.md"
   - "/.harness/skills-shared/adversarial-review/SKILL.md"
+  # Rodada 2026-07-31 (sincronização do projeto-doador): mesmo mecanismo
+  # skills-shared, mesma regra de exclusão nominal do selector renderizado.
+  - "/.harness/skills-shared/clarification-plan/SKILL.md"
+  - "/.harness/skills-shared/exploration-protocol/SKILL.md"
+  - "/.harness/skills-shared/master-plan/SKILL.md"
   # i18n (harness_language): variantes .pt/.en das skills são FONTE dos selectors
   # SKILL.md.jinja ({% raw %}{% include "..." ~ harness_language ~ "..." %}{% endraw %});
   # só o selector renderiza (SKILL.md, já excluído acima). AGENTS.pt/.en idem
@@ -319,6 +325,24 @@ use_hookify:
     default: true
     when: "{{ use_claude }}"
 
+# A regra §6 (proibida a pergunta seca) existe nas instruções desde a v1.0.0 e
+# mesmo assim foi violada num projeto adotante em 2026-07-30: o agente escreveu
+# "duas decisões que são suas" em prosa, sem comportamento por opção, sem
+# exemplo aplicado a entidade real e sem Opção C — com a skill listada e nunca
+# aberta. Prosa só é obedecida quando o agente lembra dela. Este gate torna a
+# skill `clarification-plan` PRECONDIÇÃO mecânica do AskUserQuestion.
+# Claude-only por construção: `AskUserQuestion` e o evento `PreToolUse` não
+# existem no Codex/Antigravity — lá vale a prosa da §6, que continua gerada.
+use_clarification_gate:
+    type: bool
+    help: >-
+        Instalar o gate PreToolUse que EXIGE a skill `clarification-plan`
+        carregada antes de perguntar uma decisão ao usuário (AskUserQuestion)?
+        A skill é sempre instalada; este flag controla só o gate mecânico.
+        Desligue se preferir a §6 como prosa não-executável.
+    default: true
+    when: "{{ use_claude }}"
+
 # A run skill with guessed commands is more dangerous than no run skill: agents
 # treat registered skills as executable contracts. Empty keeps the capability
 # disabled until harness-init or the operator supplies the real entrypoint.
@@ -340,6 +364,61 @@ harness_run_stop_command:
     help: Comando opcional para desligar a stack iniciada pelo comando canônico.
     default: ""
     when: "{{ harness_run_command != '' }}"
+
+# --- gate de push (githook `pre-push`) ---
+# Gating por PARÂMETRO, não por flag de capability: comando vazio = hook não é
+# gerado (mesma invariante do grafo de contexto — gate sem o que rodar é ruído).
+# Estes três valores NÃO vão para `.harness/harness.conf`, de propósito: o parser
+# do .conf expande `${...}` sequencialmente e trata `#` como comentário, então um
+# comando de shell com `$`, aspas ou `#` seria mangled em silêncio. Mesmo
+# tratamento que `harness_run_command` já recebe (também ausente do .conf).
+#
+# INTERPOLAÇÃO VERBATIM DENTRO DE `( ... )`, nunca `| tojson` (bug real desta
+# rodada, pego no render): o `tojson` do Jinja é HTML-safe e converte `'` em
+# `'`, então `make test ARGS='x'` virava, dentro do hook,
+# `make test ARGS='x'` — `bash -n` PASSA (é sintaxe válida) e o comando
+# executa errado. Verbatim preserva as aspas como escritas; o preço é que uma
+# quebra de linha destruiria o script, e é isso que os validators abaixo barram.
+harness_pre_push_test_command:
+    type: str
+    help: >-
+        Comando da suite RÁPIDA a rodar antes de cada `git push` (ex.:
+        "pytest -q -m 'not slow'" ou "npm test"). Vazio = nenhum githook
+        `pre-push` é gerado.
+    default: ""
+    validator: >-
+        {% if '\n' in harness_pre_push_test_command %}
+        harness_pre_push_test_command precisa ser um comando de UMA linha (ele é interpolado
+        verbatim dentro do githook gerado; uma quebra de linha corrompe o script). Encadeie com
+        '&&' ou aponte para um script.
+        {% endif %}
+
+harness_pre_push_slow_command:
+    type: str
+    help: >-
+        Comando da suite CARA/lenta (ex.: testes contra Postgres). Roda depois da
+        rápida e do lint. Vazio = etapa não existe no hook.
+    default: ""
+    when: "{{ harness_pre_push_test_command != '' }}"
+    validator: >-
+        {% if '\n' in harness_pre_push_slow_command %}
+        harness_pre_push_slow_command precisa ser um comando de UMA linha (mesma razão do comando
+        rápido: interpolação verbatim no githook gerado).
+        {% endif %}
+
+harness_pre_push_slow_probe:
+    type: str
+    help: >-
+        Comando read-only que prova que a infraestrutura da suite cara está de pé
+        (ex.: "pg_isready -h localhost -p 5432 -q"). Falhou = a suite cara é
+        PULADA com aviso, nunca bloqueia — bloquear por ausência de infra ensina
+        o time a usar PUSH_GATE_ACK sempre. Vazio = a suite cara roda sempre.
+    default: ""
+    when: "{{ harness_pre_push_slow_command != '' }}"
+    validator: >-
+        {% if '\n' in harness_pre_push_slow_probe %}
+        harness_pre_push_slow_probe precisa ser um comando de UMA linha (mesma razão dos anteriores).
+        {% endif %}
 
 # =========================================================================
 # --- dev stack ---
@@ -731,6 +810,46 @@ harness_data_write_patterns:
         banco antes do veredito. Vazio = P3 desligado.
     default: ""
     when: "{{ use_context_graph }}"
+
+# --- protocolo de exploração (task-start) ---
+# Complemento TEMPORAL do bloco acima, não duplicata: `use_context_graph`
+# responde "o que quebra se eu mudar este símbolo" (DIFF-TIME); este responde
+# "onde eu leio primeiro" (TASK-START). Sem o segundo, cada sessão inventa a
+# própria rota. Medição do projeto-doador (2026-07-30): 23 páginas de referência
+# viva criadas num commit, e `grep` das 16 principais nos 6 pontos de entrada
+# retornou ZERO em todos os seis — doc que existe e ninguém acha é doc que não
+# existe. Default false porque o valor real vem dos parâmetros abaixo: sem doc
+# de entrada nem índice de referência, o protocolo instala disciplina genérica
+# e pouco mais.
+use_exploration_protocol:
+    type: bool
+    help: >-
+        Instalar o protocolo de exploração de início de tarefa (skill
+        `exploration-protocol` + hook UserPromptSubmit `exploration-kickoff` +
+        bloco ⭐ nas instruções)? Roteia F0 âncora -> F1 docs canônicos ->
+        F2 grafo∥grep -> F3 banco -> F4 LSP -> F5 docs de lib, e proíbe
+        clarificação antes da exploração.
+    default: false
+
+harness_entry_docs:
+    type: str
+    help: >-
+        CSV ORDENADO dos documentos de entrada do repositório — a rota F1, lida
+        NESTA ordem (ex.: "docs/index.md,docs/log.md,docs/pending/README.md").
+        O primeiro é o roteador; os demais, autoridade por assunto. Vazio = a
+        fase F1 não é emitida (rota que aponta para nada ensina o agente a
+        passar o olho pelo bloco).
+    default: ""
+    when: "{{ use_exploration_protocol }}"
+
+harness_reference_index:
+    type: str
+    help: >-
+        Path do ÍNDICE da referência viva por subsistema (ex.:
+        "docs/reference/README.md") — a fase F1-bis manda ler a página do
+        subsistema ANTES de mexer no código dele. Vazio = fase não emitida.
+    default: ""
+    when: "{{ use_exploration_protocol }}"
 
 use_ui_evidence:
     type: bool

@@ -1,0 +1,169 @@
+{#-
+  Single source (H3/A1, orions-belt) — see the full comment in
+  ../grill-me/SKILL.md.jinja (same include mechanism).
+
+  ORIGIN (real adoption, 2026-07-30): §6 of the generated instructions already
+  banned the bare question and already published the D[n] template — and an
+  agent still closed a diagnosis with a section titled "two decisions that are
+  yours", written as prose: no per-option behaviour, no example bound to a real
+  entity, no Option C. The rule existed; the contract was not in context at the
+  moment the question was written. This skill is §6 in LOADABLE form, and the
+  `clarification-plan-gate.py` hook makes it a mechanical precondition of
+  AskUserQuestion. Prose obeyed only when the agent happens to remember it is
+  exactly the failure mode the self-improvement loop exists to kill.
+-#}
+---
+name: clarification-plan
+description: >-
+  Use when a task, audit, fix plan, technical decision or clarification has more
+  than one possible option and the user must choose based on concrete
+  consequences. Forces D[n] blocks with behaviour, applied good example, applied
+  bad example, when to choose, and a third way when A/B are insufficient.
+  Accepts numeric arguments for how many examples per option (e.g. "4" = 4 good
+  + 4 bad; "4 2" or "good=4 bad=2").
+---
+
+# Clarification Plan
+
+Use this skill whenever more than one option exists to solve, plan, fix, audit or clarify anything.
+It is the operational procedure for §6 of [`AGENTS.md`](../../../AGENTS.md) — that section states
+the RULE, this skill delivers the CONTRACT that satisfies it.
+
+**Before building D[n] blocks for material work**, confirm the question serves the user's ORIGINAL
+request, not a derived plan. Options and recommendations never replace the request; a scope change
+needs explicit acceptance. `request-reinject.py` re-injects the anchor every session — read it.
+
+## Anti-shallowness gate — a bug requires root cause BEFORE options
+
+When the decision at hand references a BUG or broken behaviour, building D[n] blocks before closing
+the root-cause investigation is **FORBIDDEN**:
+
+1. **Real failure×success pairs side by side** — RAW messages/bytes/lines of the concrete case
+   (exact input, exact output, protocol fields), not a summary or a rate. Statistical correlation
+   ("fails 37% of the time when X=on") only says WHERE to read; it is never the cause.
+2. **A single mechanical hypothesis explaining 100% of the separation** between the populations. If
+   an "it sometimes works" remains, the hypothesis is wrong or incomplete — go back to the data.
+3. **A refutation test actually run** — the hypothesis only holds after surviving an attempt to
+   knock it down with its own data (e.g. the "truncation" hypothesis dies if the failures used 465
+   of 4,096 available tokens).
+4. Only then the options — and each option must attack THE NAMED MECHANISM, not the symptom. If the
+   investigation has not closed, this skill's deliverable is an **INVESTIGATION PLAN** (which data
+   to read, which hypothesis to test), never a menu of fixes.
+
+Underlying principle: model capability (reasoning, size, few-shot) is never an explanation of
+failure nor a substitute for a contract. Behavioural instability is a context/instruction/contract
+deficit until proven otherwise.
+
+## Arguments (examples per option)
+
+The skill accepts arguments defining HOW MANY real applied examples each option must carry. Read in
+this order:
+
+1. **No argument** → default: 1 good + 1 bad example per option.
+2. **One number `N`** (e.g. `/clarification-plan 4`) → **at least N good AND N bad examples per
+   option**, labelled and numbered (`Applied good example 1..N`, `Applied bad example 1..N`).
+3. **Two numbers `N M`** or **`good=N bad=M`** (e.g. `/clarification-plan 4 2`) → at least N good
+   and M bad per option.
+
+Rules when N or M > 1:
+
+- The numbers are MINIMUMS ("at least"), never ceilings.
+- Each example must cover a **DISTINCT trade-off dimension** (correctness, methodological risk,
+  navigability, bias, maintenance, temporal edge...). Delivering N variations of the same argument
+  is forbidden — if only K honest dimensions exist, deliver K and state why there are no more.
+- All of them stay REAL and APPLIED (entity/table/file/route/job from the analysed context);
+  numbering does not authorise generics.
+- The **third way (Option C)** needs at least N good and `max(1, ⌈M/2⌉)` bad — well-designed
+  combinations usually have fewer failure modes, but never zero; if C has NO honest bad example,
+  that signals incomplete analysis, not a perfect option.
+- Text outside the examples stays LEAN: Behaviour in 1-2 sentences, When to choose in 1; the depth
+  belongs in the examples, not in extra prose.
+- If the user asks for the examples without naming which decision, apply the arguments to ALL open
+  D[n] decisions in the current conversation.
+
+## Core rule
+
+Bare questions — "A or B?", "which do you prefer?" — or lists of options without practical
+consequences are forbidden.
+
+Before asking for the choice, explain each option's concrete behaviour and show real examples
+applied to the context. The goal is to GUIDE the choice, not to hand raw ambiguity to the user.
+
+## Mandatory format
+
+```md
+### D[n] — R[x]/[related item]: [concrete question of the decision]
+
+**Option A — [option name]**
+
+- **Behaviour:** if we pick this, the system/process will [concrete effect].
+- **Applied good example:** in the real case [entity/table/file/command/route/job], [good outcome] happens.
+- **Applied bad example:** in the real case [entity/table/file/command/route/job], [risk/failure/cost] happens.
+- **When to choose:** pick this if the priority is [criterion].
+
+**Option B — [option name]**
+
+- **Behaviour:** ...
+- **Applied good example:** ...
+- **Applied bad example:** ...
+- **When to choose:** ...
+```
+
+There is no artificial cap on decisions. In long audits, if there are D1-D12, write D1-D12.
+
+With numeric arguments the good/bad pair expands into numbered lists in the same block — e.g. `4 2`:
+
+```md
+- **Behaviour:** [1-2 sentences]
+- **Applied good example 1..4:** ...
+- **Applied bad example 1..2:** ...
+- **When to choose:** [1 sentence]
+```
+
+## Mandatory third way
+
+If no individual option is good, propose an **Option C** — combination, spike, fallback or hybrid —
+explaining why A and B in isolation are insufficient.
+
+```md
+**Option C — minimal spike + mandatory fallback**
+
+- **Behaviour:** keep the current path, build real fixtures, test the alternative, adopt only if it proves a gain.
+- **Applied good example:** if the new library covers the cases the manual resolver gets wrong, it lands as an auxiliary layer.
+- **Applied bad example:** if it cannot produce the shape the manual path needs, the spike was cost without replacement.
+- **When to choose:** when A and B in isolation carry high risk and the union/fallback can cover more cases.
+```
+
+## Applied example
+
+An applied example must cite an entity, flow, table, column, command, file, route, job, record,
+screen or scenario **real to the analysed context**. A generic analogy does not count.
+
+Minimum shape:
+
+```md
+If we pick [option], then in the real case [concrete scenario] the system will [behaviour].
+That is good because [gain]. That is bad/dangerous when [failure case].
+```
+
+## The 5 gaps the user does NOT declare
+
+Beyond the decisions they raised, each of these also becomes a D[n] block when it exists:
+
+| Gap | Question it answers |
+|---|---|
+| State conflict | two attributes of the same domain disagree — which wins? |
+| Temporal edge | does the condition expire mid-operation? |
+| Concurrency | two simultaneous events — who wins? |
+| Partial failure | what persists if step N of M fails? |
+| Untreated invalid state | which possible combination does the happy path ignore? |
+
+## Audits and plans
+
+When the task is an audit with items R1, R2, R3..., each item separates: **verdict**
+(agree/disagree/partially) · **proof** (100% proven / partially / not proven) · **concrete
+evidence** · **fix plan** · **pending decisions as D[n]**.
+
+A preliminary per-item plan is fine, but **do not close the final implementation of an item that
+depends on the user's choice** — build an option-conditioned plan, or stop at the clarification
+block.
