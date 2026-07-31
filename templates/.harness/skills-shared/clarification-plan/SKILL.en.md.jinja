@@ -20,7 +20,9 @@ description: >-
   consequences. Forces D[n] blocks with behaviour, applied good example, applied
   bad example, when to choose, and a third way when A/B are insufficient.
   Accepts numeric arguments for how many examples per option (e.g. "4" = 4 good
-  + 4 bad; "4 2" or "good=4 bad=2").
+  + 4 bad; "4 2" or "good=4 bad=2"). The output is a single report: measured vs
+  estimated progress, an inventory of ALL decisions blocking execution to the
+  end, verifiable evidence per decision and an explicit recommendation.
 ---
 
 # Clarification Plan
@@ -89,10 +91,65 @@ consequences are forbidden.
 Before asking for the choice, explain each option's concrete behaviour and show real examples
 applied to the context. The goal is to GUIDE the choice, not to hand raw ambiguity to the user.
 
+## Deliverable — ONE report, with progress, full inventory and a recommendation
+
+The output of this skill is a **single decision report**, never a bare question in the middle of
+prose. Three parts, in this order:
+
+**1. Progress — where we are.** Three SEPARATE lines, never fused into one number:
+
+- `MEASURED:` — what came out of commands/queries run NOW (test counts, ledger rows, `SELECT`),
+  with the source cited. No countable denominator this session ⇒ write
+  `MEASURED: not applicable — no denominator`, never fabricate (§10 of the generated
+  instructions forbids % without proof).
+- `DECISIONS:` — how many user choices are open / how many the countable source predicted.
+- `JOURNEY:` — the % of the journey to the final goal, always labelled `ESTIMATED`, with the
+  basis of the estimate declared in one line.
+
+A number measured this session never mixes with an estimate; "I did not measure now" shows up as
+data — it does not disappear.
+
+**2. Decisions — ALL that block execution to the end.** Not "the two left over from the last
+step": it is the inventory of the choices missing between the current state and the finished
+goal. Enumerate from a countable source (open plan items, registered pending items, run
+failures, code TODOs) and declare the disposition — `N decisions found in <source>`. The risk of
+an unseen decision is declared, never omitted.
+
+**3. Recommendation — mandatory in EVERY D[n].** Every block closes with
+`**Recommend: Option X** — because [objective criterion + data]`. Listing options without
+picking one hands back the raw ambiguity the Core rule forbids. Recommending is not deciding:
+the user can overrule.
+
+## Evidence provenance — every D[n] says where it came from
+
+An option without a primary source is an opinion. Context comes from the project's global-view
+tools (cheap in context), not from blind file reading — in the exploration protocol's order,
+when installed:
+
+- **canonical doc via the route** — index → temporal log → pending items → the subsystem's
+  reference page. Code graphs do not index Markdown: docs are found via the route, never via a
+  graph query.
+- **code** — code graph **in parallel** with `grep` for the same symbol.
+- **architecture** — the architecture/knowledge graph, within the scope it declares.
+- **live state** — the project's database MCP; a permission error is the wrong endpoint/role,
+  never "the data does not exist".
+
+Every D[n] carries the `**Evidence:**` line with a VERIFIABLE locator: `path:Line` (never just
+the file name), the executed query, or the tool + query. Gate by decision class:
+
+- A decision asserting **state, code behaviour or a number** ⇒ a verifiable locator is
+  MANDATORY and `inference` is FORBIDDEN — run the query / open the symbol BEFORE writing the
+  block.
+- A **policy/preference** decision ⇒ `none — inference` is legitimate, but the option is born
+  marked as unverified.
+
 ## Mandatory format
 
 ```md
 ### D[n] — R[x]/[related item]: [concrete question of the decision]
+
+**Evidence:** [verifiable locator: path:Line · executed query · tool+query — "none, inference" only for policy/preference decisions]
+**Unblocks:** [what stays blocked while this decision is not made]
 
 **Option A — [option name]**
 
@@ -107,6 +164,8 @@ applied to the context. The goal is to GUIDE the choice, not to hand raw ambigui
 - **Applied good example:** ...
 - **Applied bad example:** ...
 - **When to choose:** ...
+
+**Recommend: Option [X]** — because [objective criterion + data].
 ```
 
 There is no artificial cap on decisions. In long audits, if there are D1-D12, write D1-D12.
