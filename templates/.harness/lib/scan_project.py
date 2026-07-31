@@ -682,6 +682,53 @@ def _rule_context_graph(facts: dict) -> tuple[str, str]:
     )
 
 
+def _rule_exploration_protocol(facts: dict) -> tuple[str, str]:
+    # The phase ORDER is language-agnostic and always useful, but the two
+    # parameters that give it teeth -- which docs are the canonical entry points,
+    # and where the living per-subsystem reference index lives -- are editorial
+    # decisions no scan can infer. A repo full of Markdown says nothing about
+    # which file is the ROUTER. So: never APLICAVEL on its own; a human confirms
+    # the route or the capability installs discipline pointing at nothing.
+    detail = " (docs/log.md present)" if facts.get("docs_log") else ""
+    return CONDICIONAL, (
+        "Task-start routing (anchor -> canonical docs -> graph||grep -> database -> "
+        f"LSP) before any plan, verdict or clarification{detail}. Requires "
+        "harness_entry_docs -- and optionally harness_reference_index -- confirmed "
+        "by a human: a scan cannot tell which document is the entry router."
+    )
+
+
+def _rule_clarification_gate(facts: dict) -> tuple[str, str]:
+    # Claude-only by construction: `AskUserQuestion` and the `PreToolUse` event
+    # are Claude Code surfaces. In Codex/Antigravity the same contract is carried
+    # by the §6 prose, which is generated regardless.
+    return APLICAVEL, (
+        "Refuses AskUserQuestion until the clarification-plan skill is loaded in the "
+        "session. No project-specific input needed and fail-open by construction. "
+        "Takes effect on the Claude surface only -- AskUserQuestion and PreToolUse do "
+        "not exist in Codex/Antigravity, where the same contract ships as §6 prose."
+    )
+
+
+def _rule_pre_push_gate(facts: dict) -> tuple[str, str]:
+    # Gated on the COMMAND, not on a capability flag: the framework cannot guess
+    # a project's test entrypoint, and a push gate that runs nothing is the inert
+    # artifact `use_hookify` was introduced to prevent.
+    frameworks = facts.get("test_frameworks") or []
+    if frameworks:
+        found = ", ".join(sorted(frameworks))
+        return CONDICIONAL, (
+            "Runs the suite before every push. Test frameworks detected "
+            f"({found}), but a framework is not an entrypoint: set "
+            "harness_pre_push_test_command to the exact command -- a wrong command "
+            "makes every push fail, which teaches the team to bypass the gate."
+        )
+    return CONDICIONAL, (
+        "Runs the suite before every push. Needs harness_pre_push_test_command: no "
+        "scan can pick a project's canonical test entrypoint with confidence."
+    )
+
+
 def _rule_prod_guards(facts: dict) -> tuple[str, str]:
     docker = facts["docker"]
     if docker["has_swarm_signal"]:
@@ -778,6 +825,12 @@ COMPONENTS: list[_ComponentRule] = [
     ("hook.completion-gate", "hook", _rule_generic_always_on),
     ("hook.subagent-throttle", "hook", _rule_generic_always_on),
     ("hook.lei-zero-kickoff", "hook", _rule_generic_always_on),
+    ("hook.exploration-kickoff", "hook", _rule_exploration_protocol),
+    ("skill.exploration-protocol", "skill", _rule_exploration_protocol),
+    ("hook.clarification-plan-gate", "hook", _rule_clarification_gate),
+    ("skill.clarification-plan", "skill", _rule_generic_always_on),
+    ("skill.master-plan", "skill", _rule_generic_always_on),
+    ("githook.pre-push", "githook", _rule_pre_push_gate),
     ("hook.git-doctor", "hook", _rule_generic_always_on),
     ("hook.marathon-reinject", "hook", _rule_generic_always_on),
     ("hook.marathon-precompact", "hook", _rule_generic_always_on),

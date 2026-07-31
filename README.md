@@ -15,7 +15,7 @@
 One `copier` install drops hooks, skills, an adversarial council, verification gates and a
 temporal wiki into *any* repo — so an agent stays aligned, verifiable and anti-drift.
 
-[Full manual — 16 chapters](docs/manual/README.md) · [Install](docs/manual/14-instalacao-e-update.md) · [How it works](#how-it-works) · [Why](docs/planning/)
+[Full manual — 17 chapters](docs/manual/README.md) · [Install](docs/manual/14-instalacao-e-update.md) · [How it works](#how-it-works) · [Why](docs/planning/)
 
 </div>
 
@@ -88,6 +88,8 @@ and applicability classification belong to the separate, agent-guided `harness-i
 | 🧠 | **Knowledge provider** | Provider contract for external Understand graphs: stable IDs, typed/provenanced edges, tombstones and incremental-versus-clean parity. Orion deliberately does not duplicate Understand's parser. |
 | ♻️ | **Self-improvement loop** | `/loop` maintenance pass: lessons capture → inject → promote, wiki lint, ref-integrity, graph freshness. |
 | 🧭 | **[Context decision graph](docs/manual/16-grafo-contexto.md)** | Deterministic routing between a code graph, `grep` and the LSP before a shared symbol changes — measured on a real repo where each layer missed what the others caught. Fork/join topology, four command-shaped predicates, and hookify guards on core-path and DB-write edits. The graph CLI stays an external dependency the installer declares, never installs. |
+| 🗺️ | **[Exploration protocol](docs/manual/17-protocolo-exploracao.md)** | The task-start counterpart to the decision graph: a phase order — anchor, canonical docs, living per-subsystem reference, graph‖grep, database, LSP — materialised in four surfaces at once (skill, instruction block, prompt hook, both context scouts). Born from a measured case where 23 fresh reference pages were reachable from zero of the six entry points. Ships with the rule that no code graph indexes Markdown, so a graph miss never proves a doc is absent. |
+| 🙋 | **[Clarification precondition](docs/manual/17-protocolo-exploracao.md)** | A `PreToolUse` gate that refuses `AskUserQuestion` until the decision contract is actually loaded — because the rule banning bare questions existed as prose and was still violated by an agent that had the skill listed and never opened it. |
 | 🛡️ | **Deterministic hooks** | 18 hook scripts shipped (14 install by default, 4 are stack-conditional): completion/UI/design-system gates, subagent throttle, leak reaper, git-doctor. |
 | 🌐 | **Dual runtime core** | The council and core operational skills share one source across Claude Code and Codex; optional and runtime-native capabilities are tracked as an explicit compatibility matrix. |
 
@@ -180,7 +182,7 @@ Full procedure, decision trees per component, and gotchas: **[chapter 14](docs/m
 
 ## Documentation
 
-- **[docs/manual/](docs/manual/README.md)** — the canonical product docs: 16 indexed chapters on
+- **[docs/manual/](docs/manual/README.md)** — the canonical product docs: 17 indexed chapters on
   what the framework installs and how to configure every component, including the
   **[context-tooling Mermaid decision flow](docs/manual/16-grafo-contexto.md)**.
 - **[docs/architecture/](docs/architecture/README.md)** — canonical current/target architecture,

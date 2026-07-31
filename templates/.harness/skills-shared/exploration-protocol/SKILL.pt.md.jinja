@@ -1,0 +1,129 @@
+{#-
+  Fonte única (H3/A1, orions-belt) — ver comentário completo em
+  ../grill-me/SKILL.md.jinja (mesmo mecanismo de include).
+
+  ORIGEM (adoção real, 2026-07-30/31): o bloco ⭐ do grafo de contexto responde
+  "o que quebra se eu mudar este símbolo" — pergunta de DIFF-TIME. Faltava a
+  pergunta de TASK-START: "onde eu leio primeiro". Sem ela cada sessão inventa
+  a própria rota, e a medição do projeto-doador foi dura: 23 páginas de
+  referência viva criadas num commit e `grep` das 16 principais nos 6 pontos de
+  entrada retornava ZERO em todos os seis — doc que existe e ninguém acha é doc
+  que não existe. Esta skill instala a ORDEM; o bloco ⭐ continua dono do raio.
+-#}
+---
+name: exploration-protocol
+description: >-
+  Padrão obrigatório de exploração inicial do repositório — roteamento
+  determinístico entre docs canônicos, grafo de código, grep, grafo de
+  arquitetura, banco e LSP ANTES de qualquer plano, veredito ou pergunta de
+  clarificação. Use ao iniciar QUALQUER tarefa não trivial (implementar,
+  corrigir, auditar, investigar, planejar, revisar).
+---
+
+# Protocolo de exploração (task-start)
+
+Este é o padrão de **início de tarefa**: em que ordem ler, o que roda em paralelo, e o que só é
+legítimo consultar depois. Ele não substitui — e não repete — o bloco ⭐ do grafo de decisão de
+contexto, que responde a pergunta de **diff-time** ("o que quebra se eu mudar este símbolo").
+Os dois se encadeiam: **este protocolo termina onde o diff começa**, e aí o handoff é para o ⭐.
+
+Ordem obrigatória. Pular fase é permitido apenas quando a fase não se aplica (o projeto não tem
+banco, não tem grafo indexado), e nesse caso **declare o pulo** em vez de omiti-lo.
+
+## F0 — a âncora
+
+O pedido ORIGINAL do usuário, não a paráfrase que sobreviveu à compactação. O
+`request-reinject.py` reinjeta a âncora a cada `SessionStart`; `.harness/requests/` guarda todo
+prompt verbatim. Plano, relatório e finding são DERIVADOS — nunca substitutos. Substituição
+silenciosa de objetivo é defeito BLOQUEANTE, mesmo com todos os invariantes locais verdes.
+{% if harness_entry_docs %}
+## F1 — docs canônicos, NESTA ordem
+
+{% for doc in harness_entry_docs.split(',') if doc.strip() %}{{ loop.index }}. `{{ doc.strip() }}`
+{% endfor %}
+Ler fora de ordem é o mesmo que não ler: o primeiro documento é o roteador, e é ele que diz qual
+dos demais é autoridade para o assunto da tarefa.
+{% endif %}{% if harness_reference_index %}
+## F1-bis — referência VIVA do subsistema
+
+Índice: `{{ harness_reference_index }}`. **Leia a página do subsistema ANTES de mexer no código
+dele.** Uma página de referência viva vale mais que a leitura do código porque ela já resolveu as
+citações `path:linha` e já separou o que é atual do que é genealogia.
+
+Duas armadilhas medidas no projeto-doador, ambas caras:
+
+- **Documento com banner de "histórico" não é fonte.** Lá, 22 páginas marcadas assim carregavam
+  110 divergências MEDIDAS contra o HEAD. Genealogia explica como se chegou aqui; não diz o que é
+  verdade agora.
+- **Doc que ninguém acha é doc que não existe.** As páginas foram criadas e não roteadas; o efeito
+  prático foi zero até entrarem nesta fase.
+{% endif %}
+## F2 — código: o fork é OBRIGATÓRIO e PARALELO, nunca em série
+
+{% if use_context_graph %}Dispare **grafo de código** e **`grep`/`rg` do mesmo símbolo** ao mesmo tempo. Serializar é
+latência pura, e escolher só um perde defeito:
+
+| camada | acerta | PERDE |
+|---|---|---|
+| grafo de código | chamadores COM a função envolvente; separa definições homônimas; segue cadeia indireta | passagem por REFERÊNCIA (callback, fixture de teste — não é aresta de chamada); resolve callee por NOME, podendo apontar um stub de teste em vez da API real |
+| `grep`/`rg` | qualquer ocorrência literal, inclusive as passagens por referência | não separa homônimo, não diz qual função contém a chamada, não segue cadeia indireta |
+
+As duas erram de formas **diferentes e complementares**. O valor está no roteamento entre elas,
+nunca numa isolada.
+{% else %}Sem grafo de código configurado (`use_context_graph=false`), a varredura é `grep`/`rg` do símbolo
+mais leitura dirigida. Saiba o que você está perdendo ao decidir: `grep` não separa definições
+homônimas, não diz qual função contém a chamada e não segue cadeia indireta — se a tarefa depende
+de "o que quebra se eu mudar isto", promova o veredito ao LSP (F4) em vez de confiar na varredura.
+{% endif %}{% if harness_understand_apps_root %}
+Arquitetura e relação entre módulos: grafo do Understand Anything em
+`{{ harness_understand_apps_root }}/.understand-anything/` — **escopo `{{ harness_understand_apps_root }}/` apenas**,
+declare isso antes de extrapolar. Frescor: `bash .harness/lib/understand-apps-changed-files.sh`.
+{% endif %}
+**NENHUM grafo de código indexa Markdown.** Medido nos dois grafos do projeto-doador: zero `.md`
+em ambos os índices. Portanto **nunca conclua "não existe doc sobre X" porque a consulta ao grafo
+não trouxe** — documentação se acha pela rota{% if harness_entry_docs %} das fases F1/F1-bis{% endif %}, jamais por consulta a grafo.
+{% if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}
+## F3 — estado vivo
+
+Quando a tarefa envolver estado, dado persistido, CRM, funil ou eval: consulte o banco pelo MCP
+antes de inferir comportamento. `DISTINCT`/contagens do dado REAL vencem qualquer suposição sobre
+o que o schema permite.
+
+Duas regras que só custam quando são aprendidas do jeito difícil:
+
+- **Erro de permissão NÃO é ausência de dado** — é endpoint/papel errado. Antes de escrever "não
+  verificável", repita a MESMA query no papel que enxerga o objeto.
+- **Config declarada ≠ comportamento produzido.** Meça o EFEITO no banco, não a flag no perfil.
+{% endif %}
+## F4 — LSP, DEPOIS do join
+
+`find_referencing_symbols` (ou equivalente do seu servidor de linguagem) só entra **depois** que o
+fork de F2 fechou: só ali se sabe QUAL aresta decide o veredito. Rodar antes significa rodá-lo às
+cegas em todo símbolo. É **obrigatório** quando o grafo reportou mais de uma definição do mesmo
+nome.
+
+## F5 — biblioteca externa
+
+Documentação oficial atualizada da lib/SDK/CLI, nunca conhecimento de treinamento para API, versão
+ou configuração. Declare a fonte consultada.
+
+## Só então: clarificação
+
+Pergunta de clarificação ao usuário é legítima **somente depois de F1-F3**. Perguntar antes de
+explorar transfere ao usuário um trabalho que os dados do repositório já respondiam. Quando a
+pergunta for de fato necessária, o contrato dela é a skill `clarification-plan` — carregada, não
+citada.
+
+## Handoff para o diff
+
+Fechada a exploração, a pergunta muda de "onde eu leio" para "o que quebra se eu mudar isto".
+{% if use_context_graph %}A partir daí manda o bloco ⭐ **Grafo de decisão de ferramentas de contexto** das instruções do
+projeto: predicados P1-P4, fork/join e o loop adversarial em subagent.{% else %}A partir daí, prefira LSP e teste de regressão sobre leitura adicional — e considere ligar
+`use_context_graph` se o projeto tiver núcleo compartilhado.{% endif %}
+
+## O que este protocolo NÃO autoriza
+
+- Grafo (de código ou de arquitetura) **nunca é verdade final**: confirme no código vivo, na
+  documentação indexada e no banco quando a conclusão envolver runtime ou estado.
+- Índice de grafo desatualizado **mente com cara de autoridade**. Sincronize antes de confiar.
+- Nenhuma fase autoriza ler diretório marcado como legado/arquivo/estrangeiro como fonte viva.

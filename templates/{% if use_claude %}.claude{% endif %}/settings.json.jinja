@@ -90,7 +90,17 @@
             "timeout": 10
           }
         ]
-      }{% if harness_understand_apps_root %},
+      }{% if use_exploration_protocol %},
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/exploration-kickoff.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+      {%- endif %}{% if harness_understand_apps_root %},
       {
         "hooks": [
           {
@@ -127,7 +137,19 @@
             "statusMessage": "throttle: checking subagent slots (cap {{ harness_subagent_max_concurrent }})"
           }
         ]
+      }{% if use_clarification_gate %},
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/clarification-plan-gate.py\"",
+            "timeout": 10,
+            "statusMessage": "clarification: checking the decision contract is loaded"
+          }
+        ]
       }
+      {%- endif %}
     ],
     "PostToolUse": [
       {%- if use_ds_gate %}

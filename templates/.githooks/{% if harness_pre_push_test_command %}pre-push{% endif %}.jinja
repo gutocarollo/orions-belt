@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# pre-push — roda a suite ANTES de empurrar. Protege o repositório de regressão, nada além disso.
+#
+# GERADO SÓ QUANDO `harness_pre_push_test_command` NÃO É VAZIO (gating por parâmetro, mesma regra
+# das guardas de blast radius): gate que não tem o que rodar é ruído, e ruído treina o time a
+# ignorar gate.
+#
+# PROVENIÊNCIA (orions-belt): generalizado de um projeto-doador que rodava a suite rápida, o lint
+# documental e uma suite cara condicionada a um probe de infraestrutura. Duas decisões vieram de
+# incidente medido lá, e ficam:
+#
+#   1. NÃO checa segredo. O gate de credencial que existia foi REMOVIDO por ordem do dono do
+#      projeto: o repo era privado e a regra só travava trabalho sem proteger terceiro. Se o seu
+#      projeto precisa de varredura de segredo, essa é uma responsabilidade de CI/pre-commit
+#      dedicada (gitleaks, trufflehog), não deste gate.
+#   2. A suite CARA nunca bloqueia por AUSÊNCIA de infraestrutura. Se o probe falha, ela é PULADA
+#      com aviso — bloquear porque o Postgres local não subiu ensina o time a exportar
+#      PUSH_GATE_ACK em todo push, e um bypass habitual é um gate morto.
+#
+# EFEITO OPERACIONAL QUE SURPREENDE (medido no projeto-doador): com este hook ativo, `git push`
+# fica minutos aparentemente "parado" — é a suite rodando, NÃO problema de credencial. Nunca passe
+# `git push` por `tail`/`head`: o buffer esconde exatamente as linhas `pre-push: ...` que explicam
+# a demora.
+#
+# ATIVAÇÃO: igual ao `pre-commit` irmão — git só chama hooks sob `core.hooksPath`, configurado pelo
+# `_task` do Copier (`.harness/lib/set_hooks_path.sh`), que é fail-open e é PULADO quando
+# `use_pre_commit_framework=true`. Se este arquivo existe e não roda, ative com
+# `git config core.hooksPath .githooks`.
+#
+# Bypass declarado: PUSH_GATE_ACK="<motivo>" git push
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+fail() { printf '\npre-push BLOQUEADO: %s\n\n' "$1" >&2; exit 1; }
+
+if [ -n "${PUSH_GATE_ACK:-}" ]; then
+    printf 'pre-push: bypass declarado (%s)\n' "$PUSH_GATE_ACK" >&2
+    exit 0
+fi
+
+LOG="$(mktemp -t orions-prepush.XXXXXX)"
+trap 'rm -f "$LOG"' EXIT
+
+# --- 1. suite rápida (obrigatória — é o motivo de este hook existir) ----------------------------
+printf 'pre-push: rodando a suite...\n' >&2
+if ! ( {{ harness_pre_push_test_command }} ) >"$LOG" 2>&1; then
+    fail "suite vermelha. Últimas linhas:
+$(tail -12 "$LOG" | sed 's/^/    /')"
+fi
+printf 'pre-push: suite OK\n' >&2
+
+# --- 2. lint documental (motor do framework, sempre presente) -----------------------------------
+# Passada REPO-WIDE, complementar ao `--staged` do pre-commit: um doc órfão só aparece quando o
+# grafo inteiro é avaliado, e o `--staged` por construção nunca vê o repositório todo.
+if ! python3 "$ROOT/.harness/lib/docs_wiki_lint.py" >"$LOG" 2>&1; then
+    fail "docs-wiki-lint vermelho:
+$(grep '^- ' "$LOG" | head -10 | sed 's/^/    /')"
+fi
+printf 'pre-push: docs-wiki-lint OK\n' >&2
+{% if harness_pre_push_slow_command %}
+# --- 3. suite cara, condicionada a infraestrutura disponível -------------------------------------
+{%- if harness_pre_push_slow_probe %}
+if ( {{ harness_pre_push_slow_probe }} ) >/dev/null 2>&1; then
+{%- else %}
+if true; then
+{%- endif %}
+    printf 'pre-push: rodando a suite cara...\n' >&2
+    if ! ( {{ harness_pre_push_slow_command }} ) >"$LOG" 2>&1; then
+        fail "suite cara vermelha. Últimas linhas:
+$(tail -12 "$LOG" | sed 's/^/    /')"
+    fi
+    printf 'pre-push: suite cara OK\n' >&2
+else
+    printf 'pre-push: pré-requisito da suite cara indisponível, PULADA\n' >&2
+fi
+{%- endif %}
+
+printf 'pre-push: gates verdes.\n' >&2
+exit 0

@@ -1,0 +1,249 @@
+{#-
+  Fonte única (H3/A1, orions-belt) — ver comentário completo em
+  ../grill-me/SKILL.md.jinja (mesmo mecanismo de include).
+
+  PORTADA de um projeto-doador na rodada 2026-07-31, sem nenhuma adaptação
+  necessária: o conteúdo já era 100% genérico (zero referência a produto,
+  stack ou path do doador). Complementa `master-plan` <-> `prova-de-conclusao`:
+  esta escreve o plano que OUTRO executor cumpre; aquela prova que ele foi
+  cumprido. O recurso PLAN_TEMPLATE.md do original foi dobrado para dentro
+  desta página (seção 7) — skill de arquivo único é o padrão das demais
+  skills-shared, e o executor se perde navegando entre arquivos.
+-#}
+---
+name: master-plan
+description: >-
+  Gera um plano de execução à prova de falhas, hiperdetalhado e zero-ambiguidade,
+  para ser executado por um modelo executor mais fraco e barato (ou por um
+  agente/humano júnior sem contexto) sem que ele precise raciocinar, inferir ou
+  decidir. Use quando o pedido for "criar um plano para outro modelo executar",
+  "master plan", "plano à prova de falhas", "quebrar a tarefa para outro agente
+  rodar" ou "handoff de execução". O planejador faz TODO o raciocínio agora; o
+  executor só transcreve.
+---
+
+
+# Master Plan — Plano à Prova de Falhas para Executor Fraco
+
+Você (o **planejador** — o modelo forte) está produzindo um plano que será executado por um **modelo executor mais fraco e barato** (ou por um agente/humano júnior sem contexto do projeto). Esta skill define COMO escrever esse plano. Leia inteira antes de começar.
+
+## 0. Princípio Único
+
+**Todo o raciocínio acontece AGORA, por você. O executor não raciocina — ele transcreve.**
+
+O executor falha quando precisa: inferir, escolher, completar lacunas, lembrar de contexto anterior, ou decidir entre alternativas. Cada uma dessas operações no plano é um ponto de falha. O plano perfeito tem **zero decisões delegadas ao executor**. Se em qualquer passo o executor precisa pensar "qual será...?", "onde fica...?", "será que...?", "acho que...", o plano falhou e a culpa é sua, não dele.
+
+Métrica de qualidade do plano: **um humano júnior sem contexto nenhum do projeto conseguiria executar cada passo mecanicamente e chegar ao resultado correto.** Se não conseguiria, o passo está subespecificado.
+
+## 1. Pré-Voo Obrigatório (você faz ANTES de escrever o plano)
+
+NUNCA escreva o plano com placeholders, suposições ou "encontre o arquivo X". Antes de redigir UMA linha do plano, colete os fatos concretos. O executor não vai explorar — você explora por ele e cola os resultados no plano.
+
+Checklist de pré-voo:
+
+1. **Leia os arquivos reais** que serão tocados. Cole no plano os trechos exatos (com número de linha) que serão alterados. Nada de "a função de login" — cole a função.
+2. **Resolva todos os caminhos absolutos.** Nada de "o componente de botão"; é `frontend/src/components/ui/Button.tsx`. Confirme que cada caminho existe (Glob/Read).
+3. **Verifique strings exatas.** Para cada edição, o `old_string` precisa ser literal e único no arquivo. Você valida a unicidade agora; o executor não tem como.
+4. **Resolva versões, nomes de pacote, comandos exatos.** `pnpm add zod@3.23.8`, não "instale o zod". Confirme o gerenciador de pacotes real do projeto (`package.json`, lockfile).
+5. **Rode as queries/leituras que decidem o caminho.** Se o plano depende de um valor do banco ou de um flag, descubra o valor agora e escreva o caminho único resultante. Não deixe a bifurcação para o executor.
+6. **Descubra como verificar sucesso.** Para cada passo precisa existir um comando objetivo (`pnpm tsc --noEmit`, `pytest path::test`, `grep`, etc.) cuja saída esperada você escreve no plano.
+
+Se faltar acesso para resolver algum desses pontos, **declare a lacuna no topo do plano** como pré-condição que o humano deve resolver — nunca a empurre para o executor.
+
+## 2. Modos de Falha do Executor → Mitigação Obrigatória
+
+Para cada fraqueza conhecida do executor, o plano JÁ deve conter o antídoto:
+
+| Falha do executor | Mitigação que o plano DEVE ter |
+|---|---|
+| Inferir caminho/arquivo errado | Caminho absoluto literal em todo passo. Nunca "o arquivo de config". |
+| Inventar conteúdo (alucinar) | Forneça o conteúdo completo a colar. Não "adicione validação"; cole o bloco exato. |
+| `old_string` não casa / casa em vários lugares | Cole o `old_string` verbatim com contexto suficiente para ser único. Você verifica unicidade no pré-voo. |
+| Perder contexto entre passos | Cada passo é autocontido. Repita o que precisar. Proibido "como no passo anterior". |
+| Escolher entre alternativas | Elimine a escolha. Se há bifurcação, vire tabela de decisão fechada (Seção 4) sem julgamento. |
+| Pular verificação e seguir com erro | Checkpoint obrigatório após cada passo com comando + saída esperada (Seção 5). |
+| Improvisar quando algo foge do plano | Protocolo PARE (Seção 6): ao primeiro desvio, parar e reportar, nunca "consertar". |
+| "etc.", "e assim por diante", "similar" | PROIBIDO no plano. Enumere tudo. Se são 7 arquivos, liste os 7. |
+| Ordem errada de operações | Passos numerados, estritamente sequenciais, com dependência explícita. |
+| Comando shell de outra plataforma | Use a shell/SO reais do projeto. No Windows, dê o comando PowerShell exato; no POSIX, o bash exato. |
+
+## 3. Anatomia de um Passo (formato obrigatório)
+
+Cada passo do plano usa EXATAMENTE esta estrutura. Sem exceções.
+
+```
+### Passo N — <verbo imperativo + objeto concreto>
+
+OBJETIVO (1 frase): o que este passo entrega.
+
+PRÉ-CONDIÇÃO (verificável): comando a rodar + saída exata esperada que prova
+que o passo anterior funcionou e que é seguro começar este.
+
+AÇÃO: instrução única e literal.
+  - Arquivo: <caminho absoluto>
+  - Operação: criar | editar | rodar comando | deletar
+  - Se EDITAR — old_string (verbatim, único) e new_string (verbatim, completo):
+    <bloco old>
+    <bloco new>
+  - Se CRIAR — conteúdo integral do arquivo, do começo ao fim.
+  - Se COMANDO — a linha exata, copiável, com a shell certa.
+
+RESULTADO ESPERADO: o que deve acontecer (arquivo criado, X linhas mudadas,
+comando sai com código 0 e imprime "<texto literal>").
+
+CHECKPOINT (obrigatório): comando de verificação + saída exata esperada.
+  Se a saída bater → vá para o Passo N+1.
+  Se NÃO bater → vá para o protocolo PARE (Seção 6). NÃO tente consertar.
+```
+
+Regra de ouro do passo: **uma ação por passo.** "Crie o arquivo e importe ele em outro" são dois passos. Atomicidade reduz a superfície de erro e localiza a falha.
+
+## 4. Tabelas de Decisão (eliminam julgamento)
+
+Sempre que o caminho dependa de uma condição, NÃO escreva "se fizer sentido" ou "dependendo do caso". Escreva uma tabela fechada e exaustiva. O executor só consulta a linha — não julga.
+
+```
+Observe a saída do CHECKPOINT do Passo 3 e siga EXATAMENTE:
+
+| Saída observada (literal)                  | Próxima ação              |
+|--------------------------------------------|---------------------------|
+| "0 errors"                                 | Vá para o Passo 4         |
+| Contém "Cannot find module 'zod'"          | Vá para o Passo 3-FIX-A   |
+| Contém "TS2304"                            | Vá para o Passo 3-FIX-B   |
+| Qualquer outra coisa                       | Protocolo PARE (Seção 6)  |
+```
+
+Toda tabela DEVE ter a linha "Qualquer outra coisa → PARE". Casos não previstos nunca viram improviso.
+
+## 5. Checkpoints — Verificação Objetiva
+
+Proibido checkpoint subjetivo ("verifique se ficou bom", "confira se está correto"). Todo checkpoint é um comando cuja saída você previu e escreveu. Tipos válidos:
+
+- **Compilação/tipos:** `pnpm tsc --noEmit` → esperado: `Found 0 errors`.
+- **Teste:** `pytest tests/test_x.py::test_y -q` → esperado: `1 passed`.
+- **Presença de string:** `grep -n "export const Foo" path/file.ts` → esperado: linha contendo `export const Foo`.
+- **Lint:** comando de lint real do projeto → esperado: exit 0.
+- **Execução:** rodar o script → esperado: imprime `<texto literal>`.
+
+Se um passo não tem como ser verificado objetivamente, divida-o até que tenha, ou marque-o como "verificação manual pelo humano" — nunca peça julgamento ao executor.
+
+## 6. Protocolo PARE (anti-improviso)
+
+Inclua este bloco LITERAL no topo do plano, para o executor:
+
+```
+PROTOCOLO PARE — leia antes de começar.
+
+Você é o executor. Você NÃO improvisa, NÃO conserta, NÃO interpreta.
+Se em QUALQUER passo:
+  - um checkpoint não bater com a saída esperada, OU
+  - um old_string não for encontrado, OU
+  - um comando der erro não previsto na tabela de decisão, OU
+  - você ficar em dúvida sobre qualquer coisa,
+ENTÃO PARE IMEDIATAMENTE. Não execute o próximo passo. Reporte assim:
+
+  PARADO NO PASSO <N>
+  Esperado: <cole a saída esperada do plano>
+  Obtido: <cole a saída real, verbatim>
+  Última ação executada: <descreva>
+
+Não tente alternativas. Não pule o passo. Não continue. Aguarde instrução.
+```
+
+## 7. Cabeçalho do Plano (obrigatório, antes do Passo 1)
+
+```
+# PLANO DE EXECUÇÃO — <título>
+
+CONTEXTO MÍNIMO (só o necessário): <2-4 frases. O executor não precisa do "porquê",
+precisa do "o quê". Dê só o indispensável para os passos fazerem sentido.>
+
+PRÉ-REQUISITOS DO AMBIENTE (o humano confirma ANTES de entregar ao executor):
+  - <ferramenta/versão/credencial/acesso> — como confirmar: <comando> → esperado: <saída>
+  - ...
+
+REGRAS GLOBAIS PARA O EXECUTOR:
+  1. Execute os passos EM ORDEM. Nunca pule, nunca reordene.
+  2. Após cada passo, rode o CHECKPOINT antes de avançar.
+  3. Em qualquer desvio, aplique o PROTOCOLO PARE.
+  4. Não rode nada que não esteja escrito no plano.
+  5. Não otimize, não "melhore", não refatore além do pedido.
+
+<bloco PROTOCOLO PARE da Seção 6 colado aqui>
+```
+
+## 8. Onde Escrever o Plano
+
+Escreva o plano como **arquivo** (ex.: `MASTER_PLAN.md` na raiz do projeto ou pasta indicada), não só no chat — o executor lê o arquivo. Se o plano for longo, mantenha-o num único arquivo sequencial (o executor se perde com navegação entre arquivos). Um arquivo, de cima para baixo, passo a passo.
+
+## 9. Autorevisão Antes de Entregar (você roda contra si mesmo)
+
+Antes de declarar o plano pronto, responda SIM a todas. Qualquer NÃO → corrija antes de entregar.
+
+- [ ] Todo caminho de arquivo é absoluto e foi confirmado que existe?
+- [ ] Todo `old_string` foi colado verbatim e é único no arquivo alvo?
+- [ ] Todo conteúdo a criar está completo (não "...", não "resto igual")?
+- [ ] Nenhum passo contém "etc.", "e assim por diante", "similar ao anterior", "se fizer sentido", "provavelmente", "deve ser"?
+- [ ] Todo passo tem checkpoint objetivo com saída esperada literal?
+- [ ] Toda bifurcação é tabela de decisão fechada com linha "Qualquer outra coisa → PARE"?
+- [ ] Cada passo faz UMA ação?
+- [ ] Os comandos são da shell/SO reais do projeto?
+- [ ] O protocolo PARE está no topo?
+- [ ] Um júnior sem contexto executaria cada passo mecanicamente sem perguntar nada?
+
+## 10. Exemplo — Passo Ruim vs. Passo Bom
+
+**RUIM (delega raciocínio ao executor):**
+> Passo 2: Adicione validação de schema no endpoint de usuários usando zod, como fizemos nos outros endpoints.
+
+Problemas: qual arquivo? qual schema? "como nos outros" exige o executor inferir um padrão. Sem checkpoint.
+
+**BOM (zero ambiguidade):**
+```
+### Passo 2 — Adicionar validação zod no corpo do POST /users
+
+OBJETIVO: validar o body de POST /users com um schema zod antes de inserir.
+
+PRÉ-CONDIÇÃO: rode `grep -n "zod" backend/package.json`
+  → esperado: linha contendo "zod": "3.23.8". Se não aparecer, PARE.
+
+AÇÃO:
+  Arquivo: C:\proj\backend\src\routes\users.ts
+  Operação: editar
+  old_string (verbatim, único):
+    router.post('/users', async (req, res) => {
+      const body = req.body;
+  new_string (verbatim, completo):
+    import { z } from 'zod';
+
+    const createUserSchema = z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+    });
+
+    router.post('/users', async (req, res) => {
+      const body = createUserSchema.parse(req.body);
+
+RESULTADO ESPERADO: arquivo editado; o import e o schema passam a existir.
+
+CHECKPOINT: rode `pnpm tsc --noEmit` em C:\proj\backend
+  → esperado: "Found 0 errors."
+  Tabela:
+  | Saída                          | Ação              |
+  |--------------------------------|-------------------|
+  | "Found 0 errors."              | Vá para o Passo 3 |
+  | Contém "Cannot find name 'z'"  | Passo 2-FIX-A     |
+  | Qualquer outra coisa           | PROTOCOLO PARE    |
+```
+
+## 11. Resumo Operacional
+
+1. **Pré-voo:** explore e resolva TODOS os fatos concretos você mesmo (Seção 1).
+2. **Escreva o cabeçalho** com pré-requisitos, regras globais e o PROTOCOLO PARE (Seção 7).
+3. **Escreva passos atômicos** no formato da Seção 3 — um por ação, cada um com checkpoint.
+4. **Feche toda bifurcação** em tabela de decisão (Seção 4) com linha "Qualquer outra coisa → PARE".
+5. **Autorevise** contra o checklist da Seção 9. Corrija todo NÃO.
+6. **Grave em arquivo único** (Seção 8) e entregue.
+
+O esqueleto pronto para preencher é a Seção 7 desta página: cabeçalho, pré-requisitos,
+regras globais e o PROTOCOLO PARE, nessa ordem, seguidos dos passos da Seção 3.
