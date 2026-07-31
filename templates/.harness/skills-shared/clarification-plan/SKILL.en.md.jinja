@@ -143,11 +143,30 @@ the file name), the executed query, or the tool + query. Gate by decision class:
 - A **policy/preference** decision ⇒ `none — inference` is legitimate, but the option is born
   marked as unverified.
 
+## Canon check — a decision already made is withdrawn, not asked
+
+Before writing any D[n], grep the TARGET repo's canonical decision sources for
+the topic — grammar/law files, ADRs, schema docs, instruction files, saved
+memories. Three verdicts, recorded in the mandatory `**Canon:**` line:
+
+- **DECIDES** — the canon already answers it. The D[n] is WITHDRAWN with the
+  citation (path:Line); asking the user a decision they already made and
+  canonized is the failure this rule exists to kill (measured 2026-07-31: a
+  "property in the token name?" question whose exact example was canonized in
+  the grammar's own examples).
+- **SILENT** — canon says nothing; the decision is genuinely open.
+- **CONFLICTS** — canon sources disagree; the D[n] becomes "which source
+  wins", citing both.
+
+A pending decision inherited from a session summary or an old plan is a
+HYPOTHESIS to re-verify, never an open decision by default.
+
 ## Mandatory format
 
 ```md
 ### D[n] — R[x]/[related item]: [concrete question of the decision]
 
+**Canon:** [which canonical docs were grepped for this decision (grammar/law/ADR/schema of the target repo) and the verdict: DECIDES (cite path:Line and withdraw the question) · SILENT · CONFLICTS]
 **Evidence:** [verifiable locator: path:Line · executed query · tool+query — "none, inference" only for policy/preference decisions]
 **Unblocks:** [what stays blocked while this decision is not made]
 

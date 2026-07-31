@@ -80,6 +80,7 @@ DECISION_SIGNALS = [
 # harness pt usam os labels traduzidos; o gate nao pode punir nenhum dos dois.
 D_BLOCK = re.compile(r"^#{2,4}\s*D[-\d]", re.MULTILINE)
 REQUIRED_ELEMENTS = {
+    "Canon": r"\*\*C[a]?non",
     "Comportamento/Behavior": r"\*\*(?:Comportamento|Behavior)",
     "Exemplo aplicado bom/Applied good example": r"\*\*(?:Exemplo aplicado bom|Applied good example)",
     "Exemplo aplicado ruim/Applied bad example": r"\*\*(?:Exemplo aplicado ruim|Applied bad example)",
@@ -89,6 +90,7 @@ REQUIRED_ELEMENTS = {
 
 FORMATO = (
     "### D1 — [pergunta concreta da decisao]\n\n"
+    "**Canon:** [docs canonicos grepados + veredito: DECIDE (retirar) / SILENTE / CONFLITA]\n"
     "**Evidencia:** [path + Linha N / query / ferramenta+consulta]\n"
     "**Destrava:** [o que fica bloqueado sem esta decisao]\n\n"
     "**Opcao A — [nome]**\n"
