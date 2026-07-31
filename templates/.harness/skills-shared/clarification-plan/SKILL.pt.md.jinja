@@ -145,11 +145,30 @@ o nome do arquivo), a query executada, ou a ferramenta + consulta. Gate por clas
 - Decisão de **política/preferência** ⇒ `nenhuma — inferência` é legítimo, mas a opção nasce
   marcada como não verificada.
 
+## Checagem de canon — decisão já tomada é RETIRADA, não perguntada
+
+Antes de escrever qualquer D[n], grep nas fontes canônicas de decisão do repo
+ALVO — gramática/lei, ADRs, schema, arquivos de instrução, memórias salvas.
+Três veredictos, registrados na linha obrigatória `**Canon:**`:
+
+- **DECIDE** — o canon já responde. O D[n] é RETIRADO com a citação
+  (path:Linha); perguntar ao dono decisão que ele já tomou e canonizou é a
+  falha que esta regra existe para matar (medido 2026-07-31: pergunta
+  "propriedade no nome do token?" cujo exemplo exato era exemplo canônico da
+  própria gramática).
+- **SILENTE** — o canon não trata; a decisão é genuinamente aberta.
+- **CONFLITA** — fontes canônicas divergem; o D[n] vira "qual fonte vence",
+  citando as duas.
+
+Pendência herdada de resumo de sessão ou plano antigo é HIPÓTESE a
+re-verificar, nunca decisão aberta por default.
+
 ## Formato obrigatório
 
 ```md
 ### D[n] — R[x]/[item relacionado]: [pergunta concreta da decisão]
 
+**Canon:** [quais docs canônicos foram grepados para esta decisão (gramática/lei/ADR/schema do repo alvo) e o veredito: DECIDE (citar path:Linha e RETIRAR a pergunta) · SILENTE · CONFLITA]
 **Evidência:** [localizador conferível: path:Linha · query executada · ferramenta+consulta — "nenhuma, inferência" só em decisão de política/preferência]
 **Destrava:** [o que fica bloqueado enquanto esta decisão não sai]
 
