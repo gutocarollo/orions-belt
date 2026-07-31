@@ -65,9 +65,9 @@ do seu projeto**, não para um path literal de outro repo.
 
 | Tipo | Responsivo (eixo + ferramenta) | Design-system (o que resolver) | NUNCA |
 |------|--------------------------------|---------------------------------|-------|
-| **Shell de página / rota** | VIEWPORT — breakpoints/hook de device; sem `transform:scale` novo no shell | background/superfície do shell + token de cor do projeto | escalar a app inteira com `transform`; breakpoint p/ micro-layout |
+| **Shell de página / rota** | VIEWPORT — breakpoints/hook de device; sem `transform:scale` novo no shell | background do shell + token de cor do projeto | escalar a app inteira com `transform`; breakpoint p/ micro-layout |
 | **Toolbar / barra de controles** | CONTENT — `@utility cluster` (flex-wrap); denso + espaço vertical escasso → lista com overflow + menu "···" | padrão de trigger/ícone animado canônico do projeto | encolher fonte/largura p/ forçar 1 linha (corta conteúdo) |
-| **Card standalone (KPI/métrica)** | CONTAINER — `container-type:inline-size` + `clamp(rem+cqi)` p/ texto/padding | superfície de card (camada, shadow, borda) do design-system | `clamp` ad-hoc sem token de tamanho |
+| **Card standalone (KPI/métrica)** | CONTAINER — `container-type:inline-size` + `clamp(rem+cqi)` p/ texto/padding | camada de card (shadow, borda) do design-system | `clamp` ad-hoc sem token de tamanho |
 | **Card grid / dashboard** | INTRINSIC — `grid repeat(auto-fit,minmax(...))` ou colunas fixas conhecidas; `h-full min-h-0` | grid-layout + regra de preenchimento de altura do card | `flex-1` num host block (inerte sem `display:flex` ancestral); `auto-fit` quando N já é conhecido |
 | **Data table** | CONTENT — `overflow-x-auto` + `min-w-0`; reveal por `grid 0fr/1fr` lazy | row-divider, paginação, expand lazy do design-system | `scaleY`/`height:auto` no expand (não anima); border direto em `<tr>` |
 | **Dropdown/combo/popover (portal)** | CONTENT/VERTICAL — flip de posição; altura `dvh`+`overflow` | animação de reveal canônica do projeto — **use o componente de dropdown/menu já existente no seu design-system**, não reinvente | `scaleY` no reveal (distorce texto); fechar sem animação; dropdown atrás de modal (sem z-index correto) |

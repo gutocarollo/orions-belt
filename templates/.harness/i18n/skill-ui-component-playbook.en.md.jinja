@@ -65,9 +65,9 @@ component/rule**, not to a literal path of another repo.
 
 | Type | Responsive (axis + tool) | Design-system (what to solve) | NEVER |
 |------|--------------------------------|---------------------------------|-------|
-| **Page / route shell** | VIEWPORT — breakpoints/device hook; no new `transform:scale` on the shell | shell background/surface + project color token | scale the whole app with `transform`; breakpoint for micro-layout |
+| **Page / route shell** | VIEWPORT — breakpoints/device hook; no new `transform:scale` on the shell | shell background + project color token | scale the whole app with `transform`; breakpoint for micro-layout |
 | **Toolbar / control bar** | CONTENT — `@utility cluster` (flex-wrap); dense + scarce vertical space → list with overflow + "···" menu | project's canonical animated trigger/icon pattern | shrink font/width to force 1 line (cuts content) |
-| **Standalone card (KPI/metric)** | CONTAINER — `container-type:inline-size` + `clamp(rem+cqi)` for text/padding | design-system's card surface (layer, shadow, border) | ad-hoc `clamp` without a size token |
+| **Standalone card (KPI/metric)** | CONTAINER — `container-type:inline-size` + `clamp(rem+cqi)` for text/padding | design-system's card layer (shadow, border) | ad-hoc `clamp` without a size token |
 | **Card grid / dashboard** | INTRINSIC — `grid repeat(auto-fit,minmax(...))` or fixed known columns; `h-full min-h-0` | grid-layout + card height-fill rule | `flex-1` on a block host (inert without a `display:flex` ancestor); `auto-fit` when N is already known |
 | **Data table** | CONTENT — `overflow-x-auto` + `min-w-0`; reveal via `grid 0fr/1fr` lazy | design-system's row-divider, pagination, lazy expand | `scaleY`/`height:auto` on the expand (does not animate); border directly on `<tr>` |
 | **Dropdown/combo/popover (portal)** | CONTENT/VERTICAL — position flip; height `dvh`+`overflow` | project's canonical reveal animation — **use your design-system's existing dropdown/menu component**, don't reinvent | `scaleY` on the reveal (distorts text); close without animation; dropdown behind a modal (without correct z-index) |

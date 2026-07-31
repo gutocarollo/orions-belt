@@ -3,7 +3,7 @@ name: classname-token-workflow
 description: >
   Use to mine, cluster, audit, and migrate repeated className/utility-class
   in {{ project_name }} without over-abstraction. Runs the AST/JSX miner
-  in `.harness/lib/`, interprets semantic clusters, defines the
+  in `.harness/lib/`, interprets role clusters, defines the
   token/component/hook contract, and requires sequential migration with visual evidence.
 ---
 
@@ -71,7 +71,7 @@ alias resolution, relative resolution still works).
 Zero-dependency variant (no `typescript` in `node_modules`, regex-only,
 no structural JSX/cluster context): `node .harness/lib/classname-miner.mjs
 --root {{ harness_web_app_dir }}` — same root/out flags; uses only text
-n-grams, not semantic entities/clusters. Prefer the v2 above whenever
+n-grams, not role entities/clusters. Prefer the v2 above whenever
 `typescript` is available — v1 is the fallback.
 
 ### 2. Read the report first
@@ -80,7 +80,7 @@ n-grams, not semantic entities/clusters. Prefer the v2 above whenever
 sed -n '1,180p' docs/design-system/sources/classname-token-mining-v2.md
 ```
 
-The report has: top n-grams by raw savings, top semantic clusters,
+The report has: top n-grams by raw savings, top role clusters,
 high-signal clusters and (if applicable to the project) sidebar evidence —
 each cluster already comes with `decision`, `confidenceScore`, `blockingReasons` and
 `recommendedSplitBy` computed heuristically by the miner.
