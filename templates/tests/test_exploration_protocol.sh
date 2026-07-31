@@ -59,6 +59,29 @@ assert "clarification gate ships on by default (no project input needed)" \
 assert "clarification skill ships unconditionally" \
   '[ -f "$OFF/.claude/skills/clarification-plan/SKILL.md" ]'
 
+# Decision-report contract (2026-07-31 donor sync): the skill must carry the report shape —
+# recommendation per D[n], verifiable evidence line, measured-vs-estimated progress — and the
+# generated §6 must publish the same template, because the prose path (a decision asked in the
+# final answer, no tool call) is exactly what the AskUserQuestion gate declares it cannot see.
+assert "clarification skill carries the mandatory recommendation (en)" \
+  'grep -q "Recommend: Option" "$OFF/.claude/skills/clarification-plan/SKILL.md"'
+assert "clarification skill carries the evidence line with the class gate (en)" \
+  'grep -q "^\*\*Evidence:\*\*" "$OFF/.claude/skills/clarification-plan/SKILL.md"'
+assert "clarification skill separates measured from estimated progress (en)" \
+  'grep -q "MEASURED:" "$OFF/.claude/skills/clarification-plan/SKILL.md"'
+assert "generated AGENTS publishes the report contract in section 6 (en)" \
+  'grep -q "Recommend: Option" "$OFF/AGENTS.md"'
+
+# Same contract in the pt variant — a pt-only regression must not ship silently.
+PTL="$WORK/ptlang"
+render "$PTL" --data use_claude=true --data harness_language=pt || exit 1
+assert "clarification skill carries the mandatory recommendation (pt)" \
+  'grep -q "Recomendo: Opção" "$PTL/.claude/skills/clarification-plan/SKILL.md"'
+assert "clarification skill carries the evidence line (pt)" \
+  'grep -q "^\*\*Evidência:\*\*" "$PTL/.claude/skills/clarification-plan/SKILL.md"'
+assert "generated AGENTS publishes the report contract in section 6 (pt)" \
+  'grep -q "Recomendo: Opção" "$PTL/AGENTS.md"'
+
 # =============================================================================
 # 2. Fully configured — every phase present, both runtimes, parameters interpolated.
 # =============================================================================

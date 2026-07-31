@@ -336,6 +336,9 @@ For EACH decision with multiple options, mandatorily create a block in this form
 ```
 ### D[n] — R[x]/[related item]: [concrete question of the decision]
 
+**Evidence:** [verifiable locator: path:Line · executed query · tool+query — "none, inference" only for policy/preference decisions]
+**Unblocks:** [what stays blocked while this decision is not made]
+
 **Option A — [option name]**
 
 - **Behavior:** if we choose this option, the system/process will do [concrete effect].
@@ -349,9 +352,13 @@ For EACH decision with multiple options, mandatorily create a block in this form
 - **Good applied example:** ...
 - **Bad applied example:** ...
 - **When to choose:** ...
+
+**Recommend: Option [X]** — because [objective criterion + data].
 ```
 
 If no individual option is good, propose an **Option C**, a combination, or a hybrid strategy, explaining why A and B in isolation are insufficient.
+
+The set of D[n] blocks forms a **single decision report**, never bare questions scattered in prose: it opens with progress in three SEPARATE lines (`MEASURED:` with the source cited — no countable denominator means writing `not applicable`, never fabricating a %; `DECISIONS:` countable; `JOURNEY:` always labelled `ESTIMATED` with its basis declared), inventories ALL decisions blocking execution to the end (with the countable source of the enumeration), and closes every block with `**Recommend: Option X**` — recommending is not deciding. Evidence asserting state/code/number requires a verifiable locator and FORBIDS `inference`; a policy decision may declare `none — inference`. Full contract and numeric arguments: `clarification-plan` skill.
 
 Mandatory definition of "real, applied example": cite an entity, flow, table, column, command, file, lead, message, endpoint, job, datum, screen, or real scenario from the analyzed context. It cannot be a generic analogy.
 

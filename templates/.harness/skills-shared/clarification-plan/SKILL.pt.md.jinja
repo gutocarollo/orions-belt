@@ -21,6 +21,9 @@ description: >-
   exemplo aplicado bom, exemplo aplicado ruim, quando escolher, e terceira via
   quando A/B forem insuficientes. Aceita argumentos numéricos para a quantidade
   de exemplos por opção (ex.: "4" = 4 bons + 4 ruins; "4 2" ou "bons=4 ruins=2").
+  A saída é um relatório único: progresso medido vs estimado, inventário de
+  TODAS as decisões que travam a execução até o fim, evidência conferível por
+  decisão e recomendação explícita.
 ---
 
 # Clarification Plan
@@ -90,10 +93,65 @@ consequências práticas.
 Antes de pedir a escolha, explique o comportamento concreto de cada opção e mostre exemplos reais
 aplicados ao contexto. O objetivo é NORTEAR a escolha, não transferir ambiguidade crua ao usuário.
 
+## Entregável — UM relatório, com progresso, inventário completo e recomendação
+
+A saída desta skill é um **relatório único de decisão**, nunca uma pergunta solta no meio da
+prosa. Três partes, nesta ordem:
+
+**1. Progresso — onde estamos.** Três linhas SEPARADAS, nunca fundidas num número só:
+
+- `MEDIDO:` — o que saiu de comando/query rodados AGORA (contagem de teste, linha de ledger,
+  `SELECT`), com a fonte citada. Sem denominador contável nesta sessão ⇒ escrever
+  `MEDIDO: não aplicável — sem denominador`, nunca fabricar (a §10 das instruções geradas
+  proíbe % sem prova).
+- `DECISÕES:` — quantas escolhas do usuário estão abertas / quantas a fonte contável previa.
+- `JORNADA:` — o % da jornada até o objetivo final, sempre rotulado `ESTIMADO`, com a base da
+  estimativa declarada em uma linha.
+
+Número medido nesta sessão nunca se mistura com estimativa; "não medi agora" aparece como dado,
+não desaparece.
+
+**2. Decisões — TODAS as que travam a execução até o fim.** Não é "as duas que sobraram do
+último passo": é o inventário das escolhas que faltam do estado atual até o objetivo concluído.
+Enumerar a partir de fonte contável (itens abertos do plano, pendências registradas, falhas do
+run, TODO do código) e declarar a disposição — `N decisões encontradas em <fonte>`. Risco de
+decisão não vista se declara; não se omite.
+
+**3. Recomendação — obrigatória em CADA D[n].** Todo bloco fecha com
+`**Recomendo: Opção X** — porque [critério objetivo + dado]`. Listar opções sem escolher devolve
+a ambiguidade crua que a Regra central proíbe. Recomendar não é decidir: o usuário pode
+contrariar.
+
+## Procedência da evidência — cada D[n] diz de onde veio
+
+Opção sem fonte primária é opinião. O contexto vem das ferramentas de visão global do projeto
+(baratas em contexto), não de leitura de arquivo às cegas — na ordem do protocolo de exploração,
+quando instalado:
+
+- **doc canônico pela rota** — índice → log temporal → pendências → página de referência do
+  subsistema. Grafo de código não indexa Markdown: doc se acha pela rota, nunca por busca em
+  grafo.
+- **código** — grafo de código **em paralelo** com `grep` do mesmo símbolo.
+- **arquitetura** — grafo de arquitetura/knowledge graph, no escopo que ele declara.
+- **estado vivo** — o MCP de banco do projeto; erro de permissão é endpoint/papel errado, nunca
+  "ausência de dado".
+
+Cada D[n] carrega a linha `**Evidência:**` com um localizador CONFERÍVEL: `path:Linha` (nunca só
+o nome do arquivo), a query executada, ou a ferramenta + consulta. Gate por classe de decisão:
+
+- Decisão que afirma **estado, comportamento de código ou número** ⇒ localizador conferível é
+  OBRIGATÓRIO e `inferência` é PROIBIDO — rode a query / abra o símbolo ANTES de escrever o
+  bloco.
+- Decisão de **política/preferência** ⇒ `nenhuma — inferência` é legítimo, mas a opção nasce
+  marcada como não verificada.
+
 ## Formato obrigatório
 
 ```md
 ### D[n] — R[x]/[item relacionado]: [pergunta concreta da decisão]
+
+**Evidência:** [localizador conferível: path:Linha · query executada · ferramenta+consulta — "nenhuma, inferência" só em decisão de política/preferência]
+**Destrava:** [o que fica bloqueado enquanto esta decisão não sai]
 
 **Opção A — [nome da opção]**
 
@@ -108,6 +166,8 @@ aplicados ao contexto. O objetivo é NORTEAR a escolha, não transferir ambiguid
 - **Exemplo aplicado bom:** ...
 - **Exemplo aplicado ruim:** ...
 - **Quando escolher:** ...
+
+**Recomendo: Opção [X]** — porque [critério objetivo + dado].
 ```
 
 Não há limite artificial de decisões. Em auditorias longas, se houver D1-D12, escreva D1-D12.
