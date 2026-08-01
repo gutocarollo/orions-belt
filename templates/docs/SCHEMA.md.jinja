@@ -81,6 +81,45 @@ scope: <categoria>           # design-system | architecture | planos | auditoria
 `superseded` (substituído — candidato a deleção), `historico` (registro imutável de algo concluído),
 `proposta` (ainda não decidido). **Nunca marque `canon` um plano que o código atual não confirma.**
 
+## 3.1. Status do ITEM (`{{ harness_docs_dir }}/pending/`) — o que o §3 não classifica
+
+O `status` do §3 classifica o **documento**. Ele não tem vocabulário para o
+**item**: um doc `active` pode carregar vinte pendências e a wiki não vê
+nenhuma. Sem isso, as pendências acabam em prosa espalhada pelos planos e num
+documento de situação escrito à mão, que nasce velho porque nada o obriga a
+acompanhar o código — e toda sessão que precisa saber "o que falta" reabre os
+planos e reconstrói a lista.
+
+**Uma pendência = um arquivo** `{{ harness_docs_dir }}/pending/<id>.md`, `<id>`
+em kebab-case, com frontmatter próprio:
+
+```yaml
+---
+title: frase imperativa curta — o que precisa acontecer
+status: aberto | bloqueado          # resolver NÃO é mudar status, é apagar o arquivo
+quem_resolve: dono | agente
+severidade: bloqueante | alta | media | baixa
+bloqueia: <o que trava enquanto isto não fecha, ou "nada">
+fonte: <path relativo à raiz>:<linha>
+citacao: "trecho textual da fonte que sustenta o item"
+updated: YYYY-MM-DD
+---
+```
+
+Duas regras, e a razão de cada uma:
+
+- **Resolver é APAGAR o arquivo**, não mudar o status. Backlog que acumula item
+  fechado deixa de ser lido. Coerente com o §5 (*git é o arquivo*).
+- **Todo item aponta para uma fonte e cita o texto dela.**
+  `python3 .harness/lib/pending_index.py --check` confere que a citação ainda
+  existe ali; quando a fonte muda, o item vira **re-auditoria** em vez de
+  continuar sendo afirmado. Backlog cheio de item já resolvido é pior que
+  backlog nenhum — ele faz o agente perguntar ao dono o que a lei já respondeu.
+
+`{{ harness_docs_dir }}/pending/index.md` é **gerado** pelo mesmo script (sem
+`--check`); editar à mão é perda de trabalho. Projeto que não usa a convenção
+não tem a pasta, e o guard passa em silêncio — ele só cobra quem adotou.
+
 ## 4. Indexação TEMPORAL (norma, não opção)
 
 Todo `.md` não-estrutural aparece em **duas** listas: no `index.md` da sua categoria (por conteúdo/status) e
@@ -94,6 +133,9 @@ passa a ser o mapa interno. A dupla-indexação é o que desambigua: diante de d
 - **Ingest** (doc/decisão nova): (1) nomeie pela classe (§2); (2) frontmatter (§3); (3) 1 entrada no
   `log.md` de repo + no `index.md` da categoria; (4) se muda a verdade atual, atualize a página curada e
   marque a antiga `superseded`; (5) rode o lint.
+- **Backlog**: `python3 .harness/lib/pending_index.py --check` — o índice de `pending/` em dia
+  E o ponteiro (`fonte`+`citacao`) de cada item ainda apontando para o que ele diz (§3.1). Sem
+  `--check` ele regenera `pending/index.md`. Projeto sem a pasta passa em silêncio.
 - **Query**: comece pelo `index.md` da categoria (verdade atual). Só desça a fontes brutas para arqueologia.
 - **Lint**: `python3 .harness/lib/docs_wiki_lint.py` — todo `.md`/asset citado no índice+log (FAIL) + naming §2
   (WARN, migração incremental; `--strict-naming` para bloquear) + índice vivo linkando `_arquivo/`
