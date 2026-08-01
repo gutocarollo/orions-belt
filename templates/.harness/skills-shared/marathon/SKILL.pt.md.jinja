@@ -12,6 +12,13 @@
   (H3/A1), instruiria o agente a `mkdir -p .claude/runs/...` num projeto que
   pode nem ter pasta `.claude/` (use_codex=true/use_claude=false) — corrigido
   para usar `{{ harness_runs_dir }}` em todo lugar, igual ao resto do stack.
+
+  CROSS-REPO (medido 2026-08-01, relato de campo de um install downstream):
+  o `register` deixou de ser opcional. Sem ele, uma maratona cujo diretório
+  vive FORA do diretório-projeto da sessão (`$CLAUDE_PROJECT_DIR`) é invisível
+  para os três hooks — o gate não bloqueia, o reinject não reinjeta, a
+  maratona "sempre para" em silêncio. O mecanismo (marathon-locate.sh) está
+  documentado no engine em engine/hooks/marathon-locate.sh.
 -#}
 ---
 name: marathon
@@ -38,7 +45,19 @@ mensagens entre sessões).
 SLUG=<kebab-curto-da-missao>   # ex: migracao-tokens
 mkdir -p {{ harness_runs_dir }}/$SLUG
 echo "$SLUG" > {{ harness_runs_dir }}/ACTIVE
+# ...escreva o RUN.md (esqueleto abaixo) e SÓ ENTÃO registre:
+bash .harness/hooks/marathon-locate.sh register "$(pwd)/{{ harness_runs_dir }}/$SLUG"
 ```
+
+**O `register` não é opcional.** O `ACTIVE` local só é enxergado pelos hooks
+quando o run vive dentro do diretório-projeto DA SESSÃO
+(`$CLAUDE_PROJECT_DIR`, ou o equivalente `git rev-parse --show-toplevel` no
+Codex). Trabalhando em outro working directory — sessão aberta num repo,
+trabalho de fato acontecendo em outro — os três hooks viram no-op silencioso:
+o gate não bloqueia, o reinject não reinjeta e a maratona "sempre para". O
+registro (`$HOME/.harness/marathon-active`) é o que torna o run localizável de
+qualquer diretório-projeto. É idempotente e recusa diretório sem RUN.md,
+então rode-o DEPOIS de escrever o RUN.md.
 
 Criar `{{ harness_runs_dir }}/$SLUG/RUN.md` com EXATAMENTE este esqueleto (hard cap
 ~150 linhas — é reinjetado no contexto após compactação):
@@ -82,15 +101,27 @@ re-planejar do zero, sem re-perguntar decisões registradas.
 ## 4. Fim de maratona
 
 1. Rodar `prova-de-conclusao` contra o Checklist.
-2. `rm {{ harness_runs_dir }}/ACTIVE && mkdir -p {{ harness_runs_dir }}/done && mv {{ harness_runs_dir }}/$SLUG {{ harness_runs_dir }}/done/`
-3. O que virou conhecimento permanente (gotcha, padrão canônico) → memória
+2. `bash .harness/hooks/marathon-locate.sh unregister "$(pwd)/{{ harness_runs_dir }}/$SLUG"`
+3. `rm {{ harness_runs_dir }}/ACTIVE && mkdir -p {{ harness_runs_dir }}/done && mv {{ harness_runs_dir }}/$SLUG {{ harness_runs_dir }}/done/`
+4. O que virou conhecimento permanente (gotcha, padrão canônico) → memória
    ou doc, não fica só no RUN.md arquivado.
+
+Esquecer o `unregister` não prende ninguém: o registro é podado sozinho quando
+o RUN.md some ou fica `HARNESS_MARATHON_STALE_DAYS`
+({{ harness_marathon_stale_days }}) dias sem ser tocado. Antes disso,
+checklist zerado já libera a parada.
 
 ## 5. Hooks que este estado alimenta
 
-- `marathon-stop-gate` (Stop): com ACTIVE + itens abertos, bloqueia a parada
-  e devolve a Próxima ação ({{ harness_marathon_max_blocks_without_progress }} strikes
-  sem progresso → libera com aviso, não prende para sempre). Encerrar na marra:
-  `rm {{ harness_runs_dir }}/ACTIVE`.
+- `marathon-stop-gate` (Stop): com a maratona localizada + itens abertos,
+  bloqueia a parada e devolve a Próxima ação
+  ({{ harness_marathon_max_blocks_without_progress }} strikes sem progresso →
+  libera com aviso, não prende para sempre). Item aberto conta `[ ]` e `[~]`,
+  em QUALQUER indentação. Encerrar na marra: o próprio bloqueio imprime o
+  comando.
 - `marathon-reinject` (SessionStart resume/compact): injeta o RUN.md.
 - `marathon-precompact` (PreCompact): marca a compactação no Journal.
+- `marathon-locate` (biblioteca dos três acima): resolve ONDE mora a
+  maratona — `ACTIVE` local (slug OU caminho absoluto), senão o registro do
+  usuário em `$HOME/.harness/marathon-active`, podando entrada morta. Sem ele
+  os hooks só enxergam o próprio repo.

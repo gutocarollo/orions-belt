@@ -12,6 +12,14 @@
   (H3/A1), it would instruct the agent to `mkdir -p .claude/runs/...` in a project that
   may not even have a `.claude/` folder (use_codex=true/use_claude=false) — corrected
   to use `{{ harness_runs_dir }}` everywhere, like the rest of the stack.
+
+  CROSS-REPO (measured 2026-08-01, field report from a downstream install):
+  `register` is no longer optional. Without it, a marathon whose run
+  directory lives OUTSIDE the session's project directory
+  (`$CLAUDE_PROJECT_DIR`) is invisible to all three hooks — the gate does not
+  block, the reinject does not reinject, the marathon "always stops" in
+  silence. The mechanism (marathon-locate.sh) is documented in the engine at
+  engine/hooks/marathon-locate.sh.
 -#}
 ---
 name: marathon
@@ -38,7 +46,19 @@ between sessions).
 SLUG=<short-kebab-of-the-mission>   # ex: migracao-tokens
 mkdir -p {{ harness_runs_dir }}/$SLUG
 echo "$SLUG" > {{ harness_runs_dir }}/ACTIVE
+# ...write RUN.md (skeleton below) and ONLY THEN register:
+bash .harness/hooks/marathon-locate.sh register "$(pwd)/{{ harness_runs_dir }}/$SLUG"
 ```
+
+**`register` is not optional.** The local `ACTIVE` is only visible to the
+hooks when the run lives inside the SESSION's project directory
+(`$CLAUDE_PROJECT_DIR`, or the `git rev-parse --show-toplevel` equivalent on
+Codex). Working in a different working directory — session opened in one
+repo, the actual work happening in another — turns all three hooks into a
+silent no-op: the gate does not block, the reinject does not reinject, and
+the marathon "always stops". The registry (`$HOME/.harness/marathon-active`)
+is what makes the run locatable from any project directory. It is idempotent
+and refuses a directory without RUN.md, so run it AFTER writing RUN.md.
 
 Create `{{ harness_runs_dir }}/$SLUG/RUN.md` with EXACTLY this skeleton (hard cap
 ~150 lines — it is reinjected into context after compaction):
@@ -82,15 +102,27 @@ re-planning from scratch, no re-asking recorded decisions.
 ## 4. Marathon end
 
 1. Run `prova-de-conclusao` against the Checklist.
-2. `rm {{ harness_runs_dir }}/ACTIVE && mkdir -p {{ harness_runs_dir }}/done && mv {{ harness_runs_dir }}/$SLUG {{ harness_runs_dir }}/done/`
-3. What became permanent knowledge (gotcha, canonical pattern) → memory
+2. `bash .harness/hooks/marathon-locate.sh unregister "$(pwd)/{{ harness_runs_dir }}/$SLUG"`
+3. `rm {{ harness_runs_dir }}/ACTIVE && mkdir -p {{ harness_runs_dir }}/done && mv {{ harness_runs_dir }}/$SLUG {{ harness_runs_dir }}/done/`
+4. What became permanent knowledge (gotcha, canonical pattern) → memory
    or a doc, it does not stay only in the archived RUN.md.
+
+Forgetting `unregister` traps no one: the entry is pruned on its own once
+RUN.md is gone or has sat untouched for `HARNESS_MARATHON_STALE_DAYS`
+({{ harness_marathon_stale_days }}) days. Before that, an empty checklist
+already releases the stop.
 
 ## 5. Hooks this state feeds
 
-- `marathon-stop-gate` (Stop): with ACTIVE + open items, it blocks the stop
-  and returns the Next action ({{ harness_marathon_max_blocks_without_progress }} strikes
-  without progress → releases with a warning, does not trap forever). Force close:
-  `rm {{ harness_runs_dir }}/ACTIVE`.
+- `marathon-stop-gate` (Stop): with the marathon located + open items, it
+  blocks the stop and returns the Next action
+  ({{ harness_marathon_max_blocks_without_progress }} strikes without
+  progress → releases with a warning, does not trap forever). An open item
+  counts `[ ]` and `[~]`, at ANY indentation. Force close: the block itself
+  prints the command.
 - `marathon-reinject` (SessionStart resume/compact): injects the RUN.md.
 - `marathon-precompact` (PreCompact): marks the compaction in the Journal.
+- `marathon-locate` (library the three above share): resolves WHERE the
+  marathon lives — local `ACTIVE` (slug OR absolute path), then the user's
+  registry at `$HOME/.harness/marathon-active`, pruning dead entries.
+  Without it the hooks only see their own repo.

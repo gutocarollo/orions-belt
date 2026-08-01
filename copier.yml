@@ -618,6 +618,11 @@ harness_marathon_max_blocks_without_progress:
     help: Número de vezes que o Stop hook do marathon pode bloquear sem progresso registrado antes de ceder (anti-prisão).
     default: 3
 
+harness_marathon_stale_days:
+    type: int
+    help: Dias sem o RUN.md ser tocado até uma entrada do registro global de maratonas ($HOME/.harness/marathon-active) ser considerada morta e podada.
+    default: 7
+
 harness_plan_review_max:
     type: int
     help: Máximo de rodadas do Planning Adversarial Loop.

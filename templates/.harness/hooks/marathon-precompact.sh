@@ -4,9 +4,12 @@
 #
 # MATERIALIZATION (F9-fixes): the runs directory comes from HARNESS_RUNS_DIR
 # (default .harness/runs) via .harness/lib/_tooling_conf.py — it used to be hardcoded.
+#
+# CROSS-REPO (measured 2026-08-01): located via marathon-locate.sh, same
+# mechanism as marathon-stop-gate.sh — see that file for the field failure
+# this fixes.
 set -uo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
-[ -n "$ROOT" ] || exit 0
 
 CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
 RUNS_DIR=".harness/runs"
@@ -15,9 +18,7 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$CONF_PY" ]; then
   [ -n "$v" ] && RUNS_DIR="$v"
 fi
 
-ACTIVE="$ROOT/$RUNS_DIR/ACTIVE"
-[ -f "$ACTIVE" ] || exit 0
-SLUG=$(head -1 "$ACTIVE" | tr -d '[:space:]')
-RUN="$ROOT/$RUNS_DIR/$SLUG/RUN.md"
-[ -f "$RUN" ] && echo "- $(date +%H:%M) context compaction (state preserved here)" >> "$RUN"
+. "$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
+marathon_locate "$ROOT" "$RUNS_DIR" || exit 0
+echo "- $(date +%H:%M) context compaction (state preserved here)" >> "$MARATHON_RUN_MD"
 exit 0
