@@ -80,4 +80,12 @@ verifica "bloco completo" 0 '### D5 — onde o manifesto vive
 **Minha recomendacao:** Opcao A, porque o pngPath e relativo ao manifesto de proposito.'
 
 echo
+echo "=== PASSA: o padrão CITADO entre aspas não é o ato (2º disparo real) ==="
+# O turno que EXPLICAVA o conserto citou o padrão novo como *"se voce me disser"*
+# e o gate bloqueou a documentação dele mesmo. Frase entre aspas está sendo
+# CITADA, não praticada — mesmo princípio já aplicado à crase em 2026-07-31.
+verifica "padrao citado entre aspas" 0 'Handoff declarativo entrou nos padroes, com as formas medidas: *"se voce me disser"*, *"depende da sua escolha"*. Teste com 9 cenarios, todos verdes; a decisao D3 do historico foi o caso real.'
+verifica "aspas curvas tambem" 0 'As formas sao “se voce me disser” e “seu ato por contrato”; ambas viraram padrao apos a decisao.'
+
+echo
 if [ "$FAIL" -eq 0 ]; then echo "RESULT: ALL SCENARIOS PASSED"; exit 0; else echo "RESULT: THERE ARE FAILURES"; exit 1; fi

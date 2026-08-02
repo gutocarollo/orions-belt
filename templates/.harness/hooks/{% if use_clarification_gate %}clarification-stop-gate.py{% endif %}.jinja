@@ -137,6 +137,16 @@ def strip_code_and_quotes(text: str) -> str:
     text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
     text = re.sub(r"`[^`\n]*`", " ", text)
     text = re.sub(r"^\s*>.*$", " ", text, flags=re.MULTILINE)
+    #
+    # TRECHO ENTRE ASPAS tambem sai, e entrou no 2o disparo real (2026-08-02):
+    # o turno que EXPLICAVA este conserto citou o padrao novo como
+    # *"se voce me disser"* e o gate bloqueou a propria documentacao dele. Frase
+    # entre aspas esta sendo CITADA, nao praticada — mesmo princípio da crase.
+    #
+    # So spans curtos (<=120 chars) e numa linha: aspas de abertura sem
+    # fechamento na mesma linha nao devem engolir o resto do turno.
+    text = re.sub(r'"[^"\n]{0,120}"', " ", text)
+    text = re.sub(r"[\u201c\u201d][^\u201c\u201d\n]{0,120}[\u201c\u201d]", " ", text)
     return text
 
 
