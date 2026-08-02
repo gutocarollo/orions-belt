@@ -64,6 +64,15 @@ HANDOFF_PATTERNS = [
     r"\bcabe\s+a\s+voce\b",
     r"\bo\s+dono\s+decide\b",
     r"\bso\s+(?:voce|o\s+dono)\s+(?:pode\s+)?(?:decide|destrava|resolve)",
+    # Handoff DECLARATIVO — as formas medidas em 2026-08-02, que passaram batido
+    # porque nenhuma tem "?" nem as palavras acima.
+    r"\bse\s+voce\s+(?:me\s+)?(?:disser|escolher|responder|definir|aprovar)",
+    r"\bbloquead[oa]s?\s+em\s+voce\b",
+    r"\b(?:bloqueia|trava|travam|impede)\s+(?:a\s+|o\s+|as\s+|os\s+)?\w*\s*(?:migra|decis|execu|transic)",
+    r"\bdepende\s+d[ae]\s+(?:voce|sua\s+(?:escolha|decisao|resposta))",
+    r"\b(?:continua|continuam|segue|seguem)\s+esperando\s+(?:sua|a\s+sua|voce)",
+    r"\besperando\s+(?:sua\s+)?(?:escolha|decisao|resposta|aprovacao)",
+    r"\bseu\s+ato\s+por\s+contrato\b",
 ]
 
 # Sinal de que ha DECISOES/OPCOES enumeradas em jogo (handoff so bloqueia com isso).
@@ -82,8 +91,11 @@ D_BLOCK = re.compile(r"^#{2,4}\s*D[-\d]", re.MULTILINE)
 REQUIRED_ELEMENTS = {
     "Canon": r"\*\*C[a]?non",
     "Comportamento/Behavior": r"\*\*(?:Comportamento|Behavior)",
-    "Exemplo aplicado bom/Applied good example": r"\*\*(?:Exemplo aplicado bom|Applied good example)",
-    "Exemplo aplicado ruim/Applied bad example": r"\*\*(?:Exemplo aplicado ruim|Applied bad example)",
+    # Ordem das palavras nao e o contrato — o conteudo e. "Bom aplicado" diz o
+    # mesmo que "Exemplo aplicado bom", e reprovar por ordem produz bloqueio
+    # falso sem ganhar nada.
+    "Exemplo aplicado bom/Applied good example": r"\*\*(?:Exemplo aplicado bom|Bom aplicado|Applied good example|Good applied)",
+    "Exemplo aplicado ruim/Applied bad example": r"\*\*(?:Exemplo aplicado ruim|Ruim aplicado|Applied bad example|Bad applied)",
     "Quando escolher/When to choose": r"\*\*(?:Quando escolher|When to choose)",
     "Minha recomendacao/Recommended answer": r"\*\*(?:Minha recomenda|Recomend[oa]|Recommended answer|My recommendation)",
 }
@@ -191,9 +203,19 @@ def main():
     has_decisions = any(re.search(p, body, re.IGNORECASE) for p in DECISION_SIGNALS)
     is_handoff = bool(handoff_hits) and has_decisions
 
-    if not is_choice and not is_handoff:
-        return 0
-
+    # A INVERSAO (2026-08-02). Antes: o bloco D[n] so era conferido DEPOIS de o
+    # gate reconhecer uma pergunta. Isso deixava passar o caso mais comum de
+    # todos — apresentar decisao de forma DECLARATIVA, sem "?" e sem as palavras
+    # exatas de handoff.
+    #
+    # Medido no proprio historico: um turno com "### D3", rotulos "**Bom
+    # aplicado:**"/"**Ruim aplicado:**" (fora do contrato) e recomendacao inline
+    # em italico passou com exit 0 — o bloco estava INCOMPLETO e ninguem olhou,
+    # porque a deteccao de pergunta falhou primeiro. E o turno seguinte entregou
+    # DUAS decisoes abertas sem bloco algum e tambem passou.
+    #
+    # Agora: bloco presente e SEMPRE conferido. A deteccao de pergunta/handoff
+    # decide apenas o caso "nao ha bloco nenhum".
     if D_BLOCK.search(raw):
         faltando = [
             nome for nome, rx in REQUIRED_ELEMENTS.items()
@@ -209,6 +231,9 @@ def main():
             "**Minha recomendacao** com o caminho que voce escolheria e por que.\n"
         )
         return 2
+
+    if not is_choice and not is_handoff:
+        return 0
 
     motivo = (
         f"pergunta de escolha (padrao: {choice_hits[0]})" if is_choice
