@@ -33,6 +33,30 @@ if [ -n "$MSG" ]; then
   exit 0
 fi
 
+# Inert-gate check: .githooks/pre-commit is unconditionally materialized by the
+# installer (set_hooks_path.sh), but activation can be skipped on purpose
+# (Husky/pre-commit framework anti-clobber, A2) or never happen at all
+# (brownfield manual port). Nothing after install time re-checks it, so the
+# gate can sit silently dead indefinitely -- the only signal was one stderr
+# line during `copier copy` that already scrolled off screen. Origin: upstream
+# defect found while porting hooks manually into
+# WhatsApp_Agent_Chat_slim-shape (2026-07-27).
+if [ -x "$ROOT/.githooks/pre-commit" ]; then
+  HP="$(git config --get core.hooksPath 2>/dev/null || true)"
+  if [ "$HP" != ".githooks" ]; then
+    CHAINED=0
+    grep -Fq 'orions-belt:begin pre-commit' "$ROOT/.husky/pre-commit" 2>/dev/null && CHAINED=1
+    { grep -Fq '.githooks/pre-commit' "$ROOT/.pre-commit-config.yaml" 2>/dev/null \
+      || grep -Fq '.githooks/pre-commit' "$ROOT/.pre-commit-config.yml" 2>/dev/null; } && CHAINED=1
+    if [ "$CHAINED" -eq 0 ]; then
+      echo "<git-doctor-alert>"
+      echo "orions-belt githook is INERT: .githooks/pre-commit is materialized but core.hooksPath='${HP:-<empty>}' does not point to it, and no chain to another hook manager was found -- ref-integrity/docs-wiki-lint are NOT running on your commits."
+      echo "Fix: 'git config core.hooksPath .githooks' (replaces your current hook manager), or chain '.githooks/pre-commit' from it. Re-run 'bash .harness/lib/set_hooks_path.sh .' -- it re-diagnoses and activates when safe. See docs/manual/14-instalacao-e-update.md."
+      echo "</git-doctor-alert>"
+    fi
+  fi
+fi
+
 # Clean repo: report push status only if there are commits ahead of the remote
 AHEAD=$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
 if [ "${AHEAD:-0}" -gt 0 ]; then
