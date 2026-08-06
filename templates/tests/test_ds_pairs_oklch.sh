@@ -72,6 +72,28 @@ assert "OKLCH low contrast: pair has the stable VIOLATES status (not SKIP)" \
 assert "OKLCH low contrast: summary does not declare the contract OK" \
   '! echo "$OUT_LOW" | grep -qE "^CONTRACT[[:space:]]+OK([[:space:]]|$)"'
 
+# --- 1b. The CANONICAL name `X-text` resolves, and still catches the violation ---
+# The guard used to build the pair by concatenating `-foreground`. That word is
+# banned as a TARGET (FORBIDDEN = surface, semantic, content, label, foreground —
+# owner ruling 2026-08-01), so the canonical anatomy is `text`. Without this case
+# the new path would ship untested and only the legacy name would be proven.
+NEWNAME="$WORK/canonical-text-name"
+mkdir -p "$NEWNAME/styles"
+cat > "$NEWNAME/styles/globals.css" <<'EOF'
+:root {
+  --background: #ffffff;
+  --primary: oklch(0.6 0.02 250);
+  --primary-text: oklch(0.62 0.02 250);
+}
+.dark {
+  --background: #000000;
+}
+EOF
+OUT_NEW=$(HARNESS_PROJECT_ROOT="$NEWNAME" HARNESS_WEB_APP_DIR=. python3 "$CHECK" 2>&1)
+NEW_EXIT=$?
+assert "canonical --primary-text: resolved (never SKIP as unresolvable)"   '! echo "$OUT_NEW" | grep -qE "primary.*SKIP"'
+assert "canonical --primary-text: the low-contrast pair still VIOLATES"   '[ "$NEW_EXIT" -ne 0 ] && echo "$OUT_NEW" | grep -qE "primary.*VIOLATES|VIOLATES.*primary"'
+
 # --- 2. HIGH-contrast OKLCH pair (pure white over a saturated tone) -- real OK ---
 HIGH="$WORK/high-contrast"
 mkdir -p "$HIGH/styles"

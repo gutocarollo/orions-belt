@@ -5,7 +5,8 @@ keeps contrast across the configured production themes.
 PORTED from apps/web/scripts/ds-pair-eval.py (reference donor harness) —
 rescue plan §R1a. Complements ds-pairs-check.py (which validates the pairs in
 the CSS DEFINITION); THIS one evaluates the pair at the POINT OF USE — e.g.
-"text-foreground over bg-white" or "text-white/70 over bg-surface-selected" —
+"text-text over bg-white" or "text-white/70 over bg-selected" (legacy
+`text-foreground`/`bg-surface-selected` still resolve as migration SOURCE) —
 deterministically judging when a pair "fits" (PASS in all themes) and when it
 does not (FAIL, with the themes that fail).
 
@@ -19,9 +20,9 @@ GENERICITY (vs. the source version): zero hardcoded brand name.
     Empty = evaluates only light/dark-base (no brand overlay).
 
 CLI:
-  python3 .harness/lib/ds-pair-eval.py --text text-foreground --bg bg-white
+  python3 .harness/lib/ds-pair-eval.py --text text-text --bg bg-white
   python3 .harness/lib/ds-pair-eval.py --text text-white/70 --bg bg-surface-selected --non-text
-  echo '[{"text":"text-muted-foreground","bg":"bg-card"}]' | python3 .harness/lib/ds-pair-eval.py --batch
+  echo '[{"text":"text-muted-text","bg":"bg-card"}]' | python3 .harness/lib/ds-pair-eval.py --batch
 
 Exit 1 if any pair FAILS in any theme (useful in a gate).
 """
@@ -122,22 +123,33 @@ for fam, hexes in _RAMPS.items():
     for stop, h in zip(_STOPS, hexes):
         PALETTE[f'{fam}-{stop}'] = '#' + h
 
-# valid semantic tokens (--var names that appear as a bg-/text- class)
-TOKENS = {'background', 'foreground', 'card', 'card-foreground', 'popover', 'popover-foreground',
-          'primary', 'primary-foreground', 'secondary', 'secondary-foreground', 'muted', 'muted-foreground',
-          'accent', 'accent-foreground', 'destructive', 'destructive-foreground', 'border', 'input', 'ring',
-          'success', 'success-foreground', 'info', 'info-foreground', 'warning', 'warning-foreground',
-          'premium', 'premium-foreground', 'surface-selected', 'surface-selected-foreground',
-          'foreground-subtle', 'foreground-faint', 'sidebar', 'sidebar-foreground',
-          'sidebar-item-foreground', 'sidebar-accent', 'sidebar-border', 'sidebar-panel',
-          'sidebar-mobile-panel', 'sidebar-mobile-panel-foreground',
-          'sidebar-mobile-panel-muted-foreground', 'sidebar-mobile-panel-accent',
-          'sidebar-mobile-panel-border', 'sidebar-mobile-panel-active',
-          'sidebar-mobile-panel-active-foreground', 'sidebar-mobile-panel-rail', 'overlay',
-          'success-fill', 'warning-fill', 'destructive-fill', 'info-fill', 'premium-fill',
-          'success-soft', 'success-soft-foreground', 'info-soft', 'info-soft-foreground',
-          'warning-soft', 'warning-soft-foreground', 'destructive-soft', 'destructive-soft-foreground',
-          'premium-soft', 'premium-soft-foreground'}
+# Vocabulario de tokens resolviveis. As entradas com `foreground` sao o nome
+# ANTIGO do shadcn e existem aqui como FONTE de migracao (GRAMMAR.md $forbidden:
+# "SOURCE, never TARGET") — o resolvedor precisa continuar lendo projeto que
+# ainda nao migrou. As entradas `-text` sao a anatomia canonica e sao o que um
+# token NOVO deve usar. FORBIDDEN = surface, semantic, content, label, foreground.
+TOKENS = {'accent', 'accent-foreground', 'accent-text', 'background', 'border', 'card', 
+          'card-foreground', 'card-text', 'destructive', 'destructive-fill', 
+          'destructive-foreground', 'destructive-soft', 'destructive-soft-foreground', 
+          'destructive-soft-text', 'destructive-text', 'foreground', 'foreground-faint', 
+          'foreground-subtle', 'info', 'info-fill', 'info-foreground', 'info-soft', 
+          'info-soft-foreground', 'info-soft-text', 'info-text', 'input', 'muted', 
+          'muted-foreground', 'muted-text', 'overlay', 'popover', 'popover-foreground', 
+          'popover-text', 'premium', 'premium-fill', 'premium-foreground', 'premium-soft', 
+          'premium-soft-foreground', 'premium-soft-text', 'premium-text', 'primary', 
+          'primary-foreground', 'primary-text', 'ring', 'secondary', 'secondary-foreground', 
+          'secondary-text', 'sidebar', 'sidebar-accent', 'sidebar-border', 
+          'sidebar-foreground', 'sidebar-item-foreground', 'sidebar-item-text', 
+          'sidebar-mobile-panel', 'sidebar-mobile-panel-accent', 'sidebar-mobile-panel-active', 
+          'sidebar-mobile-panel-active-foreground', 'sidebar-mobile-panel-active-text', 
+          'sidebar-mobile-panel-border', 'sidebar-mobile-panel-foreground', 
+          'sidebar-mobile-panel-muted-foreground', 'sidebar-mobile-panel-muted-text', 
+          'sidebar-mobile-panel-rail', 'sidebar-mobile-panel-text', 'sidebar-panel', 
+          'sidebar-text', 'success', 'success-fill', 'success-foreground', 'success-soft', 
+          'success-soft-foreground', 'success-soft-text', 'success-text', 'surface-selected', 
+          'surface-selected-foreground', 'surface-selected-text', 'text', 'text-faint', 
+          'text-subtle', 'warning', 'warning-fill', 'warning-foreground', 'warning-soft', 
+          'warning-soft-foreground', 'warning-soft-text', 'warning-text'}
 
 
 def parse_class(cls):
