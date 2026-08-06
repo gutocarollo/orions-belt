@@ -51,9 +51,9 @@ tema governa o outro.
 5. **`OVERFLOW > WRAP > SHRINK`** para "itens demais numa linha". Encolher
    abaixo do tamanho do conteúdo **corta** — proibido.
 6. **Shrink content-aware** (linha de pills/chips de largura variável):
-   `clamp(cqi)` é cego ao conteúdo (nº de itens + comprimento do label).
+   `clamp(cqi)` é cego ao conteúdo (nº de itens + comprimento do texto).
    Faça o gate do shrink na lógica de render (só o item que precisa
-   encolher) e derive o piso do `clamp` do nº de caracteres — label curto
+   encolher) e derive o piso do `clamp` do nº de caracteres — texto curto
    mantém maior, longo desce; WRAP como fallback final.
 
 ## Playbook por tipo de componente
@@ -76,7 +76,7 @@ do seu projeto**, não para um path literal de outro repo.
 | **Tabs / segmented toggle** | CONTENT — slide-swap de conteúdo com transição própria | animação de transição canônica do projeto | troca instantânea sem transição; animar o corpo inteiro da aba a cada troca |
 | **Chart / data-viz** | CONTAINER — `cqi` + `ResizeObserver` só quando a árvore de render muda | ver seção "Charts / data-viz" abaixo | implementar chart do zero sem checar biblioteca OSS madura primeiro; paletas de cor divergentes por componente |
 | **Sidebar / nav** | VIEWPORT/CONTAINER — largura em px fixa (não `max-content`); shadow + z-index basal | token de cor do item ativo do design-system | `width:max-content` com transição (não interpola suavemente) |
-| **Form / field group** | CONTENT — `min-w-0`, `flex-wrap`, label sizing fluido | border/estado do input canônico do projeto | 2px de border em repouso (padrão costuma ser 1px); hex hardcoded fora de token |
+| **Form / field group** | CONTENT — `min-w-0`, `flex-wrap`, sizing de texto fluido | border/estado do input canônico do projeto | 2px de border em repouso (padrão costuma ser 1px); hex hardcoded fora de token |
 | **Badge / pill / chip** | CONTENT — intrínseco ao conteúdo; linha de pills variável → gate por render + piso do `clamp` por nº de chars + WRAP fallback | padrão de badge/pill do design-system | contagem parentetizada tipo `(N)`; opacidade `rgba()` literal; `clamp(cqi)` global cego ao conteúdo; `overflow-hidden`+`truncate` (corta informação) |
 | **Icon / icon button** | escala fixa por tamanho do ícone | biblioteca de ícones canônica única do projeto | ícone estático num trigger de filtro/expand quando o padrão do projeto usa ícone animado nesse contexto |
 

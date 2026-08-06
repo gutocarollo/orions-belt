@@ -51,9 +51,9 @@ token governs the other.
 5. **`OVERFLOW > WRAP > SHRINK`** for "too many items on one line". Shrinking
    below the content's size **cuts it off** — forbidden.
 6. **Content-aware shrink** (row of variable-width pills/chips):
-   `clamp(cqi)` is blind to content (number of items + label length).
+   `clamp(cqi)` is blind to content (number of items + text length).
    Gate the shrink in the render logic (only the item that needs
-   to shrink) and derive the `clamp` floor from the character count — a short label
+   to shrink) and derive the `clamp` floor from the character count — short text
    stays larger, a long one goes down; WRAP as the final fallback.
 
 ## Per-component-type playbook
@@ -76,7 +76,7 @@ component/rule**, not to a literal path of another repo.
 | **Tabs / segmented toggle** | CONTENT — content slide-swap with its own transition | project's canonical transition animation | instant swap without transition; animate the whole tab body on each swap |
 | **Chart / data-viz** | CONTAINER — `cqi` + `ResizeObserver` only when the render tree changes | see the "Charts / data-viz" section below | implement a chart from scratch without checking a mature OSS library first; divergent color palettes per component |
 | **Sidebar / nav** | VIEWPORT/CONTAINER — fixed px width (not `max-content`); shadow + baseline z-index | design-system's active-item color token | `width:max-content` with a transition (does not interpolate smoothly) |
-| **Form / field group** | CONTENT — `min-w-0`, `flex-wrap`, fluid label sizing | project's canonical input border/state | 2px border at rest (the pattern is usually 1px); hardcoded hex outside a token |
+| **Form / field group** | CONTENT — `min-w-0`, `flex-wrap`, fluid text sizing | project's canonical input border/state | 2px border at rest (the pattern is usually 1px); hardcoded hex outside a token |
 | **Badge / pill / chip** | CONTENT — intrinsic to content; variable pill row → gate by render + `clamp` floor by char count + WRAP fallback | design-system's badge/pill pattern | parenthesized count like `(N)`; literal `rgba()` opacity; global `clamp(cqi)` blind to content; `overflow-hidden`+`truncate` (cuts information) |
 | **Icon / icon button** | fixed scale per icon size | project's single canonical icon library | static icon on a filter/expand trigger when the project's pattern uses an animated icon in that context |
 
