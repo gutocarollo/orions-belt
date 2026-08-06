@@ -118,6 +118,14 @@ HARNESS_ENTRY_DOCS={{ harness_entry_docs }}
 # Rota F1-bis: índice da referência viva por subsistema.
 HARNESS_REFERENCE_INDEX={{ harness_reference_index }}
 {% endif %}HARNESS_DOCS_DIR={{ harness_docs_dir }}
+{%- if harness_docs_categories_override %}
+HARNESS_DOCS_CATEGORIES={{ harness_docs_categories_override }}
+{%- elif harness_docs_topology == "standard" %}
+HARNESS_DOCS_CATEGORIES=planning,architecture,decisions,audits,qa-evidence,meetings
+{%- else %}
+HARNESS_DOCS_CATEGORIES=planning,architecture,decisions
+{%- endif %}
+HARNESS_DOCS_TOPOLOGY_ENFORCE={{ harness_docs_topology_enforce }}
 HARNESS_LESSONS_FILE={{ harness_lessons_file }}
 HARNESS_RUNS_DIR={{ harness_runs_dir }}
 HARNESS_EVIDENCE_DIR={{ harness_evidence_dir }}

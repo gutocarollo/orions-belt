@@ -9,8 +9,8 @@ Convenções: capítulos são classe **sequenced** (`NN-slug.md`, ordem de leitu
 | # | Capítulo | Leia quando |
 |---|----------|-------------|
 | 01 | [Visão geral: o harness, as 3 camadas e o ciclo de vida de um turno](01-visao-geral.md) | Precisa do mapa: eventos de hook, config central, tabela evento→script |
-| 02 | [Hooks de início de sessão: dev-doctor, git-doctor, lessons-inject, marathon-reinject](02-hooks-sessionstart.md) | Entender o contexto que aparece "de graça" quando a sessão abre |
-| 03 | [Hooks de cada prompt: lei-zero-kickoff e understand-context-inject](03-hooks-prompt.md) | Entender injeção condicional de regra por assunto do prompt |
+| 02 | [Hooks de início de sessão: dev-doctor, git-doctor, lessons-inject, marathon-reinject, harness-freshness, request-reinject](02-hooks-sessionstart.md) | Entender o contexto que aparece "de graça" quando a sessão abre |
+| 03 | [Hooks de cada prompt: lei-zero-kickoff, request-ledger e understand-context-inject](03-hooks-prompt.md) | Entender injeção condicional de regra por assunto do prompt |
 | 04 | [Hooks antes de cada ferramenta: o semáforo de subagents e o guard de diff](04-hooks-pretooluse.md) | Entender bloqueio pré-execução; configurar o cap de subagents |
 | 05 | [Hooks depois de cada edição: ds-gate e deliverable-scrub-gate](05-hooks-posttooluse.md) | Entender os gates de qualidade com feedback no mesmo turno |
 | 06 | [Os porteiros do fim de turno: completion-gate, ui-evidence-gate, marathon-stop-gate, reap-leaks](06-stop-gates.md) | Entender por que o turno foi bloqueado ao terminar; os escape hatches |

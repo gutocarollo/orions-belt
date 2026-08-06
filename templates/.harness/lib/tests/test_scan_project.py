@@ -218,6 +218,24 @@ class ScanProjectNextjsFixtureTest(unittest.TestCase):
         self.assertIn("global_codex_READONLY", surfaces)
         self.assertIn("NEVER", surfaces["policy"])
 
+    def test_docs_categories_inferred_lists_real_subdirs_excludes_infra(self) -> None:
+        # Docs-topology inventory (D3, grill-me 2026-07-22): deterministic input for
+        # harness-init's proposal step and the INSTALL-REPORT audit trail. Uses its
+        # OWN tmpdir (not the class-shared self.tmpdir fixture) so it never mutates
+        # state other tests in this class depend on.
+        target = Path(tempfile.mkdtemp(prefix="harness-init-docs-topology-"))
+        docs = target / "docs"
+        for name in ("architecture", "planning", "_arquivo", "assets"):
+            (docs / name).mkdir(parents=True, exist_ok=True)
+        facts = _run_scan("scan", target)
+        inferred = facts["local_memory_surfaces"]["docs_categories_inferred"]
+        self.assertEqual(inferred, ["architecture", "planning"])
+
+    def test_docs_categories_inferred_empty_without_docs_dir(self) -> None:
+        target = Path(tempfile.mkdtemp(prefix="harness-init-no-docs-"))
+        facts = _run_scan("scan", target)
+        self.assertEqual(facts["local_memory_surfaces"]["docs_categories_inferred"], [])
+
 
 class ScanProjectNoGitTest(unittest.TestCase):
     """Plan step 0 (§5): a project that is not even a git repo (finding 5 of report 08,

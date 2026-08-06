@@ -76,6 +76,15 @@ IGNORED_DIRS = set(get_config_csv("IGNORED_TOOL_DIRS", [".understand-anything", 
 ROOT_ALLOWED_MD = CAPS_OK | {"CONTRIBUTING.md", "CHANGELOG.md", "CODE_OF_CONDUCT.md", "SECURITY.md", "NOTICE.md"}
 # Directory names never swept for strays: dependency/build output and test fixtures.
 STRAY_SKIP_DIRS = {"node_modules", "vendor", "dist", "build", "out", "target", "__pycache__", "fixtures"}
+# Docs-topology (D3-D6, 2026-07-22): directories under docs/ that are the wiki's own
+# indexing/support layer, never "categories" a project declares via HARNESS_DOCS_CATEGORIES.
+# Somente a infra de arquivamento do proprio wiki. NAO herda GENERIC_DIRS:
+# aquele conjunto isentava silenciosamente docs/reports/, docs/assets/,
+# docs/img/ do ratchet — diretorios de conteudo, nao de infra. Todo nome
+# "plausivel de infra" numa allowlist finita, sob um ratchet WARN por
+# default, e falso negativo. Valor final apurado em duas rodadas de review
+# adversarial (4ad3609 -> 5bf4c88), aplicado aqui a mao.
+TOPOLOGY_INFRA_DIRS = {"_arquivo", "_archive"}
 # lowercase kebab, with an optional date prefix (event) or number (sequenced); dot only for versions like v2.2
 NAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}-|\d+-)?[a-z0-9]+([a-z0-9.\-]*[a-z0-9])?\.[a-z0-9]+$")
 # date (YYYY-MM-DD) present but NOT as a prefix → event doc with date in suffix (§2: must be a prefix)
@@ -270,6 +279,46 @@ def check_stray_docs(corpus: str) -> list[str]:
     return warns
 
 
+def check_docs_topology() -> tuple[list[str], bool]:
+    """Docs-topology ratchet (D3-D6, grill-me 2026-07-22). HARNESS_DOCS_CATEGORIES is
+    the project's declared category set (CSV in harness.conf, populated by harness-init's
+    proposal step or the greenfield harness_docs_topology copier answer). Absence of the
+    key means the feature is not opted into yet — a no-op, not a failure, so existing
+    installs are unaffected until they declare a topology. Any docs/<dir>/ NOT declared
+    and not part of the wiki's own indexing infra (TOPOLOGY_INFRA_DIRS) is flagged.
+    Enforcement is a ratchet: HARNESS_DOCS_TOPOLOGY_ENFORCE=warn (default) reports only;
+    =fail promotes the same list to a blocking failure — same pattern as ds-gate."""
+    declared = set(get_config_csv("HARNESS_DOCS_CATEGORIES", []))
+    if not declared:
+        return [], False
+    enforce_fail = get_config("HARNESS_DOCS_TOPOLOGY_ENFORCE", "warn").strip().lower() == "fail"
+    messages: list[str] = []
+    if DOCS.is_dir():
+        for child in sorted(DOCS.iterdir()):
+            if not child.is_dir():
+                continue
+            name = child.name
+            if name in TOPOLOGY_INFRA_DIRS or name in IGNORED_DIRS or name.startswith("."):
+                continue
+            if name not in declared:
+                messages.append(
+                    f"docs/{name}/ is not a declared category (HARNESS_DOCS_CATEGORIES={sorted(declared)}) "
+                    f"— add it to the topology or reclassify into an existing category / _arquivo/"
+                )
+    for candidate in ("SCHEMA.md", "docs/SCHEMA.md"):
+        schema_path = ROOT / candidate
+        if schema_path.is_file():
+            schema_text = schema_path.read_text(encoding="utf-8", errors="ignore")
+            for category in sorted(declared):
+                if category not in schema_text:
+                    messages.append(
+                        f"declared category '{category}' is not mentioned in {candidate} "
+                        f"(topology and constitution have drifted apart)"
+                    )
+            break
+    return messages, enforce_fail
+
+
 def git_diff_name_status(diff_base: str | None, staged: bool, worktree: bool, failures: list[str]) -> list[tuple[str, list[str]]]:
     if not diff_base and not staged and not worktree:
         return []
@@ -377,6 +426,14 @@ def main() -> int:
     failures.extend(check_stray_tool_tags(base))
     check_diff_policy(args.diff_base, args.staged, args.worktree, failures)
 
+    topology_warns: list[str] = []
+    if not scope:
+        topology_messages, topology_enforce_fail = check_docs_topology()
+        if topology_enforce_fail:
+            failures.extend(topology_messages)
+        else:
+            topology_warns = topology_messages
+
     if strict_naming:
         failures.extend(naming_warns)
         naming_warns = []
@@ -399,6 +456,11 @@ def main() -> int:
             print(f"  ~ {w}")
         if len(stray_warns) > 40:
             print(f"  ... +{len(stray_warns) - 40} others")
+
+    if topology_warns:
+        print(f"docs-wiki-lint: {len(topology_warns)} docs-topology warning(s) (WARN, ratchet — HARNESS_DOCS_TOPOLOGY_ENFORCE=fail to block):")
+        for w in topology_warns:
+            print(f"  ~ {w}")
 
     if failures:
         print("docs-wiki-lint: FAIL")

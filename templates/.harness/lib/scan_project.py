@@ -570,6 +570,15 @@ def scan(target: Path, explicit_component_roots: list[str] | None = None) -> dic
         ),
         "lessons_file": (target / "tasks" / "lessons.md").is_file(),
         "docs_log": (target / "docs" / "log.md").is_file(),
+        # Docs-topology inventory (D3, grill-me 2026-07-22): deterministic list of
+        # docs/<dir>/ that already exist, for harness-init's proposal step (base vs
+        # inferred vs hybrid) and for the INSTALL-REPORT audit trail. Does not itself
+        # decide or write HARNESS_DOCS_CATEGORIES — inventory only, never a silent write.
+        "docs_categories_inferred": sorted(
+            p.name for p in (target / "docs").iterdir()
+            if p.is_dir() and not p.name.startswith(".")
+            and p.name not in {"_arquivo", "_archive", "sources", "assets", "img", "images", "reports"}
+        ) if (target / "docs").is_dir() else [],
     }
 
     return {

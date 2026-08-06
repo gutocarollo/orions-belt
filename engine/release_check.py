@@ -45,6 +45,7 @@ GATES: tuple[Gate, ...] = (
     Gate("template_python", ("python3", "-m", "unittest", "discover", "-s", "templates/tests", "-p", "test_*.py", "-v"), 180),
     Gate("template_shell", ("python3", "engine/release_check.py", "--internal-template-shell"), 900),
     Gate("docs", ("python3", "engine/lint/docs_wiki_lint.py"), 180),
+    Gate("readme_freshness", ("python3", "engine/lint/readme_freshness.py"), 30),
     Gate("references", ("python3", "engine/lint/ref_integrity.py", "--since", "HEAD"), 180),
     Gate("template_boundary", ("python3", "-m", "unittest", "engine.tests.test_template_boundary", "-v"), 60),
     Gate("distribution_boundary", ("python3", "-m", "unittest", "engine.tests.test_distribution_boundary", "-v"), 60),

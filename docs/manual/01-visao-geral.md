@@ -41,8 +41,8 @@ O runtime do agente expõe esses eventos; o harness registra um ou mais scripts 
 
 | Evento | Hook(s) instalados | Papel | Capítulo |
 |---|---|---|---|
-| `SessionStart` | `dev-doctor status`, `marathon-reinject`, `git-doctor`, `lessons-inject` | Preparar o contexto: estado da stack, estado do git, lições anteriores, estado de execução longa | 02 |
-| `UserPromptSubmit` | `lei-zero-kickoff` (+ `understand-context-inject`, condicional) | Injetar regras no instante em que o assunto aparece | 03 |
+| `SessionStart` | `dev-doctor status`, `marathon-reinject`, `git-doctor`, `lessons-inject`, `harness-freshness`, `request-reinject` | Preparar o contexto: estado da stack, estado do git, lições anteriores, estado de execução longa, frescor da instalação, âncora do pedido original | 02 |
+| `UserPromptSubmit` | `lei-zero-kickoff`, `request-ledger` (+ `understand-context-inject`, condicional) | Injetar regras no instante em que o assunto aparece; gravar o pedido original | 03 |
 | `PreToolUse` | `subagent-throttle` (matcher Task/Agent; no Codex, evento `SubagentStart`) (+ `understand-apps-diff-guard`, condicional, matcher Bash) | Barrar a ação ANTES de executar | 04 |
 | `PostToolUse` | `ds-gate-posttool`, `deliverable-scrub-gate` (matcher Edit/Write), `subagent-release` (matcher Task/Agent; no Codex, `SubagentStop`) | Feedback segundos depois da edição; liberar recursos | 05 |
 | `PostToolUseFailure` | `subagent-release` (Claude; o Codex cobre pelo `SubagentStop`) | Não vazar slot quando o subagent falha | 04/05 |

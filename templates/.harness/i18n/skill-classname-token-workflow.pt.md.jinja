@@ -3,7 +3,7 @@ name: classname-token-workflow
 description: >
   Use para minerar, clusterizar, auditar e migrar className/utility-class
   repetido em {{ project_name }} sem over-abstraction. Roda o miner AST/JSX
-  em `.harness/lib/`, interpreta clusters semânticos, define o contrato de
+  em `.harness/lib/`, interpreta clusters de papel, define o contrato de
   token/componente/hook e exige migração sequencial com evidência visual.
 ---
 
@@ -80,7 +80,7 @@ de texto, não entidades/clusters semânticos. Prefira o v2 acima sempre que
 sed -n '1,180p' docs/design-system/sources/classname-token-mining-v2.md
 ```
 
-O relatório tem: top n-grams por economia bruta, top clusters semânticos,
+O relatório tem: top n-grams por economia bruta, top clusters de papel,
 clusters de alto sinal e (se aplicável ao projeto) evidência de sidebar —
 cada cluster já vem com `decision`, `confidenceScore`, `blockingReasons` e
 `recommendedSplitBy` calculados heuristicamente pelo miner.

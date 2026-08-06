@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "project": {"name": "fixture", "root": "apps"},
+  "nodes": [
+    {"id": "file:web/main.ts", "type": "file", "name": "main.ts", "filePath": "web/main.ts", "summary": "Entry point", "tags": ["entry"]},
+    {"id": "function:web/main.ts:run", "type": "function", "name": "run", "filePath": "web/main.ts", "lineRange": [1, 3], "summary": "Runs the app"}
+  ],
+  "edges": [
+    {"source": "file:web/main.ts", "target": "function:web/main.ts:run", "type": "contains", "direction": "forward", "weight": 1.0}
+  ],
+  "layers": [],
+  "tour": []
+}

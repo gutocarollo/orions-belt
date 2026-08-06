@@ -90,7 +90,7 @@ and applicability classification belong to the separate, agent-guided `harness-i
 | 🧭 | **[Context decision graph](docs/manual/16-grafo-contexto.md)** | Deterministic routing between a code graph, `grep` and the LSP before a shared symbol changes — measured on a real repo where each layer missed what the others caught. Fork/join topology, four command-shaped predicates, and hookify guards on core-path and DB-write edits. The graph CLI stays an external dependency the installer declares, never installs. |
 | 🗺️ | **[Exploration protocol](docs/manual/17-protocolo-exploracao.md)** | The task-start counterpart to the decision graph: a phase order — anchor, canonical docs, living per-subsystem reference, graph‖grep, database, LSP — materialised in four surfaces at once (skill, instruction block, prompt hook, both context scouts). Born from a measured case where 23 fresh reference pages were reachable from zero of the six entry points. Ships with the rule that no code graph indexes Markdown, so a graph miss never proves a doc is absent. |
 | 🙋 | **[Clarification precondition](docs/manual/17-protocolo-exploracao.md)** | A `PreToolUse` gate that refuses `AskUserQuestion` until the decision contract is actually loaded — because the rule banning bare questions existed as prose and was still violated by an agent that had the skill listed and never opened it. |
-| 🛡️ | **Deterministic hooks** | 18 hook scripts shipped (14 install by default, 4 are stack-conditional): completion/UI/design-system gates, subagent throttle, leak reaper, git-doctor. |
+| 🛡️ | **Deterministic hooks** | 23 hook scripts shipped (16 install by default, 7 are stack-conditional): completion/UI/design-system gates, clarification precondition + Stop sibling, exploration kickoff, request-anchor persistence, subagent throttle, leak reaper, git-doctor. |
 | 🌐 | **Dual runtime core** | The council and core operational skills share one source across Claude Code and Codex; optional and runtime-native capabilities are tracked as an explicit compatibility matrix. |
 
 ## How it works
@@ -146,7 +146,9 @@ flowchart LR
 External corpora are untrusted input, never instructions. Promotion follows the explicit pipeline
 `raw → manifest → validated → curated → canonical`; raw content stays quarantined, and only reviewed,
 traceable facts enter canonical knowledge. Golden datasets, trajectory evals, JSONL traces and one
-fail-closed release check — currently 20 gates, all local — measure the system end to end.
+fail-closed release check — currently 21 gates, all local, including a gate that recomputes this
+README's own numeric claims (hook/gate/corpus counts) against the real repo state — measure the
+system end to end.
 
 The canonical release entry point is local and provider-agnostic:
 `python3 engine/release_check.py`. GitHub Actions, Bitbucket Pipelines, GitLab CI,

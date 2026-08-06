@@ -41,4 +41,12 @@ python3 "$ROOT/.harness/lib/docs_wiki_lint.py" --staged || exit $?
 # `pre-push`). Por isso o questionário barra comando multi-linha.
 ( {{ harness_pre_commit_extra_command }} ) || exit $?
 {%- endif %}
+# Dogfood-only, safe no-op em qualquer projeto instalado: `engine/lint/` não é materializado
+# fora do repo do próprio orions-belt (o motor fica no framework, não no template — ver
+# engine/lint/readme_freshness.py). Quando o arquivo existe, é O framework checando seu
+# próprio README contra o estado real (contagem de hooks/gates/corpus) — pedido do Augusto
+# 2026-07-22 ("já pedi milhões de vezes... precisa ter um hook determinístico").
+if [ -f "$ROOT/engine/lint/readme_freshness.py" ]; then
+  python3 "$ROOT/engine/lint/readme_freshness.py" || exit $?
+fi
 exec python3 "$ROOT/.harness/lib/ref_integrity.py" --staged

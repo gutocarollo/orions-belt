@@ -205,7 +205,23 @@ def main() -> int:
     w(f"- **Decision:** {hp_decision}")
     w(f"- **Why / applied example:** {hp_example}\n")
 
-    w("## 4. Not installed — one-glance summary\n")
+    w("## 4. Docs topology (D3-D6)\n")
+    topo = str(answers.get("harness_docs_topology", "minimal") or "minimal")
+    override = str(answers.get("harness_docs_categories_override", "") or "").strip()
+    enforce = str(answers.get("harness_docs_topology_enforce", "warn") or "warn")
+    if override:
+        w(f"- **Categories:** `{override}` (explicit override — harness-init's proposal step, not the `{topo}` preset)")
+    else:
+        preset_csv = (
+            "planning,architecture,decisions,audits,qa-evidence,meetings" if topo == "standard"
+            else "planning,architecture,decisions"
+        )
+        w(f"- **Categories:** `{preset_csv}` (`{topo}` preset, unmodified)")
+    w(f"- **Enforcement:** `HARNESS_DOCS_TOPOLOGY_ENFORCE={enforce}` — "
+      + ("undeclared docs/<dir>/ blocks docs-wiki-lint" if enforce == "fail" else "undeclared docs/<dir>/ is a WARN only"))
+    w("")
+
+    w("## 5. Not installed — one-glance summary\n")
     skipped = [name for name, fl, *_rest in COMPONENTS if not flag(answers, fl, _rest[-1])]
     if not d_on:
         skipped.append("Deploy skill + prod guards")
