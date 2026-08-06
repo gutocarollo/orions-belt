@@ -101,6 +101,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/harness-block-guard.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/request-reinject.py\"",
             "timeout": 10
           }
@@ -122,6 +131,15 @@
           {
             "type": "command",
             "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/request-ledger.py\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/exploration-kickoff.py\"",
             "timeout": 10
           }
         ]

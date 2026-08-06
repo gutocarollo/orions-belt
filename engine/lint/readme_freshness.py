@@ -45,13 +45,33 @@ def check_hook_count() -> list[str]:
     claude_scripts = set(ref_pattern.findall(claude_settings.read_text(encoding="utf-8")))
     codex_scripts = set(ref_pattern.findall(codex_hooks.read_text(encoding="utf-8")))
 
+    # Parity exemption: a hook whose Claude registration matches on a tool that
+    # exists ONLY in Claude Code can never have a Codex counterpart, so counting
+    # it as divergence is a false positive by construction. Measured when this
+    # gate first ran: it reported clarification-plan-gate.py as a defect, but
+    # that hook is `PreToolUse` on matcher "AskUserQuestion" — a Claude-only
+    # tool (0 occurrences in the Codex hooks.json). The other two it reported,
+    # exploration-kickoff.py and harness-block-guard.py, WERE real omissions:
+    # their event siblings (request-ledger.py on UserPromptSubmit,
+    # harness-freshness.sh on SessionStart) were already registered in Codex.
+    CLAUDE_ONLY_TOOLS = ("AskUserQuestion",)
+    claude_text = claude_settings.read_text(encoding="utf-8")
+    runtime_bound = set()
+    for tool in CLAUDE_ONLY_TOOLS:
+        for m_tool in re.finditer(rf'"matcher"\s*:\s*"{tool}"', claude_text):
+            # the scripts registered inside this matcher's own hooks[] block
+            tail = claude_text[m_tool.end() : m_tool.end() + 1200]
+            block = tail.split('"matcher"')[0]
+            runtime_bound |= set(ref_pattern.findall(block))
+
     failures: list[str] = []
-    if claude_scripts != codex_scripts:
-        only_claude = claude_scripts - codex_scripts
-        only_codex = codex_scripts - claude_scripts
+    only_claude = claude_scripts - codex_scripts - runtime_bound
+    only_codex = codex_scripts - claude_scripts
+    if only_claude or only_codex:
         failures.append(
             f"hook registration diverges between runtimes (claude-only: {sorted(only_claude)}, "
-            f"codex-only: {sorted(only_codex)}) — README's single hook count assumes parity"
+            f"codex-only: {sorted(only_codex)}) — README's single hook count assumes parity. "
+            f"Exempt as Claude-tool-bound: {sorted(runtime_bound)}"
         )
 
     # Conditionality is a property of the hook's OWN file in templates/.harness/hooks/
