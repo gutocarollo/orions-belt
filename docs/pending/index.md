@@ -4,7 +4,7 @@
 
 # Pendencias abertas
 
-**1 itens abertos** — 1 esperam decisao do dono, 0 sao trabalho de agente. Resolver um item e **apagar o arquivo** `docs/pending/<id>.md` e regenerar este indice; o git guarda o historico.
+**2 itens abertos** — 1 esperam decisao do dono, 1 sao trabalho de agente. Resolver um item e **apagar o arquivo** `docs/pending/<id>.md` e regenerar este indice; o git guarda o historico.
 
 Cada item declara a `fonte` que o originou e a `citacao` textual dela. `pending_index.py --check` confere que a citacao ainda existe — item cujo ponteiro apodreceu vira **re-auditoria**, nunca afirmacao.
 
@@ -18,4 +18,8 @@ _decisao humana: preferencia, escopo, emenda de lei, custo._
 
 ## Trabalho de agente
 
-Nada aberto.
+_resolvivel com codigo, medicao ou leitura — nao pergunte, faca._
+
+| | item | severidade | bloqueia | fonte |
+|---|---|---|---|---|
+| [ ] | [O guard de pares coloridos resolve por RANK; a lei exige ENTIDADE na cabeça](guard-de-pares-nao-conhece-entidade-so-rank.md) | media | conformidade total do ds-gate com a GRAMMAR do ui-tokenizer-v2 | [`templates/tests/test_ds_pairs_oklch.sh:86`](../../templates/tests/test_ds_pairs_oklch.sh) |
