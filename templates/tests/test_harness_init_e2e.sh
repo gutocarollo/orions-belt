@@ -60,8 +60,12 @@ if ! command -v uvx >/dev/null 2>&1; then
   exit 77  # SKIP convention (README.md #H4): not a PASS
 fi
 
+# Without --vcs-ref, copier pins to the latest git TAG, not HEAD (same trap
+# documented in test_copier_update_no_op.sh) — this e2e must prove the
+# CURRENT branch state renders and merges correctly, not a stale tag.
+HEAD_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 RENDER_LOG="$WORK/copier.log"
-if ! uvx copier copy "$REPO_ROOT" "$SCRATCH" \
+if ! uvx copier copy "$REPO_ROOT" "$SCRATCH" --vcs-ref "$HEAD_SHA" \
     --data project_name=e2e-fixture --data owner_name=Tester \
     --defaults --trust -q > "$RENDER_LOG" 2>&1; then
   echo "FAIL: copier copy failed -- $(tail -5 "$RENDER_LOG")"
