@@ -21,7 +21,7 @@ GENERICITY (vs. the source version): zero hardcoded brand name.
 
 CLI:
   python3 .harness/lib/ds-pair-eval.py --text text-text --bg bg-white
-  python3 .harness/lib/ds-pair-eval.py --text text-white/70 --bg bg-surface-selected --non-text
+  python3 .harness/lib/ds-pair-eval.py --text text-white/70 --bg bg-list-row-selected --non-text
   echo '[{"text":"text-muted-text","bg":"bg-card"}]' | python3 .harness/lib/ds-pair-eval.py --batch
 
 Exit 1 if any pair FAILS in any theme (useful in a gate).
@@ -146,7 +146,7 @@ TOKENS = {'accent', 'accent-foreground', 'accent-text', 'background', 'border', 
           'sidebar-mobile-panel-muted-foreground', 'sidebar-mobile-panel-muted-text', 
           'sidebar-mobile-panel-rail', 'sidebar-mobile-panel-text', 'sidebar-panel', 
           'sidebar-text', 'success', 'success-fill', 'success-foreground', 'success-soft', 
-          'success-soft-foreground', 'success-soft-text', 'success-text', 'surface-selected', 
+          'list-row-selected', 'success-soft-foreground', 'success-soft-text', 'success-text', 'surface-selected', 
           'surface-selected-foreground', 'surface-selected-text', 'text', 'text-faint', 
           'text-subtle', 'warning', 'warning-fill', 'warning-foreground', 'warning-soft', 
           'warning-soft-foreground', 'warning-soft-text', 'warning-text'}
