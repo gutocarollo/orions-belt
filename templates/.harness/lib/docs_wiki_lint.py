@@ -78,7 +78,13 @@ ROOT_ALLOWED_MD = CAPS_OK | {"CONTRIBUTING.md", "CHANGELOG.md", "CODE_OF_CONDUCT
 STRAY_SKIP_DIRS = {"node_modules", "vendor", "dist", "build", "out", "target", "__pycache__", "fixtures"}
 # Docs-topology (D3-D6, 2026-07-22): directories under docs/ that are the wiki's own
 # indexing/support layer, never "categories" a project declares via HARNESS_DOCS_CATEGORIES.
-TOPOLOGY_INFRA_DIRS = {"_arquivo", "_archive"} | GENERIC_DIRS
+# Somente a infra de arquivamento do proprio wiki. NAO herda GENERIC_DIRS:
+# aquele conjunto isentava silenciosamente docs/reports/, docs/assets/,
+# docs/img/ do ratchet — diretorios de conteudo, nao de infra. Todo nome
+# "plausivel de infra" numa allowlist finita, sob um ratchet WARN por
+# default, e falso negativo. Valor final apurado em duas rodadas de review
+# adversarial (4ad3609 -> 5bf4c88), aplicado aqui a mao.
+TOPOLOGY_INFRA_DIRS = {"_arquivo", "_archive"}
 # lowercase kebab, with an optional date prefix (event) or number (sequenced); dot only for versions like v2.2
 NAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}-|\d+-)?[a-z0-9]+([a-z0-9.\-]*[a-z0-9])?\.[a-z0-9]+$")
 # date (YYYY-MM-DD) present but NOT as a prefix → event doc with date in suffix (§2: must be a prefix)
