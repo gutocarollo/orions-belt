@@ -141,16 +141,16 @@ Don't confuse them: baseline fails the build; evidence informs the human/agent.
 
 {% if use_ds_gate -%}
 Installed by `use_ds_gate` (enabled in this project): when tokenizing, the
-classic error is swapping the TEXT color without checking the BACKGROUND — `text-foreground` over
+classic error is swapping the TEXT color without checking the BACKGROUND — `text-text` over
 fixed `bg-white` ends up white-on-white in dark; `text-white` over
 `bg-muted` (neutral token) disappears in light. A function like this judges a pair
 deterministically across the project's themes (`PROJECT_THEMES` from
 `.harness/harness.conf`), without looking at a pixel.
 
 ```bash
-python3 .harness/lib/ds-pair-eval.py --text text-foreground --bg bg-white           # → FAIL in dark
-python3 .harness/lib/ds-pair-eval.py --text text-primary-foreground --bg bg-primary # → PASS (brand button)
-python3 .harness/lib/ds-pair-eval.py --text text-muted-foreground --bg bg-card --non-text
+python3 .harness/lib/ds-pair-eval.py --text text-text --bg bg-white           # → FAIL in dark
+python3 .harness/lib/ds-pair-eval.py --text text-primary-text --bg bg-primary # → PASS (brand button)
+python3 .harness/lib/ds-pair-eval.py --text text-muted-text --bg bg-card --non-text
 echo '[{"text":"text-white","bg":"bg-muted"}]' | python3 .harness/lib/ds-pair-eval.py --batch  # JSON batch
 ```
 
@@ -169,6 +169,6 @@ Not installed in this project (`use_ds_gate: false`). If this project has an
 equivalent contrast evaluator, it solves the same problem: judge
 deterministically whether a text×background pair fits (≥4.5:1 text / ≥3:1
 non-text) in ALL of the project's themes without relying on looking at a pixel — the
-classic error is swapping the TEXT color without checking the BACKGROUND (`text-foreground` over
+classic error is swapping the TEXT color without checking the BACKGROUND (`text-text` over
 fixed `bg-white` becomes white-on-white in dark).
 {%- endif %}
