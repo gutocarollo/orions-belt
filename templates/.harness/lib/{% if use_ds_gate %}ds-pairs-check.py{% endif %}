@@ -4,10 +4,13 @@
 PORTED from apps/web/scripts/ds-pairs-check.py (reference donor harness) —
 rescue plan §R1a. Structural rule (shadcn-style design-system contract):
   - Action/status colored pairs (primary, destructive, success, info, premium):
-    `X-foreground` MUST be white (#fff family) and contrast >= 4.5:1 with `X`.
-    The label contrasts with its PARENT (container), never with the page.
+    `X.text` MUST be white (#fff family) and contrast >= 4.5:1 with the fill.
+    The text contrasts with its PARENT (container), never with the page.
+    Legacy `X-foreground` still RESOLVES (migration SOURCE), but a new token
+    never carries the word: FORBIDDEN = surface, semantic, content, label,
+    foreground (ui-tokenizer GRAMMAR.md §3/§5.6, owner ruling 2026-08-01).
   - Exception:
-    - warning (amber + dark label is the canonical pair; requires >= 4.5:1 too).
+    - warning (amber + dark text is the canonical pair; requires >= 4.5:1 too).
   - surface-selected is inverted NEUTRAL (the pair inverts together) — checks contrast only.
 
 GENERICITY (vs. the source version): zero hardcoded brand string.
@@ -200,8 +203,19 @@ def eff(name, body, base):
 fails = 0
 skips = 0  # H2/A6.1: pairs that exist in the CSS but could not be resolved to
            # an evaluable color (neither var()/hex/oklch) — do NOT count as "OK".
-print(f'{"BLOCK":24} {"PAIR":18} {"tone":9} {"label":9} {"ratio":>6}  verdict')
+print(f'{"BLOCK":24} {"PAIR":18} {"tone":9} {"text":9} {"ratio":>6}  verdict')
 print('-' * 82)
+def pair_text(p, body, base):
+    """The token that paints what sits on the colored container.
+
+    Canonical anatomy is `text` (`X-text`); `X-foreground` is the OLD shadcn
+    name and is accepted ONLY as migration SOURCE — the guard must keep
+    reading projects that have not migrated yet, while never teaching the
+    banned word as a target.
+    """
+    return eff(p + '-text', body, base) or eff(p + '-foreground', body, base)
+
+
 for bname, bpat in BLOCKS.items():
     body = block_body(bpat)
     if not body:
@@ -210,7 +224,7 @@ for bname, bpat in BLOCKS.items():
     scope = body + '\n' + base  # inherited var() resolves in the base
     for p in PAIRS:
         mx = eff(p, body, base)
-        mf = eff(p + '-foreground', body, base)
+        mf = pair_text(p, body, base)
         if not mx or not mf:
             continue
         x = resolve(mx.group(1), scope)
@@ -228,12 +242,12 @@ for bname, bpat in BLOCKS.items():
         verdict = 'OK' if (ok_contrast and ok_white) else 'VIOLATES'
         if verdict == 'VIOLATES':
             fails += 1
-        why = '' if verdict == 'OK' else (' label-not-white' if not ok_white else '') + ('' if ok_contrast else ' contrast<4.5')
+        why = '' if verdict == 'OK' else (' text-not-white' if not ok_white else '') + ('' if ok_contrast else ' contrast<4.5')
         print(f'{bname:24} {p:18} {x:9} {fg:9} {r:6.2f}  {verdict}{why}')
     # *-soft pairs — text over the chip itself (>=4.5)
     for p in SOFT_PAIRS:
         mx = eff(p, body, base)
-        mf = eff(p + '-foreground', body, base)
+        mf = pair_text(p, body, base)
         if not mx or not mf:
             continue
         x = resolve(mx.group(1), scope)
