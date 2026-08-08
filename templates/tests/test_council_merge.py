@@ -86,6 +86,26 @@ def assert_payload_block(
 
 
 class CouncilMergeRegressionTest(unittest.TestCase):
+    def test_incremental_execution_and_remote_authority_contract(self):
+        council = read(COUNCIL)
+        assert_contains_all(
+            self,
+            council,
+            (
+                "MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE",
+                "planning-and-task-breakdown",
+                "incremental-implementation",
+                "Cada slice validado DEVE produzir imediatamente um commit LOCAL atomico",
+                "Push para qualquer remoto e merge para `main` no remoto exigem autorizacao explicita",
+                "Critical`, `Required`, `Optional`, `Nit`, `FYI",
+                "zero `Critical` e zero `Required`",
+                "ANCHOR -> PHASE-PLAN -> ITEM-PLAN -> SLICE -> VALIDATION -> LOCAL-COMMIT",
+                "subagent isolado `code-reviewer`",
+            ),
+            "Council incremental contract",
+        )
+        self.assertNotIn("commit/push dependem da autoridade", council)
+
     def test_plan_loop_requires_request_and_consumption_handoff(self):
         for path in (COUNCIL, REVIEWER, ADVERSARIAL):
             text = read(path)
