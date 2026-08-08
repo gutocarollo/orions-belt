@@ -15,7 +15,7 @@
 # block, the reinject does not reinject, and the precompact does not stamp
 # the journal.
 #
-# MEASURED 2026-08-01 (learnhouse field report). A marathon whose run
+# MEASURED 2026-08-01 (multi-repo field report). A marathon whose run
 # directory lived in a second working directory, driven from a session
 # anchored on a different project directory, ran for hours and produced ZERO
 # `.stop-strikes` files, and a compaction of that session injected no

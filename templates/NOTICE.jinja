@@ -5,7 +5,7 @@ AGENTS.md.jinja) because `.harness/lib/docs_wiki_lint.py`, `ref_integrity.py`
 and `scan_project.py` are ALWAYS installed, regardless of use_claude/use_codex —
 and they carry third-party / same-author provenance that must travel with the
 target project (CC BY-SA 4.0 Section 3(a)). The block for the 10 trailofbits
-skills + diataxis + 3 learnhouse-internal skills is included only when
+skills + diataxis + 3 internal skills is included only when
 use_claude=true, because only then are they materialized under
 .claude/skills/ (see templates/{% raw %}{% if use_claude %}{% endraw %}.claude{% raw %}{% endif %}{% endraw %}/skills/).
 Full, always-current source: NOTICE + PROVENANCE.json at the root of the
