@@ -103,12 +103,12 @@ if ! uvx copier copy "$REPO_ROOT" "$BASE_CLAUDE" --vcs-ref HEAD \
   echo "FAIL: copier copy --vcs-ref HEAD (claude-only) failed -- $(tail -20 "$WORK/copier-claude.log")"
   FAIL=1
 else
-  for name in grill-me harness-init prova-de-conclusao marathon repo-wiki-curator ui-evidence verify; do
+  for name in grill-me harness-init prova-de-conclusao marathon repo-wiki-curator ui-evidence verify adversarial-review clarification-plan planning-and-task-breakdown incremental-implementation test-driven-development interview-me code-review-and-quality code-simplification; do
     A="$BASE/.agents/skills/$name/SKILL.md"
     C="$BASE_CLAUDE/.claude/skills/$name/SKILL.md"
     if [ -f "$A" ] && [ -f "$C" ]; then
       assert "(b) skill '$name': .agents and .claude render BYTE-IDENTICAL (single source)" \
-        'diff -q "$A" "$C" >/dev/null'
+        'diff -q <(sed "s|$BASE|<PROJECT_ROOT>|g" "$A") <(sed "s|$BASE_CLAUDE|<PROJECT_ROOT>|g" "$C") >/dev/null'
     else
       echo "FAIL: skill '$name' missing in one of the two renders (.agents=$([ -f "$A" ] && echo ok || echo MISSING), .claude=$([ -f "$C" ] && echo ok || echo MISSING))"
       FAIL=1

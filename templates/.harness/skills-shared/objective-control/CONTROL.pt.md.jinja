@@ -1,0 +1,11 @@
+## Controle obrigatório do objetivo macro
+
+Antes de perguntar, sugerir mudança, criar finding ou impor gate, declare `NORTE-MACRO`, `START`, `GOAL` e os nós/arestas afetados. Pontue cada questão de 0 a 4: impacto no objetivo (30%), alcançabilidade da jornada (25%), aceite/testes (20%), irreversibilidade (15%) e urgência de dependência (10%).
+
+- `CRITICAL_BLOCK`: evidência `REAL`, caminho crítico, sem workaround validado e score >=85; hard safety override exige irreversibilidade 4 e fronteira concreta.
+- `HIGH_FIX_NOW`: evidência `REAL`, fase atual, sem workaround e score >=70.
+- `DEFER_RUN`: qualquer outro caso; persistir em `RUN.md`, seção `## Pendências não bloqueantes`, e continuar.
+
+Evidência `REAL` nunca é prosa livre: o assessment usa `evidence: {path, line, contains}` com caminho relativo ao repositório. O runtime rejeita locator incompleto; a entrega resolve a linha no arquivo e rejeita marker ausente. `on_critical_path` e `affects_current_phase` devem coincidir com o grafo e a aresta ativa, não com a opinião do reviewer.
+
+`BLOQUEADO` exige `CRITICAL_BLOCK` e dependência externa nominal (autoridade, acesso ou fato). Questão corrigível retorna `CORRIGIR`. Para desligar ou adiar restrição excessiva, apresente dados, impacto e recomendação, e espere aprovação humana explícita.

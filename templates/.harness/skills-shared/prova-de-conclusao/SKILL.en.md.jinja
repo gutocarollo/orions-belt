@@ -20,6 +20,10 @@ description: >
 
 # Proof of Completion
 
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL.en.md.jinja" %}
+
+Reconstruct the executed path and require `functional`, `quality`, and `regression` IDs with PASS evidence bound to the correct commit/artifact for every critical edge. Proof covers all critical edges, not only the first path found, and every ID is bound to the command the ledger actually executed.
+
 Origin: adapted from a protocol of the reference donor-harness (friction audit) —
 completion claims that external adversarial audits later knocked down. This protocol
 replaces self-optimism with raw evidence.

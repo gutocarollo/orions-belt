@@ -60,6 +60,7 @@ CODEX_ROOT = ROOT / "{% if use_codex %}.codex{% endif %}"
 # real vive em SKILL.{pt,en}.md.jinja. Este teste asserta a fonte PT (strings PT + sentinels);
 # os sentinels são idênticos nos 2 idiomas (contrato fixo), então o gate independe do idioma.
 COUNCIL = ROOT / ".harness/skills-shared/delivery-council/SKILL.pt.md.jinja"
+COUNCIL_EN = ROOT / ".harness/skills-shared/delivery-council/SKILL.en.md.jinja"
 ADVERSARIAL = ROOT / ".harness/skills-shared/adversarial-review/SKILL.pt.md.jinja"
 REVIEWER = CODEX_ROOT / "agents/{{ project_name }}-adversarial-reviewer.toml.jinja"
 
@@ -86,6 +87,58 @@ def assert_payload_block(
 
 
 class CouncilMergeRegressionTest(unittest.TestCase):
+    def test_english_lifecycle_commands_and_read_only_anchor_are_safe(self):
+        council = read(COUNCIL_EN)
+        self.assertIn("--anchor-source <source>", council)
+        self.assertIn("--execution-graph <validated-graph.json>", council)
+        self.assertIn("agent_swarm_ledger.py transition", council)
+        self.assertNotIn("--request-source", council)
+        self.assertNotIn("council_session.py transition", council)
+        self.assertIn("In `READ_ONLY`, never create, update, archive or delete files", council)
+        self.assertIn("In `READ_ONLY`, never clear, move or change the anchor", council)
+        self.assertIn("`APLICAR` with reason", council)
+        self.assertIn("record `APLICAR`", council)
+        self.assertNotIn("record `APPLY`", council)
+
+    def test_incremental_execution_and_remote_authority_contract(self):
+        council = read(COUNCIL)
+        assert_contains_all(
+            self,
+            council,
+            (
+                "MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE",
+                "planning-and-task-breakdown",
+                "incremental-implementation",
+                "Cada slice validado DEVE produzir imediatamente um commit LOCAL atomico",
+                "Push para qualquer remoto e merge para `main` no remoto exigem autorizacao explicita",
+                "`CRITICAL_BLOCK`, `HIGH_FIX_NOW`, `DEFER_RUN`",
+                "zero `Critical` e zero `Required`",
+                "| `ANCHOR` |",
+                "| `LOCAL-COMMIT` |",
+                "subagent isolado `code-reviewer`",
+            ),
+            "Council incremental contract",
+        )
+        assert_contains_all(self, council, ("Grafo e testes obrigatórios", "functional", "quality", "regression", "relatório de necessidade"), "Council objective graph contract")
+        self.assertNotIn("commit/push dependem da autoridade", council)
+
+    def test_all_operating_skill_sources_are_present_and_role_specific(self):
+        markers = {
+            "planning-and-task-breakdown": "directed execution graph",
+            "incremental-implementation": "governing execution skill",
+            "test-driven-development": "stable IDs",
+            "interview-me": "Ask one question at a time",
+            "code-review-and-quality": "individually assessed findings",
+            "code-simplification": "every added code line",
+        }
+        for skill, marker in markers.items():
+            source = ROOT / ".harness/skills-shared" / skill / "SKILL.md.jinja"
+            with self.subTest(skill=skill):
+                self.assertTrue(source.is_file())
+                text = read(source)
+                self.assertIn(marker, text)
+                self.assertIn("objective-control/CONTROL", text)
+
     def test_plan_loop_requires_request_and_consumption_handoff(self):
         for path in (COUNCIL, REVIEWER, ADVERSARIAL):
             text = read(path)

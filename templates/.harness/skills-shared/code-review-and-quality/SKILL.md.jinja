@@ -1,0 +1,12 @@
+---
+name: code-review-and-quality
+description: Reviews correctness and code health while blocking only evidence-backed issues material to the macro objective.
+---
+
+# Code Review and Quality
+
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL." ~ harness_language ~ ".md.jinja" %}
+
+Review correctness, readability/simplicity, architecture, security, performance, and the planned tests. Every finding includes evidence, affected nodes, calculated score, and disposition. Only `CRITICAL_BLOCK` and `HIGH_FIX_NOW` enter blocking counts; `DEFER_RUN` findings go to RUN.md and do not prevent approval.
+
+Reject counts that do not equal individually assessed findings. Use `BLOQUEADO` only for an external critical blocker; use `CORRIGIR` for issues the implementer can fix. Approval means the change improves overall code health and its critical graph edges are proven, not that it is stylistically perfect.

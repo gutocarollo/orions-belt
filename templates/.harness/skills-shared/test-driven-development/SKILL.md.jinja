@@ -1,0 +1,12 @@
+---
+name: test-driven-development
+description: Creates graph-bound behavioral tests before implementation and proves each planned edge.
+---
+
+# Test-Driven Development
+
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL." ~ harness_language ~ ".md.jinja" %}
+
+Before RED, identify the plan edge and assign stable IDs. Every phase/item has three required classes: `functional` proves the promised input-to-output transition, `quality` proves the explicit quality threshold, and `regression` proves prior reachable paths still work.
+
+Record IDs in the item plan and return the exact same IDs with PASS evidence during validation. A generic green command cannot replace this binding. Each ID must be carried by the exact command that the ledger executes; a separately declared PASS list is invalid evidence. Use real implementations where practical; for a bug, first reproduce the failure, then make the smallest change that turns RED into GREEN.

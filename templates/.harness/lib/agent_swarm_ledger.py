@@ -6,12 +6,17 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 from _tooling_conf import get_config, project_root
+from council_runtime import TransitionError, apply_transition
+from objective_control import ObjectiveControlError, record_deferred
 
 
 ROOT = project_root()
@@ -26,6 +31,45 @@ EVENT_STATUSES = {
     ("execution", "fix-request"): {"CORRIGIR"},
     ("execution", "fix-consumed"): {"CORRIGIR"},
 }
+COUNCIL_EVENTS = ("ANCHOR", "PHASE-PLAN", "ITEM-PLAN", "SLICE", "VALIDATION", "LOCAL-COMMIT", "QUALITY", "SIMPLIFICATION", "ADVERSARIAL", "DELIVERY")
+
+
+def persist_deferred(run_id: str, event_payload: dict[str, Any]) -> None:
+    findings = event_payload.get("deferred_findings", [])
+    if not findings:
+        return
+    runs = ROOT / ".harness" / "runs"
+    active = runs / "ACTIVE"
+    if not active.is_file() or active.read_text(encoding="utf-8").strip() != run_id:
+        raise ObjectiveControlError("DEFER_RUN requires this run to be the active Council run")
+    run_path = runs / run_id / "RUN.md"
+    for finding in findings:
+        record_deferred(run_path, {**finding["impact"], "reason": finding["reason"], "review_after": finding["review_after"]})
+
+
+def verify_repository_transition(event: str, state: dict[str, Any], root: Path) -> None:
+    if event == "LOCAL-COMMIT":
+        sha = state["commits"][-1]
+        if subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=root, capture_output=True).returncode:
+            raise SystemExit(f"invalid Council transition: local commit does not exist: {sha}")
+        actual = set(subprocess.check_output(["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", sha], cwd=root, text=True).splitlines())
+        if actual != set(state["commit_files"][sha]):
+            raise SystemExit(f"invalid Council transition: local commit files differ from validated slice: {sha}")
+        expected_hashes = {item["path"]: item["sha256"] for item in state["validation_evidence"]["file_hashes"]}
+        actual_hashes = {path: hashlib.sha256(subprocess.check_output(["git", "show", f"{sha}:{path}"], cwd=root)).hexdigest() for path in actual}
+        if actual_hashes != expected_hashes:
+            raise SystemExit(f"invalid Council transition: commit content differs from validated file hashes: {sha}")
+    if event == "DELIVERY":
+        if state.get("mutation_mode") == "WORKSPACE_WRITE":
+            source_root = Path(__file__).resolve().parents[2]
+            sys.path.insert(0, str(source_root))
+            from engine.integration.council_pipeline import IntegrationError, verify_repository_evidence
+            head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            try:
+                verify_repository_evidence({"state": state, "evidence": {"git_sha": head}}, root)
+            except IntegrationError as exc:
+                raise SystemExit(f"invalid Council transition: {exc}") from exc
+        state["delivery_verified"] = True
 
 
 def utc_now() -> str:
@@ -107,6 +151,14 @@ def payload(raw: str | None) -> dict[str, Any]:
 
 def append(args: argparse.Namespace) -> None:
     path = ledger_path(args.run_id)
+    state_path = path.parent / "council-state.json"
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit("append requires a persisted WORKSPACE_WRITE Council run") from exc
+    if state.get("mutation_mode") != "WORKSPACE_WRITE":
+        raise SystemExit("append requires a persisted WORKSPACE_WRITE Council run")
+    event_payload = payload(args.payload_json)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+", encoding="utf-8") as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
@@ -115,12 +167,13 @@ def append(args: argparse.Namespace) -> None:
         parent_seq = pending_parent(entries, args.loop, args.event)
         entry = {"ts": utc_now(), "run_id": args.run_id, "seq": len(entries) + 1,
                  "loop": args.loop, "round": args.round, "event": args.event,
-                 "status": args.status, "payload": payload(args.payload_json)}
+                 "status": args.status, "payload": event_payload}
         if parent_seq is not None:
             entry["parent_seq"] = parent_seq
         validate_entry(entry, args.run_id, len(entries) + 1)
         if entries and args.round < entries[-1]["round"]:
             raise SystemExit("round cannot regress")
+        persist_deferred(args.run_id, event_payload)
         stream.seek(0, 2)
         stream.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
         stream.flush()
@@ -141,6 +194,56 @@ def summary(args: argparse.Namespace) -> None:
     print(json.dumps({"run_id": args.run_id, "counts": counts, "last_status": last_status}, indent=2, sort_keys=True))
 
 
+def transition(args: argparse.Namespace) -> None:
+    folder = ledger_path(args.run_id).parent
+    event_payload = payload(args.payload_json)
+    if args.council_event == "ANCHOR" and event_payload.get("mutation_mode") == "READ_ONLY":
+        raise SystemExit("read-only Council runs are inline and cannot mutate the ledger")
+    folder.mkdir(parents=True, exist_ok=True)
+    event_path = folder / "council-events.jsonl"
+    state_path = folder / "council-state.json"
+    required_path = state_path.with_suffix(".required-next")
+    if required_path.exists() and args.council_event != "VALIDATION":
+        raise SystemExit("invalid Council transition: VALIDATION is required after the last edit")
+    with event_path.open("a+", encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        stream.seek(0)
+        events = [json.loads(line) for line in stream if line.strip()]
+        state = None
+        try:
+            for item in events:
+                state = apply_transition(state, item["event"], item["payload"], repository_root=ROOT)
+            if state and state.get("mutation_mode") == "READ_ONLY":
+                raise TransitionError("read-only Council runs are inline and cannot mutate the ledger")
+            if args.council_event == "VALIDATION":
+                checked = event_payload.get("checked_files", [])
+                for name in checked:
+                    if not subprocess.check_output(["git", "status", "--porcelain", "--", name], cwd=ROOT, text=True).strip():
+                        raise TransitionError(f"VALIDATION must precede LOCAL-COMMIT; checked file is already clean: {name}")
+                for command in event_payload.get("commands", []):
+                    process = subprocess.run(command.get("command", ""), cwd=ROOT, shell=True)
+                    if process.returncode != 0:
+                        raise TransitionError(f"validation command failed with exit {process.returncode}: {command.get('command')}")
+                    command["exit_code"] = process.returncode
+                event_payload["executor"] = "agent_swarm_ledger"
+                event_payload["validated_at"] = utc_now()
+                event_payload["file_hashes"] = [{"path": name, "sha256": hashlib.sha256((ROOT / name).read_bytes()).hexdigest()} for name in checked]
+            item = {"seq": len(events) + 1, "ts": utc_now(), "event": args.council_event, "payload": event_payload}
+            state = apply_transition(state, item["event"], item["payload"], repository_root=ROOT)
+            if args.council_event in {"QUALITY", "ADVERSARIAL"}:
+                persist_deferred(args.run_id, event_payload)
+        except (TransitionError, KeyError, TypeError, ValueError) as exc:
+            raise SystemExit(f"invalid Council transition: {exc}") from exc
+        verify_repository_transition(args.council_event, state, ROOT)
+        stream.seek(0, 2)
+        stream.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n")
+        stream.flush()
+        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        if args.council_event == "VALIDATION" and required_path.exists():
+            required_path.unlink()
+    print(state_path.relative_to(ROOT))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -155,6 +258,11 @@ def main() -> int:
     show = commands.add_parser("summary")
     show.add_argument("--run-id", required=True)
     show.set_defaults(func=summary)
+    move = commands.add_parser("transition")
+    move.add_argument("--run-id", required=True)
+    move.add_argument("--event", dest="council_event", choices=COUNCIL_EVENTS, required=True)
+    move.add_argument("--payload-json", required=True)
+    move.set_defaults(func=transition)
     args = parser.parse_args()
     args.func(args)
     return 0

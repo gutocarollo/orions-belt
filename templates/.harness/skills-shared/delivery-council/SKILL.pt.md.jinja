@@ -22,25 +22,14 @@
 -#}
 ---
 name: {{ project_name }}-delivery-council
-description: Use em tarefas complexas do {{ project_name }} que envolvam implementacao, planejamento, revisao de plano existente, arquitetura, design-system, banco, auth, tenancy, seguranca, testes, PR review ou qualquer mudanca que precise iniciar por EXECUTION, PLANNING, PLAN_REVIEW ou AUTO, com trade-off automatico e adversarial loops.
+description: Use em tarefas complexas do {{ project_name }} que envolvam implementacao, planejamento, revisao de plano existente, arquitetura, design-system, banco, auth, tenancy, seguranca, testes, PR review ou qualquer mudanca que precise iniciar por EXECUTION, PLANNING, PLAN_REVIEW ou AUTO, com planning-and-task-breakdown antes de cada fase/item, incremental-implementation como disciplina de execucao, trade-off automatico e adversarial loops.
 ---
 
 # {{ project_name }} Delivery Council
 
 Coordene uma entrega dentro de `{{ project_root }}` usando Codex nativo: `AGENTS.md`, repo skills, custom agents, comandos reais e evidencia desta sessao.
 
-{#
-PROVENIENCIA (vive SO no repo do framework — comentario Jinja nao renderiza no
-projeto-alvo; requisito F9-fixes: zero conteudo do doador no render): fusao de
-2 linhagens do council do harness-doador de referencia, feita em F1.5 sobre uma
-copia extraida (D11) e parametrizada em F3. Regra de merge (docs/planning/
-00-plano-consolidado.md secao 3/6 F1.5): REPLAN-REQUEST/CONSUMED +
-FIX-REQUEST/CONSUMED + gate de rodada final + ledger vem da linhagem
-agent-swarm; review-sempre-em-subagent + REVISORES: + continuacao do mesmo
-subagent + guard Understand-Anything vem da linhagem do doador vivo. Nenhuma
-das duas sozinha e o estado da arte — ver witness em
-templates/verification/council-witness.json.
-#}
+
 
 ## Argumentos de Entrada
 
@@ -54,6 +43,7 @@ AUTO_DECIDE=true | false
 PLAN_REVIEW_MAX={{ harness_plan_review_max }}
 EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}
 AUTO_EXECUTE_AFTER_PLAN=false | true
+MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE
 ```
 
 Defaults:
@@ -64,6 +54,7 @@ Defaults:
 - `PLAN_REVIEW_MAX={{ harness_plan_review_max }}`
 - `EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}`
 - `AUTO_EXECUTE_AFTER_PLAN=false` para `START_AT=PLANNING`; default efetivo `true` para `START_AT=PLAN_REVIEW`
+- `MUTATION_MODE=READ_ONLY` para auditoria/review/diagnostico sem pedido de mudanca; `WORKSPACE_WRITE` somente quando o usuario pedir implementacao ou alteracao.
 
 Limites:
 
@@ -72,7 +63,7 @@ Limites:
 
 Interprete:
 
-- `START_AT=EXECUTION`: comece pela execucao. Faca apenas contexto minimo, reuso local e checagens bloqueantes antes de editar.
+- `START_AT=EXECUTION`: se ja existir plano executavel aprovado, nao repita o Planning Adversarial Loop; execute os preflights obrigatorios de fase/item. Sem plano executavel, transicione automaticamente para `PLANNING`. Drift material de objetivo, escopo ou aceite durante a execucao volta ao Planning Adversarial Loop.
 - `START_AT=PLANNING`: comece criando/estruturando o plano. Nao edite codigo ate concluir o Planning Adversarial Loop, a menos que `AUTO_EXECUTE_AFTER_PLAN=true`.
 - `START_AT=PLAN_REVIEW`: plano ja existe. Leia `PLAN_SOURCE`, bloco `PLAN:` ou arquivo citado; revise o plano com Planning Adversarial Loop; se ficar `SATISFEITO`, execute; depois rode Adversarial Verification Loop da execucao. Nao refaca planejamento inicial amplo.
 - `START_AT=AUTO`: inferir pelo pedido. "implemente", "corrija", "termine", "faça" e "aplique" indicam execucao; "planeje", "desenhe", "arquiteture", "avalie abordagem" indicam planejamento; "plano ja existe", "revise execute" e "review do plano aprovado" indicam plan review.
@@ -81,13 +72,21 @@ Interprete:
 
 ## Regra de Escopo
 
-Use o fluxo completo quando a tarefa tiver risco medio/alto, tocar multiplos arquivos, alterar contrato de dominio, UI, dados, auth, tenancy, seguranca, arquitetura ou teste. Para um ajuste trivial de um arquivo, use uma versao compacta: contexto minimo, implementacao, validacao e relato.
+Use o fluxo completo quando a tarefa tiver risco medio/alto, tocar multiplos arquivos, alterar contrato de dominio, UI, dados, auth, tenancy, seguranca, arquitetura ou teste. Para ajuste trivial, compacte somente a amplitude: fase e item implicitos, preflight `planning-and-task-breakdown`, ciclo `incremental-implementation`, validacao, commit local e quality review continuam obrigatorios; apenas a review adversarial completa pode ser proporcionalmente dispensada com justificativa e evidencia.
 
-Nao delegue ambiguidade crua ao usuario. Explore codigo, docs e dados reais primeiro. O unico mecanismo de clarificacao e `$grill-me`, chamado apenas pelo Gate Condicional de Grill.
+Nao delegue ambiguidade crua ao usuario. Explore codigo, docs e dados reais primeiro. Use `interview-me` para descobrir objetivo/START/GOAL ainda indefinidos, `clarification-plan` para decisões materiais e `$grill-me` quando o Gate Condicional de Grill autorizar a sabatina.
+
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL.pt.md.jinja" %}
+
+## Grafo e testes obrigatórios
+
+Materialize o plano como grafo START→GOAL: jornadas, nós, arestas, dependências, interfaces e transições de falha. Toda fase/item referencia `edge_id`, entrada, saída, entregável e IDs deterministas `functional`, `quality` e `regression`. Antes de `DELIVERY`, `prova-de-conclusao` reconstrói o caminho; `verify` prova cada mudança pontual; `test-driven-development` cria os testes. O manifesto final liga grafo, testes, evidências e commits.
+
+Antes do primeiro slice executável, inicie o run com `python3 .harness/lib/council_session.py start --run-id <id> --anchor-source <fonte> --mutation-mode WORKSPACE_WRITE --execution-graph <grafo-validado.json>`. O `ANCHOR` armazena esse grafo; `PHASE-PLAN` com nós, testes ou aresta inventados falha antes de qualquer edição.
 
 ## Fluxo Obrigatorio
 
-0. **Ancore o pedido original (fidelidade ao estimand).** Antes de tudo, escreva/atualize `.harness/requests/CURRENT-TASK.md` com o objetivo ORIGINAL do usuario VERBATIM + as emendas explicitamente acordadas, a partir de `.harness/requests/session-*.md` (o ledger append-only capturado por `request-ledger.py`, imune a compactacao de contexto). Toda rodada de plan-review e verificacao DEVE entregar esse arquivo ao subagent revisor, e o eixo 1.0 estimand-fidelity do revisor julga o trabalho contra ele — nao contra o plano derivado. E a contramedida para a deriva mais recorrente: o objetivo e parafraseado pela compactacao e a review acaba validando um plano intermediario que substituiu o pedido em silencio.
+0. **Ancore o pedido original (fidelidade ao estimand).** Em `WORKSPACE_WRITE`, escreva/atualize `.harness/requests/CURRENT-TASK.md` com o objetivo ORIGINAL do usuario VERBATIM + emendas acordadas, preferindo o ledger append-only `.harness/requests/session-*.md`. Em `READ_ONLY`, e proibido criar, atualizar, arquivar ou apagar arquivos: use como `ANCHOR_SOURCE` o ledger existente ou um bloco inline verbatim no prompt dos reviewers. Toda review recebe `ANCHOR_SOURCE` e julga contra ele, nunca apenas contra o plano derivado.
 1. Resolva o ponto de entrada (`START_AT`).
 2. Produza um Context Brief proporcional ao ponto de entrada:
    - pedido real e objetivo verdadeiro (cite a ANCORA verbatim);
@@ -107,20 +106,41 @@ Nao delegue ambiguidade crua ao usuario. Explore codigo, docs e dados reais prim
 5. Se `START_AT=PLANNING` ou `START_AT=PLAN_REVIEW`, execute o Planning Adversarial Loop.
 6. Se `START_AT=PLANNING` e `AUTO_EXECUTE_AFTER_PLAN=false`, pare apos o Planning Adversarial Loop com plano revisado/aprovado.
 7. Se `START_AT=PLAN_REVIEW`, execute somente depois de `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO`, salvo `AUTO_EXECUTE_AFTER_PLAN=false`, que transforma o modo em review-only.
-8. Se seguir para execucao, implemente de forma sequencial:
-   - altere o menor conjunto de arquivos que satisfaz o plano;
-   - preserve mudancas locais nao relacionadas;
+8. Se seguir para execucao, execute o Planning-by-Item and Incremental Execution Loop (secao abaixo):
+   - antes de iniciar CADA fase e CADA item, invoque `planning-and-task-breakdown` em preflight read-only;
+   - use `incremental-implementation` como A skill governante de toda edicao e correcao;
+   - altere o menor conjunto de arquivos que satisfaz o item e preserve mudancas locais nao relacionadas;
    - nao adicione dependencias de producao sem justificativa explicita.
-9. Valide com comandos reais:
+9. Valide cada incremento e depois o conjunto com comandos reais:
    - rode testes, typecheck, lint, queries, scripts ou evidencia visual conforme o risco;
    - claim visual exige evidencia renderizada quando pixels importam;
    - claim de dado exige query ou prova equivalente.
-10. Registre rodadas criticas com o `.harness/lib/agent_swarm_ledger.py` instalado; isso e evidencia auxiliar, nao substitui o review.
-11. Execute o Adversarial Verification Loop para execucao.
-12. Relate sem inflar conclusao:
+10. Execute o Quality and Simplification Gate para a execucao (secao abaixo), antes do Adversarial Verification Loop.
+11. Registre rodadas criticas com o `.harness/lib/agent_swarm_ledger.py` instalado; isso e evidencia auxiliar, nao substitui o review.
+12. Execute o Adversarial Verification Loop para execucao.
+13. Relate sem inflar conclusao:
     - diga exatamente o que mudou;
     - liste comandos rodados e resultados;
     - declare gaps ou riscos restantes.
+
+`MUTATION_MODE=READ_ONLY` encerra depois de contexto, analise, reviews aplicaveis e relato. Nenhuma etapa de execucao, cleanup, ledger mutavel, commit, push ou merge pode ocorrer nesse modo.
+
+## Maquina de estados obrigatoria
+
+| Estado | Evidencia de entrada | Proximo estado permitido |
+|---|---|---|
+| `ANCHOR` | `ANCHOR_SOURCE` verbatim; SHA inicial e baseline do worktree | `PHASE-PLAN` ou entrega read-only |
+| `PHASE-PLAN` | `planning-and-task-breakdown`; fase `PRONTO` | `ITEM-PLAN` |
+| `ITEM-PLAN` | item `PRONTO`, dependencias e aceite | `SLICE` |
+| `SLICE` | menor incremento vertical | `VALIDATION` |
+| `VALIDATION` | cada ID funcional/qualidade/regressao ligado a comando executado com PASS | `LOCAL-COMMIT` |
+| `LOCAL-COMMIT` | SHA local atomico do slice | proximo `ITEM-PLAN` ou `QUALITY` |
+| `QUALITY` | zero `Critical` e zero `Required` | `SIMPLIFICATION` ou novo `ITEM-PLAN` de fix |
+| `SIMPLIFICATION` | `APLICAR` com motivo ou `NAO_NECESSARIA` com motivo | novo `ITEM-PLAN` para aplicar ou `ADVERSARIAL` |
+| `ADVERSARIAL` | review independente satisfeita ou dispensa proporcional valida | `DELIVERY` ou novo `ITEM-PLAN` de fix |
+| `DELIVERY` | aceite mapeado a evidencias e SHAs locais | terminal |
+
+Transicao fora desta tabela e invalida. Push remoto e merge para `main` remoto nao sao estados implicitos e exigem autorizacao explicita separada.
 
 ## Trade-off Automatico No Planejamento
 
@@ -161,6 +181,148 @@ Retorne `GATE-GRILL: NAO` para risco `MEDIA`/`BAIXA` quando `AUTO_DECIDE=true`, 
 
 Quando o resultado for `SIM`, pare antes de consolidar o plano, invoque `$grill-me` e faca uma pergunta por vez ate fechar os ramos materiais. Registre as respostas como D[n], atualize somente a parte afetada do plano e retome o fluxo. A entrevista nao consome rodada do Planning Adversarial Loop.
 
+## Planning-by-Item and Incremental Execution Loop
+
+Este e o unico caminho autorizado para executar codigo pelo Council, inclusive em `START_AT=EXECUTION`, depois de um Planning Adversarial Loop aprovado e ao consumir `QUALITY-FIX-REQUEST` ou `FIX-REQUEST`. `incremental-implementation` e **A skill que orienta a execucao**; instrucoes genericas do Council ou do `{{ project_name }}-implementer` nao podem substitui-la por uma implementacao em lote.
+
+### Preflight obrigatorio de cada fase
+
+Antes de iniciar CADA fase do plano, invoque `planning-and-task-breakdown` e opere sem editar codigo. Compare `PLAN_SOURCE`/plano aprovado, `tasks/plan.md`, `tasks/todo.md`, estado atual do codigo e evidencias das fases anteriores. Confirme:
+
+- grafo de dependencias e ordem da fase;
+- itens S/M executaveis, dividindo qualquer L/XL antes de editar;
+- criterios de aceite e verificacao de cada item;
+- riscos, arquivos provaveis e checkpoints;
+- ausencia de D[n] material ainda aberta.
+
+Materialize ou atualize `tasks/plan.md` e `tasks/todo.md` como projecao operacional do plano aprovado, sem trocar objetivo, escopo ou criterio de aceite. O plano fornecido pelo usuario continua sendo a autoridade; os arquivos em `tasks/` nao podem reescreve-lo silenciosamente.
+
+Feche o preflight de fase com:
+
+```md
+PHASE-PLAN: PRONTO | REPLANEJAR | SABATINAR | BLOQUEADO
+PLANNING-SKILL: planning-and-task-breakdown
+FASE: [id e nome]
+NORTE-MACRO: [objetivo imutável]
+ARESTA: [edge_id; entry_node -> exit_node]
+ITENS-ORDENADOS: [...]
+TESTES: {functional: [...], quality: [...], regression: [...]}
+CHECKPOINTS: [...]
+RISCO-CRITICO-ABERTO: SIM | NAO
+PROXIMA-ACAO: iniciar-item | replanejar | sabatinar | parar
+```
+
+Somente `PHASE-PLAN: PRONTO` permite iniciar o primeiro item. `REPLANEJAR` que mude materialmente o plano volta ao Planning Adversarial Loop; `SABATINAR` passa pelo Gate Condicional de Grill.
+
+### Preflight obrigatorio de cada item
+
+Antes de iniciar CADA item — inclusive o primeiro da fase, que portanto recebe preflight de fase e de item — invoque novamente `planning-and-task-breakdown` em modo read-only e confirme o item contra o estado real deixado pelo incremento anterior. Nao trate o preflight da fase como substituto deste passo.
+
+```md
+ITEM-PLAN: PRONTO | DIVIDIR | REPLANEJAR | SABATINAR | BLOQUEADO
+PLANNING-SKILL: planning-and-task-breakdown
+FASE: [id]
+ITEM: [id e titulo]
+NORTE-MACRO: [mesmo objetivo]
+ARESTA: [edge_id]
+ENTREGAVEL: [saída observável]
+DEPENDENCIAS-SATISFEITAS: SIM | NAO
+CRITERIOS-DE-ACEITE: [...]
+ARQUIVOS-PROVAVEIS: [...]
+VALIDACAO-FOCADA: [...]
+TESTES: {functional: [...], quality: [...], regression: [...]}
+SLICE-INICIAL: [menor entrega vertical completa]
+PROXIMA-ACAO: executar-slice | dividir | replanejar | sabatinar | parar
+```
+
+Um item `L`, `XL`, com mais de aproximadamente 5 arquivos ou com mais de uma responsabilidade independente deve retornar `DIVIDIR`; rode o mesmo preflight para os novos subitens antes de qualquer edicao. O preflight pode reordenar ou dividir o trabalho, mas nao mudar silenciosamente comportamento contratado. Drift material volta ao Planning Adversarial Loop.
+
+### Execucao governada por incremental-implementation
+
+Somente depois de `ITEM-PLAN: PRONTO`, carregue e siga integralmente `incremental-implementation`. Para cada slice:
+
+1. implemente a menor entrega vertical completa do item;
+2. teste imediatamente com o comando focado apropriado;
+3. verifique build, tipos, lint, comportamento manual/visual ou dado real conforme o risco;
+4. registre o checkpoint e atualize `tasks/todo.md` com evidencia, sem marcar aceite apenas por prosa;
+5. avance para o proximo slice somente com o repositorio em estado funcional e testavel.
+
+Nao escreva mais de aproximadamente 100 linhas sem testar, nao misture refactor alheio, nao atravesse itens em paralelo quando compartilham estado e nao acumule uma fase inteira para validar no final. Cada slice validado DEVE produzir imediatamente um commit LOCAL atomico, contendo somente seus arquivos. Push para qualquer remoto e merge para `main` no remoto exigem autorizacao explicita; nunca inferir essa autoridade do pedido de implementar, finalizar ou commitar.
+
+Toda operacao remota do agente DEVE passar por `python3 .harness/lib/council_git.py push|merge-main --authorization <evidencia.json> -- <comando-remoto>`. `git push --no-verify` e proibido. O pre-push e defesa adicional do fluxo local, nao uma fronteira de seguranca contra um usuario hostil com controle do cliente Git.
+
+Registre checkpoints no ledger existente como `loop=execution`, `event=validation`, com payload contendo `phase`, `item`, `slice`, `skill=incremental-implementation`, comandos e resultados; nao invente um novo tipo de evento.
+
+Feche cada item com:
+
+```md
+EXECUTION-ITEM: SATISFEITO | CORRIGIR | BLOQUEADO
+EXECUTION-SKILL: incremental-implementation
+FASE: [id]
+ITEM: [id]
+SLICES-CONCLUIDOS: [...]
+VALIDACOES: [...]
+CRITERIOS-DE-ACEITE: [atendidos com evidencia]
+PROXIMA-ACAO: proximo-item | corrigir | parar
+```
+
+Toda correcao pedida por quality review ou adversarial review vira um novo item de execucao: rode `planning-and-task-breakdown` antes dela e aplique a correcao via `incremental-implementation`. Nenhum reviewer implementa diretamente.
+
+## Quality and Simplification Gate
+
+Este gate integra as skills `code-review-and-quality` e `code-simplification` ao caminho de execucao do Council. Ele roda depois da implementacao e da validacao inicial, e antes do Adversarial Verification Loop. Nao substitui o `{{ project_name }}-adversarial-reviewer`: sao perspectivas e contratos diferentes.
+
+Nao aplique este gate como se houvesse codigo quando a tarefa for exclusivamente documental. Nesse caso, reporte `QUALITY-GATE: NAO_APLICAVEL` e siga para o fechamento correspondente. Para qualquer mudanca em codigo, teste, migration, configuracao executavel, script, template ou contrato de runtime, o gate e obrigatorio.
+
+### Rodada de qualidade
+
+1. DISPARE um subagent isolado `code-reviewer` (Claude Code: Agent tool; Codex: custom agent thread) para executar a skill `code-review-and-quality`. Entregue a ele:
+   - a ancora original `.harness/requests/CURRENT-TASK.md`;
+   - o plano/issue/diff e os arquivos realmente alterados;
+   - a documentacao de arquitetura/design-system aplicavel;
+   - os comandos de validacao e a evidencia produzida nesta sessao.
+2. O `code-reviewer` deve seguir os cinco eixos da skill e retornar o template de review dela. Para o Council, acrescente ao final:
+
+```md
+QUALITY-REVIEW: SATISFEITO | CORRIGIR | BLOQUEADO
+GAPS-CRITICOS: N
+PROXIMA-ACAO: corrigir | simplificar | parar | pedir decisao
+QUALITY-FIX-REQUEST:
+- gap: [achado Critical/Required REAL que exige mudanca]
+- evidencia: [fonte/codigo/doc/teste/log que prova o achado]
+- alteracao-obrigatoria: [mudanca objetiva]
+```
+
+3. A taxonomia executável é `CRITICAL_BLOCK`, `HIGH_FIX_NOW`, `DEFER_RUN`. Cada finding inclui assessment ponderado; `critical` e `required` devem igualar os dois primeiros grupos. `DEFER_RUN` vai para RUN.md e não bloqueia. `BLOQUEADO` exige crítico mais bloqueador externo nominal; correção local usa `CORRIGIR`, `planning-and-task-breakdown`, `incremental-implementation`, testes e commit local.
+4. Limite a esta qualidade a 3 rodadas. Se a rodada final ainda retornar `CORRIGIR`, o gate fica `PENDENTE` e o Council nao pode declarar a execucao satisfeita.
+
+Cada rodada de qualidade deve ser registrada no ledger de execucao como `event=review`, com `payload.review_kind=quality` e `payload.skill=code-review-and-quality`. Quando houver `QUALITY-FIX-REQUEST`, use os eventos `fix-request` e `fix-consumed` existentes; nao invente eventos novos. A passada de simplificacao deve aparecer no payload da review seguinte ou na evidencia de validacao.
+
+### Passada de simplificacao
+
+1. Somente depois de `QUALITY-REVIEW: SATISFEITO`, carregue e aplique `code-simplification` no codigo da mudanca atual. A passada e condicional: nao refatore por contagem de linhas e nao toque codigo nao relacionado.
+2. Se nao houver simplificacao segura, registre `SIMPLIFICATION: NAO_NECESSARIA` com a razao concreta. Isso e um resultado valido; a skill nao autoriza churn.
+3. Se houver simplificacao, registre `SIMPLIFICATION: APLICAR` e volte obrigatoriamente ao fluxo `planning-and-task-breakdown -> incremental-implementation -> VALIDATION -> LOCAL-COMMIT`. Nao marque uma alteracao como aplicada apontando para commit anterior. Preserve comportamento, efeitos, erros e ordenacao; se os testes falharem, desfaça somente a simplificacao recem-aplicada e reavalie.
+4. Depois do commit local da simplificacao, rode novamente `code-review-and-quality` e a propria passada de simplificacao antes do adversarial final. A nova review precisa confirmar reducao de complexidade sem regressao, e a passada final deve terminar em `NAO_NECESSARIA`. Se nenhuma alteracao for feita, nao consuma uma rodada extra.
+5. Gere o relatório de necessidade (`code-necessity`) cobrindo cada linha de código adicionada por porção semântica: path/range, motivo, objetivo, entradas, saídas, evidência, alternativa mais simples e necessidade.
+
+### Fechamento do gate
+
+O Council so pode iniciar o Adversarial Verification Loop quando houver:
+
+```md
+Para mudanca de codigo:
+QUALITY-GATE: SATISFEITO
+QUALITY-REVIEW: SATISFEITO
+SIMPLIFICATION: NAO_NECESSARIA
+
+Para tarefa exclusivamente documental:
+QUALITY-GATE: NAO_APLICAVEL
+```
+
+`PENDENTE` ou `BLOQUEADO` exige reporte explicito e impede declarar `ADVERSARIAL-VERIFICATION: SATISFEITO`.
+Na entrega, a aresta de review só fecha quando seus arquivos de evidência contêm, como linhas terminais exatas, `QUALITY-REVIEW: SATISFEITO`, `SIMPLIFICATION: NAO_NECESSARIA` e `ADVERSARIAL-VERIFICATION: SATISFEITO`. Cada arquivo que fornece um veredicto também deve conter a linha exata `CHECKED-CODE-SHA: <head_sha do code-necessity>`, introduzida por commit posterior a esse SHA. Rodada histórica, vinculada a SHA obsoleto ou anterior ao código pode permanecer como histórico, mas nunca satisfaz esse gate.
+
 ## Planning Adversarial Loop
 
 Execute quando `START_AT=PLANNING` ou `START_AT=PLAN_REVIEW`.
@@ -185,12 +347,13 @@ PROXIMA-ACAO: [executar | replanejar | sabatinar | pedir decisao]
 REPLAN-REQUEST:
 - gap: [achado REAL que exige mudanca no plano]
 - evidencia: [fonte/codigo/doc/teste que prova o gap]
+- assessment: [id, notas 0-4, score, nós, workaround, CRITICAL_BLOCK|HIGH_FIX_NOW]
 - alteracao-obrigatoria: [mudanca objetiva que o plano revisado deve incorporar]
 ```
 
-O reviewer so pode retornar `SABATINAR` se provar o Gate Condicional de Grill para um achado `REAL` `ALTA`/`BLOQUEANTE`: a decisao e subjetividade material, nao foi resolvida por evidencia e a resposta do usuario muda o plano. Nao use esse status para fato ainda pesquisavel, preferencia sem impacto material ou gap `MEDIA`/`BAIXA`.
+O reviewer só pode retornar `SABATINAR` para `CRITICAL_BLOCK`/`HIGH_FIX_NOW` que dependa de subjetividade material. Qualquer `DEFER_RUN` vai para RUN.md e o fluxo continua.
 
-Se o review retornar `SABATINAR`, interrompa o loop antes de replanejar automaticamente, invoque `$grill-me`, registre D[n] e retome o **mesmo** subagent com o plano atualizado e as respostas. `SABATINAR` e um estado suspenso, nao uma rodada concluida: ele nao consome o limite de {{ harness_plan_review_max }} rodadas ate o mesmo reviewer emitir `SATISFEITO`, `REPLANEJAR` ou `BLOQUEADO`. Evite repeticao: o reviewer so pode pedir nova sabatina para uma D[n] material nova que as respostas anteriores nao resolveram.
+Se o review retornar `SABATINAR`, interrompa o loop antes de replanejar automaticamente, invoque `$grill-me`, registre D[n] e retome o **mesmo** subagent com o plano atualizado e as respostas. `SABATINAR` e um estado suspenso, nao uma rodada concluida: ele nao consome o limite de 2 rodadas ate o mesmo reviewer emitir `SATISFEITO`, `REPLANEJAR` ou `BLOQUEADO`. Evite repeticao: o reviewer so pode pedir nova sabatina para uma D[n] material nova que as respostas anteriores nao resolveram.
 
 Se o review retornar `REPLANEJAR` com gap critico corrigivel, o Council deve replanejar usando o bloco `REPLAN-REQUEST` como input obrigatorio. O reviewer nao replaneja; ele acusa e especifica a mudanca minima. O Council incorpora essa mudanca no plano revisado, registra o que mudou e so entao roda a proxima rodada de plan review.
 
@@ -204,7 +367,7 @@ REPLAN-CONSUMED:
 - decisao-atualizada: [...]
 ```
 
-Sem `REPLAN-REQUEST` do reviewer e sem `REPLAN-CONSUMED` do Council, a proxima rodada do loop e invalida. Pare em `SATISFEITO`, `BLOQUEADO` ou {{ harness_plan_review_max }} rodadas.
+Sem `REPLAN-REQUEST` do reviewer e sem `REPLAN-CONSUMED` do Council, a proxima rodada do loop e invalida. Pare em `SATISFEITO`, `BLOQUEADO` ou 2 rodadas.
 
 Registre o handoff com o ledger instalado:
 
@@ -263,16 +426,17 @@ ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
 GAPS-CRITICOS: N
 PROXIMA-ACAO: [corrigir | parar | pedir decisao]
 FIX-REQUEST:
-- gap: [achado REAL BLOQUEANTE/ALTA que exige mudanca na execucao]
+- gap: [achado REAL CRITICAL_BLOCK/HIGH_FIX_NOW que exige mudança]
 - evidencia: [fonte/codigo/doc/teste/log que prova o gap]
+- assessment: [id, notas 0-4, score, nós, workaround, disposição]
 - alteracao-obrigatoria: [mudanca objetiva que a correcao deve incorporar]
 ```
 
 ### Criterio de correcao
 
-Corrija sequencialmente e rode nova rodada quando houver gap `REAL` com severidade `BLOQUEANTE` ou `ALTA`.
+Corrija sequencialmente somente `CRITICAL_BLOCK` ou `HIGH_FIX_NOW`; `DEFER_RUN` não consome rodada.
 
-Se o review retornar `CORRIGIR`, o Council deve corrigir usando o bloco `FIX-REQUEST` como input obrigatorio. O reviewer nao corrige; ele acusa e especifica a mudanca minima. O Council implementa a correcao, registra o que mudou, revalida e so entao roda a proxima rodada de execution review.
+Se o review retornar `CORRIGIR`, o Council deve corrigir usando o bloco `FIX-REQUEST` como input obrigatorio. O reviewer nao corrige; ele acusa e especifica a mudanca minima. O Council transforma o fix em item, roda `planning-and-task-breakdown`, implementa a correcao via `incremental-implementation`, registra o que mudou, revalida e so entao roda a proxima rodada de execution review.
 
 Handoff obrigatorio em cada `CORRIGIR`:
 
@@ -299,15 +463,15 @@ Nao corrija automaticamente:
 - acao destrutiva;
 - credencial, pagamento ou acesso externo;
 - deploy/prod sem procedimento especifico;
-- gap `NAO-PROVADO` que precise de evidencia indisponivel.
+- gap `UNVERIFIED`, `REFUTED` ou `DEFER_RUN`.
 
 ### Criterio de parada
 
 Pare quando:
 
 - o review retornar `ADVERSARIAL-VERIFICATION: SATISFEITO`;
-- completar {{ harness_execution_review_max }} rodadas;
-- sobrar apenas gap `MEDIA`/`BAIXA` aceito explicitamente como pendencia;
+- completar 3 rodadas;
+- sobrar apenas `DEFER_RUN` registrado no RUN.md;
 - sobrar bloqueio real fora do alcance da sessao.
 
 Em `CORRIGIR` na rodada final:
@@ -316,7 +480,7 @@ Em `CORRIGIR` na rodada final:
 - nao declare `ADVERSARIAL-VERIFICATION: SATISFEITO`;
 - entregue o `FIX-REQUEST` final como proxima acao concreta para o proximo chamado, ou pare com a pendencia declarada.
 
-**Fechamento da âncora (obrigatório em status terminal).** Quando o loop termina `SATISFEITO` (ou a tarefa é entregue/abandonada), LIMPE `.harness/requests/CURRENT-TASK.md` (delete, ou arquive em `.harness/requests/done/`). Um objetivo concluído deixado ali reinjetaria no próximo SessionStart com autoridade bloqueante — o aviso de staleness do `request-reinject.py` é só backstop; o fechamento é o fix. O passo 0 do Fluxo da próxima tarefa escreve uma âncora nova.
+**Fechamento da ancora.** Em `WORKSPACE_WRITE`, quando o loop termina, arquive a ancora conforme a politica do harness. Em `READ_ONLY`, nunca limpe, mova ou altere a ancora; apenas reporte eventual staleness.
 
 Na resposta final, inclua:
 
@@ -329,12 +493,14 @@ Antes da prova final, quando o kernel de graph engineering existir neste repo,
 materialize a execucao real a partir do ledger (nao reconstrua eventos em prosa):
 
 ```bash
-python3 engine/integration/council_pipeline.py .harness/runs/agent-swarm/<run-id>/loop.jsonl \
-  --git-sha "$(git rev-parse HEAD)" --output-dir .harness/runs/<run-id>/graph
+python3 engine/integration/council_pipeline.py .harness/runs/agent-swarm/<run-id>/council-events.jsonl \
+  --git-sha "$(git rev-parse HEAD)" --repo-root . --output-dir .harness/runs/<run-id>/graph
 ```
 
 Ausencia do kernel em um projeto instalado e uma capability explicitamente
 indisponivel, nao autorizacao para fabricar evidence/replay.
+
+O pipeline final deve provar, sem vacuidade: `base_sha != head_sha`; o `base_sha` e o mesmo capturado no ANCHOR; todos os commits de slice estao no intervalo justificado; toda aresta critica do grafo aparece no aceite; o worktree nao ganhou drift nao commitado desde a baseline; e cada ID de teste esta associado ao comando que o ledger realmente executou. SHAs iguais, uma unica rota BFS ou uma lista de IDs autodeclarada nao constituem prova.
 
 ## Fontes Obrigatorias
 
@@ -345,13 +511,12 @@ Sempre comece por:
 - `python3 .harness/lib/scan_project.py all --target .` e os componentes reais reportados em `scan.components[]`
 - codigo real nos componentes detectados, mais migrations, scripts e testes encontrados por busca
 
-{% if harness_understand_apps_root %}Se o tema envolver `/understand`, Understand Anything, `.understand-anything`, `knowledge-graph`, grafo de codigo ou `compute-batches`, use a skill `understand-apps-incremental`. Regra bloqueante: o grafo do produto usa `PROJECT_ROOT={{ harness_understand_apps_root }}`, mas o Git root é a raiz do repo; incremental em `{{ harness_understand_apps_root }}/` deve gerar changed files com `git diff --relative={{ harness_understand_apps_root }} <last>..HEAD --name-only -- {{ harness_understand_apps_root }}` ou `bash .harness/lib/understand-apps-changed-files.sh`. Nunca alimente `compute-batches` com paths `{{ harness_understand_apps_root }}/api/...`; ele espera `api/...`.
-{% endif %}
+
 
 Leia tambem quando o tema exigir e o path existir; ausencia e declarada, nunca substituida por topologia seed:
 
 - Arquitetura: indice/README e documentos canonicos realmente presentes
-- UI/design-system: docs existentes e tokens/estilos/componentes sob `{{ harness_web_app_dir }}`
+- UI/design-system: docs existentes e tokens/estilos/componentes sob `.`
 - Banco/dados: schema, migrations, services e queries no banco dev quando a conclusao depender de cardinalidade, status, NULL, integridade ou distribuicao real
 - Ferramentas, SDKs, frameworks, APIs, CLI ou cloud: documentacao atual conforme `AGENTS.md`
 
@@ -363,19 +528,23 @@ Para tarefas completas, entregue nesta ordem:
 2. Context Brief.
 3. Plano sequencial ou decisoes D[n].
 4. Arquivos alterados.
-5. Comandos de validacao com resultado.
-6. Resultado do Adversarial Verification Loop ou justificativa de por que nao se aplicava.
-7. Pendencias reais.
+5. Resultado do Planning-by-Item and Incremental Execution Loop por fase/item.
+6. Comandos de validacao com resultado.
+7. Resultado do Quality and Simplification Gate.
+8. Resultado do Adversarial Verification Loop ou justificativa de por que nao se aplicava.
+9. Pendencias reais.
+10. Relatório de necessidade de código com cobertura integral.
 
 ## Uso Com Subagents
 
 Regras duras:
 
 - Toda rodada de review adversarial (Planning Adversarial Loop e Adversarial Verification Loop) roda OBRIGATORIAMENTE em subagent `{{ project_name }}-adversarial-reviewer`, em contexto isolado. PROIBIDO o agente principal executar a review inline: self-review no mesmo contexto herda os vieses de quem produziu o plano/diff (nao e adversarial de fato) e as dezenas de leituras da review estouram o contexto principal.
+- A rodada de qualidade do Quality and Simplification Gate roda em subagent isolado `code-reviewer`; ela segue `code-review-and-quality` e nao substitui nenhuma rodada adversarial. `code-simplification` e aplicada pelo Council no contexto de implementacao, com testes incrementais e nova quality review se houver mudanca.
 - Rodada 1 de um loop = subagent novo. Rodadas seguintes do MESMO loop podem continuar o MESMO subagent (Claude Code: SendMessage; Codex: mesma thread) — ele ja conhece os gaps e re-verifica mais barato. O veredito valido e sempre o texto retornado PELO subagent; o agente principal repassa, nao reescreve.
 - No relatorio final, atribua cada rodada ao seu executor (linha `REVISORES:` dos blocos de encerramento). Rodada sem atribuicao de executor nao conta como review valida.
 - Se o mecanismo de subagent estiver indisponivel, PARE e declare o bloqueio — nao rode a review inline como fallback silencioso.
-- Exploracao/pesquisa paralelizavel → `{{ project_name }}-context-scout` (1 investigacao por subagent). Implementacao mecanica em lote de baixo risco (muitos arquivos, decisao ja tomada) pode ir para `{{ project_name }}-implementer` para poupar o contexto principal; decisao arquitetural e edicao central ficam no agente principal. `{{ project_name }}-test-auditor` valida se a evidencia sustenta o claim quando o risco e alto.
+- Exploracao/pesquisa paralelizavel → `{{ project_name }}-context-scout` (1 investigacao por subagent). Implementacao mecanica de baixo risco pode ir para `{{ project_name }}-implementer`, mas sempre item por item e slice por slice sob `planning-and-task-breakdown` + `incremental-implementation`; decisao arquitetural e edicao central ficam no agente principal. `{{ project_name }}-test-auditor` valida se a evidencia sustenta o claim quando o risco e alto.
 - Sempre espere os subagents da rodada terminarem antes de consolidar achados. Nao use subagents para fugir de uma decisao que exige leitura direta de instrucoes da skill pelo agente principal (ARGS, gates, D[n]).
 
 ## Contrato Executavel Do Pacote

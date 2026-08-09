@@ -1,0 +1,45 @@
+{
+  "commits": [
+    "ef49de60f97f0bed90e760e2ee48ca7929b4ead2"
+  ],
+  "execution_graph": "artifacts/council-macro-objective-upgrade/execution-graph.json",
+  "code_necessity_report": "artifacts/council-macro-objective-upgrade/code-necessity.json",
+  "acceptance": [
+    {
+      "criterion": "Authorized branch publication is visible in the open PR and remote main remains unmerged.",
+      "phase": "delivery",
+      "item": "publish an authorized branch without merging main",
+      "slice": "E6-publication",
+      "commit": "ef49de60f97f0bed90e760e2ee48ca7929b4ead2",
+      "files": [
+        "artifacts/council-macro-objective-upgrade/RUN.md",
+        "artifacts/council-macro-objective-upgrade/delivery-report.md",
+        "artifacts/council-macro-objective-upgrade/execution-graph.json",
+        "artifacts/council-macro-objective-upgrade/reviews/adversarial-final.md",
+        "artifacts/council-macro-objective-upgrade/reviews/quality-final.md",
+        "artifacts/council-macro-objective-upgrade/reviews/simplification-final.md"
+      ],
+      "commands": [
+        "python3 templates/.harness/lib/council_git.py push --authorization /tmp/orions-remote-authorization.json -- git push -u origin feat/council-operational-runtime",
+        "git ls-remote --heads origin feat/council-operational-runtime",
+        "gh pr view 14 --json number,state,url,headRefName,baseRefName,headRefOid,isDraft,mergedAt"
+      ],
+      "evidence": [
+        "artifacts/council-macro-objective-upgrade/publication-receipt.json",
+        "artifacts/council-macro-objective-upgrade/reviews/quality-final.md",
+        "artifacts/council-macro-objective-upgrade/reviews/simplification-final.md",
+        "artifacts/council-macro-objective-upgrade/reviews/adversarial-final.md"
+      ],
+      "reviewer_ids": [
+        "019fe5ba-cf76-76b3-937e-43d8b0c0ba8d",
+        "019fe627-4262-7723-9388-be8d332a73e5"
+      ],
+      "edge_id": "E6",
+      "test_ids": [
+        "F-AUTHORIZED-PUSH",
+        "Q-PR-EVIDENCE",
+        "R-NO-MERGE"
+      ]
+    }
+  ]
+}

@@ -26,6 +26,10 @@ description: >
 
 # Verify
 
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL.pt.md.jinja" %}
+
+Exercite a entrada, a aresta e a saída observável; confirme os IDs planejados `functional`, `quality` e `regression`. Teste verde sem vínculo com a jornada não prova conclusão. Confirme também que cada ID está no comando executado, que toda aresta crítica foi coberta e que não existe drift não commitado posterior à baseline do run.
+
 Complementa `prova-de-conclusao`: mudança única não precisa da tabela nem do
 sentinel `PROVA-DE-CONCLUSAO: x/y PASS, gaps: [...]` — precisa de EVIDÊNCIA
 DE COMPORTAMENTO real, não de leitura de diff.
