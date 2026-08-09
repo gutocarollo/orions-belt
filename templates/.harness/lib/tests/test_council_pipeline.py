@@ -94,6 +94,9 @@ class CouncilPipelineTest(unittest.TestCase):
             root = Path(directory)
             run = root / ".harness/runs/planning-defer"
             run.mkdir(parents=True)
+            state = root / ".harness/runs/agent-swarm/planning-defer/council-state.json"
+            state.parent.mkdir(parents=True)
+            state.write_text(json.dumps({"mutation_mode": "WORKSPACE_WRITE"}), encoding="utf-8")
             (root / ".harness/runs/ACTIVE").write_text("planning-defer\n", encoding="utf-8")
             run_md = run / "RUN.md"
             run_md.write_text(
@@ -144,6 +147,46 @@ class CouncilPipelineTest(unittest.TestCase):
             )
             self.assertEqual(0, process.returncode, process.stdout + process.stderr)
             self.assertEqual(1, run_md.read_text(encoding="utf-8").count("`D-PLAN`"))
+
+    def test_append_rejects_read_only_run_without_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = root / ".harness/runs/read-only-append"
+            run.mkdir(parents=True)
+            run_md = run / "RUN.md"
+            run_md.write_text("# RUN\n\n## Pendências não bloqueantes\n", encoding="utf-8")
+            state = root / ".harness/runs/agent-swarm/read-only-append/council-state.json"
+            state.parent.mkdir(parents=True)
+            state.write_text(json.dumps({"mutation_mode": "READ_ONLY"}), encoding="utf-8")
+            (root / ".harness/runs/ACTIVE").write_text("read-only-append\n", encoding="utf-8")
+            before = run_md.read_bytes()
+            process = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / ".harness/lib/agent_swarm_ledger.py"),
+                    "append",
+                    "--run-id",
+                    "read-only-append",
+                    "--loop",
+                    "planning",
+                    "--round",
+                    "1",
+                    "--event",
+                    "review",
+                    "--status",
+                    "SATISFEITO",
+                    "--payload-json",
+                    json.dumps({"deferred_findings": []}),
+                ],
+                cwd=ROOT,
+                env={**os.environ, "HARNESS_PROJECT_ROOT": str(root)},
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(0, process.returncode)
+            self.assertIn("WORKSPACE_WRITE", process.stderr)
+            self.assertEqual(before, run_md.read_bytes())
+            self.assertFalse((state.parent / "loop.jsonl").exists())
 
     def test_integrates_exact_sequence_with_sha_and_reviewers(self):
         result = integrate_events(complex_events(), "b" * 40)

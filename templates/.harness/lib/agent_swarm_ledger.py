@@ -151,6 +151,13 @@ def payload(raw: str | None) -> dict[str, Any]:
 
 def append(args: argparse.Namespace) -> None:
     path = ledger_path(args.run_id)
+    state_path = path.parent / "council-state.json"
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit("append requires a persisted WORKSPACE_WRITE Council run") from exc
+    if state.get("mutation_mode") != "WORKSPACE_WRITE":
+        raise SystemExit("append requires a persisted WORKSPACE_WRITE Council run")
     event_payload = payload(args.payload_json)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+", encoding="utf-8") as stream:
