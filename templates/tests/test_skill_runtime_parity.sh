@@ -99,6 +99,8 @@ assert "codex-only: required skills default includes the generated council" \
   'grep -q "^HARNESS_REQUIRED_SKILLS=.*$COUNCIL_SKILL" "$CODEX_ONLY/.harness/harness.conf"'
 assert "codex-only: installed validator passes inside the rendered destination" \
   '(cd "$CODEX_ONLY" && python3 .harness/lib/validate_skills.py >/dev/null)'
+assert "codex-only: installed session starts a writable Council run" \
+  '(cd "$CODEX_ONLY" && git init -q && git config user.email test@example.invalid && git config user.name Test && git add -A && git commit -q -m baseline && python3 .harness/lib/council_session.py start --run-id render-e2e --anchor-source parity-test --mutation-mode WORKSPACE_WRITE >/dev/null)'
 assert "codex-only: installed ledger records a request" \
   '(cd "$CODEX_ONLY" && python3 .harness/lib/agent_swarm_ledger.py append --run-id render-e2e --loop execution --round 1 --event fix-request --status CORRIGIR --payload-json '\''{"gap":"g"}'\'' >/dev/null)'
 assert "codex-only: installed ledger links the consumed event to its request" \
