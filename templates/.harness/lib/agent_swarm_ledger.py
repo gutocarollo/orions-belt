@@ -189,12 +189,15 @@ def transition(args: argparse.Namespace) -> None:
                 state = apply_transition(state, item["event"], item["payload"])
             event_payload = payload(args.payload_json)
             if args.council_event == "VALIDATION":
+                checked = event_payload.get("checked_files", [])
+                for name in checked:
+                    if not subprocess.check_output(["git", "status", "--porcelain", "--", name], cwd=ROOT, text=True).strip():
+                        raise TransitionError(f"VALIDATION must precede LOCAL-COMMIT; checked file is already clean: {name}")
                 for command in event_payload.get("commands", []):
                     process = subprocess.run(command.get("command", ""), cwd=ROOT, shell=True)
                     if process.returncode != 0:
                         raise TransitionError(f"validation command failed with exit {process.returncode}: {command.get('command')}")
                     command["exit_code"] = process.returncode
-                checked = event_payload.get("checked_files", [])
                 event_payload["executor"] = "agent_swarm_ledger"
                 event_payload["validated_at"] = utc_now()
                 event_payload["file_hashes"] = [{"path": name, "sha256": hashlib.sha256((ROOT / name).read_bytes()).hexdigest()} for name in checked]

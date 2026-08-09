@@ -101,18 +101,29 @@ class CouncilPipelineTest(unittest.TestCase):
             subprocess.run(["git", "init", "-q"], cwd=root, check=True)
             subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
             subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
-            (root / "slice.txt").write_text("slice\n")
-            subprocess.run(["git", "add", "slice.txt"], cwd=root, check=True)
-            subprocess.run(["git", "commit", "-q", "-m", "slice"], cwd=root, check=True)
-            commit_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-            (root / "delivery.json").write_text(json.dumps(delivery_manifest(commit_sha)))
             env = {**os.environ, "HARNESS_PROJECT_ROOT": str(root)}
-            for item in complex_events(commit_sha):
+
+            def transition(item):
                 process = subprocess.run(
                     [sys.executable, str(ROOT / ".harness/lib/agent_swarm_ledger.py"), "transition", "--run-id", "real-flow", "--event", item["event"], "--payload-json", json.dumps(item["payload"])],
                     cwd=ROOT, env=env, capture_output=True, text=True,
                 )
                 self.assertEqual(0, process.returncode, process.stdout + process.stderr)
+
+            events = complex_events()
+            for item in events[:3]:
+                transition(item)
+            (root / "slice.txt").write_text("slice\n")
+            transition(events[3])
+            transition(events[4])
+            subprocess.run(["git", "add", "slice.txt"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "slice"], cwd=root, check=True)
+            commit_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            transition({"event": "LOCAL-COMMIT", "payload": {"sha": commit_sha, "files": ["slice.txt"]}})
+            for item in events[6:9]:
+                transition(item)
+            (root / "delivery.json").write_text(json.dumps(delivery_manifest(commit_sha)))
+            transition({"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": "delivery.json"}})
             ledger = root / ".harness/runs/agent-swarm/real-flow/council-events.jsonl"
             output = root / "proof"
             process = subprocess.run(
