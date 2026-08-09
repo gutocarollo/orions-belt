@@ -39,14 +39,15 @@ Both `.claude` and `.agents` renders include the same operating contract for:
 
 ## Deterministic evidence
 
-Fresh rendered installation at code commit `0f4b144`:
+Fresh rendered installation at receipt commit `9689049`, covering code through
+`979c825`:
 
-- objective control: 8/8 PASS;
+- objective control: 9/9 PASS;
 - runtime: 19/19 PASS;
-- delivery pipeline: 12/12 PASS;
+- delivery pipeline: 15/15 PASS;
 - contract: 19/19 PASS;
 - evaluator and real scenarios: 3/3 PASS;
-- total rendered Python checks: 61/61 PASS;
+- total rendered Python checks: 65/65 PASS;
 - template merge checks: 10/10 PASS;
 - Claude-only, Codex-only and dual-runtime PT/EN render matrix: PASS;
 - `.claude`/`.agents` operating skills: byte-identical in dual-runtime render;
@@ -60,8 +61,10 @@ Quality reviewer thread: `019fe5ba-cf76-76b3-937e-43d8b0c0ba8d`.
 
 The first round reproduced four proof gaps. The second round reproduced reused slice SHAs, unrecorded code commits and declared-only commands. The third round found merge-resolution provenance. All blocking findings were corrected and rechecked in the same thread.
 
-That verdict preceded the final adversarial corrections. A continuation of the
-same quality thread is required before final publication evidence is closed.
+The latest quality recheck reproduced one proof-provenance gap: the command
+receipts and commit ledger stopped at `0f4b144`. This artifact slice refreshes
+both through code commit `979c825`; the same thread must confirm the correction
+before publication.
 
 The independent adversarial round reproduced three critical and two high gaps:
 invalid EN lifecycle commands, a direct read-only write bypass, lost planning
@@ -71,13 +74,15 @@ through `0f4b144`; the same adversarial thread must re-verify them.
 
 ## Simplification and line necessity
 
-Across `e373cce..0f4b144`, code files contain 1,138 added lines. Every added code
-line is covered by `code-necessity.json`. Each semantic portion now carries a
-repository path, exact line marker and command that the validator resolves at
-the bound SHA and executes. Four distinct proof commands passed.
+Across `e373cce..979c825`, code files contain 1,301 added lines. Every added code
+line is covered by 36 semantic portions in `code-necessity.json`; the largest
+portion is 103 lines. Each portion carries a repository path, bounded source
+range, objective, inputs, outputs and a command that the validator resolves at
+the bound SHA and executes. Four distinct nontrivial proof commands passed.
 
-The previous simplification verdict must be repeated after the final corrections.
-The current added mechanisms correspond one-to-one to reproduced bypasses:
+The previous simplification verdict identified five concrete gaps; four code or
+proof-integrity gaps are now corrected and the fifth is the authorized
+publication artifact still pending. The current mechanisms correspond one-to-one to reproduced bypasses:
 read-only rejection, planning deferral persistence, executable evidence receipts
 and a reusable rendered-runtime harness.
 
@@ -96,6 +101,11 @@ Orion’s Belt commits, oldest to newest:
 - `02c6f63` — executable code-necessity evidence;
 - `0d59764` — rendered-runtime proof harness;
 - `0f4b144` — path-normalized cross-render parity.
+- `324516b` — valid EN simplification vocabulary;
+- `ef39d2c` — read-only append rejection;
+- `5e4c429` — post-replay repository integrity;
+- `febf660` — granular necessity receipts;
+- `979c825` — real Council lifecycle in the parity test.
 
 Tengwar remains local-only for this task. The Orion’s Belt branch is the authorized publication target. No merge to remote `main` is authorized.
 

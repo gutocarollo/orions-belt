@@ -1,10 +1,10 @@
 {
-  "executed_at": "2026-08-09T09:47:44+00:00",
+  "executed_at": "2026-08-09T10:32:13+00:00",
   "receipts": [
-    {"id":"C-RENDERED","command":"bash templates/tests/test_council_rendered_runtime.sh","git_sha":"0f4b1447c51a52ebcf537f70f42f58e94ab1637e","exit_code":0,"output_sha256":"b0af62fa98d1334be40fdb5b4c741a57624b1eed4650bd193febbd3e405d94a9","result":"61/61 installed runtime tests PASS"},
-    {"id":"C-CODEX","command":"bash templates/tests/test_codex_parity.sh","git_sha":"0f4b1447c51a52ebcf537f70f42f58e94ab1637e","exit_code":0,"output_sha256":"330fc500823ceddf337279e5cd94e52a95d11839f449237b9250e1b0594e3891","result":"64 PASS markers; Codex-only parity PASS"},
-    {"id":"C-MERGE","command":"python3 templates/tests/test_council_merge.py","git_sha":"0f4b1447c51a52ebcf537f70f42f58e94ab1637e","exit_code":0,"output_sha256":"0d73e89437e0616983e7792e7c92c662313275149178d798d21fb72dc7e39ae7","result":"10/10 merge tests PASS"},
-    {"id":"C-RUNTIME-PARITY","command":"bash templates/tests/test_skill_runtime_parity.sh","git_sha":"0f4b1447c51a52ebcf537f70f42f58e94ab1637e","exit_code":0,"output_sha256":"6fe7cbe19afa442128b651114214f39ed6e2659ffeba21c6bff146650d6f4552","result":"61 PASS markers; Claude/Codex PT/EN parity PASS"},
-    {"id":"C-DIFF","command":"git diff --check","git_sha":"0f4b1447c51a52ebcf537f70f42f58e94ab1637e","exit_code":0,"output_sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","result":"no whitespace errors"}
+    {"id":"C-RENDERED","command":"bash templates/tests/test_council_rendered_runtime.sh","git_sha":"96890497cded14a0de4f63de1da35123ac4a61c9","exit_code":0,"output_sha256":"3fc39593147424cc9511eedbb294ff9ed04d8cb5c00fe62d226895b5c447b200","result":"65/65 installed runtime tests PASS (9 objective, 19 runtime, 15 pipeline, 19 contract, 3 evaluation)"},
+    {"id":"C-CODEX","command":"bash templates/tests/test_codex_parity.sh","git_sha":"96890497cded14a0de4f63de1da35123ac4a61c9","exit_code":0,"output_sha256":"330fc500823ceddf337279e5cd94e52a95d11839f449237b9250e1b0594e3891","result":"62 PASS markers; Codex-only parity PASS"},
+    {"id":"C-MERGE","command":"python3 templates/tests/test_council_merge.py","git_sha":"96890497cded14a0de4f63de1da35123ac4a61c9","exit_code":0,"output_sha256":"88268c8c2e49b602a4c3bdf8990145ed8423cb82194eee48a9a220ca2fd6eb37","result":"10/10 merge tests PASS"},
+    {"id":"C-RUNTIME-PARITY","command":"bash templates/tests/test_skill_runtime_parity.sh","git_sha":"96890497cded14a0de4f63de1da35123ac4a61c9","exit_code":0,"output_sha256":"fad046770f98c52bce2f243209c7ae1dd4d7b2b906b10043130278521307af66","result":"62 PASS markers; Claude/Codex PT/EN parity PASS"},
+    {"id":"C-DIFF","command":"git diff --check","git_sha":"96890497cded14a0de4f63de1da35123ac4a61c9","exit_code":0,"output_sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","result":"no whitespace errors"}
   ]
 }

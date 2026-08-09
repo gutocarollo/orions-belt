@@ -1,19 +1,22 @@
 {
   "base_sha": "e373cce492df347ad4a3a2da94e1f6bacf19fad9",
-  "code_head_sha": "0f4b1447c51a52ebcf537f70f42f58e94ab1637e",
+  "code_head_sha": "979c82598c9c1b80eed06d1ff8b352a8ec0363d3",
   "entries": [
     {"sha":"0d2c42cfbf74a75a9859e827fdaa60261d513413","edge_ids":["E1","E2"],"subject":"feat(council): enforce macro-objective delivery"},
     {"sha":"d35621598df2ff12cc50d9125714de2e5328184c","edge_ids":["E2","E4"],"subject":"feat(council): render objective-focused operating skills"},
     {"sha":"647491dd9e3a16c58252cf097a6ece0ce15b5697","edge_ids":["E1","E4"],"subject":"fix(council): validate impact markers across locales"},
     {"sha":"a489a54744170616a3093338c95b142194fc1b90","edge_ids":["E3"],"subject":"fix(council): keep code receipts current"},
-    {"sha":"3584ab02376203ea4c6a58243e16eabe0413c730","edge_ids":["E3","E4"],"subject":"fix(council): preserve rendered code receipt marker"},
     {"sha":"5e291ab7080d8686a5afed35376c167dd512330c","edge_ids":["E3"],"subject":"fix(council): bind delivery proof to executed work"},
     {"sha":"95dbfd4531d1ea7c09942d743a396eaff5758e21","edge_ids":["E3"],"subject":"fix(council): verify commit and test provenance"},
     {"sha":"7b9a02ee3503ba66f912928d4881e438c1d10bce","edge_ids":["E3"],"subject":"fix(council): detect code-changing merge commits"},
-    {"sha":"60f25a64d0708d3bb60d9c8399f8331b812cd63e","edge_ids":["E3","E5"],"subject":"docs(council): add delivery evidence"},
     {"sha":"f98a62afe88045f7ec1ee14cd55423c469ad66fd","edge_ids":["E1","E3","E4"],"subject":"fix(council): close read-only and planning gaps"},
     {"sha":"02c6f63a539e625d17740f0be142c11e61ba9b9e","edge_ids":["E3"],"subject":"fix(council): verify code necessity evidence"},
     {"sha":"0d59764210ad8bc78631b925de78c7e6811ca878","edge_ids":["E3","E4"],"subject":"test(council): automate rendered runtime proof"},
-    {"sha":"0f4b1447c51a52ebcf537f70f42f58e94ab1637e","edge_ids":["E4"],"subject":"test(council): normalize rendered project roots"}
+    {"sha":"0f4b1447c51a52ebcf537f70f42f58e94ab1637e","edge_ids":["E4"],"subject":"test(council): normalize rendered project roots"},
+    {"sha":"324516bb2167335ac58ceccbce86fb6a87f160fd","edge_ids":["E4"],"subject":"fix(council): align simplification status in English"},
+    {"sha":"ef39d2c68ed8c26c940f3f45cbdae1f7bff63e91","edge_ids":["E1","E3"],"subject":"fix(council): reject read-only review ledger writes"},
+    {"sha":"5e4c429b024fa5d750297f40400b75dd1ec8513d","edge_ids":["E3"],"subject":"fix(council): preserve repository integrity on replay"},
+    {"sha":"febf6600314bbc75a9aa22d8650872be3862c576","edge_ids":["E3"],"subject":"fix(council): require granular code necessity receipts"},
+    {"sha":"979c82598c9c1b80eed06d1ff8b352a8ec0363d3","edge_ids":["E4"],"subject":"test(council): initialize parity ledger lifecycle"}
   ]
 }
