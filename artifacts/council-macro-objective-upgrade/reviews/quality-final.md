@@ -1,18 +1,21 @@
-# Independent quality review
+# Independent quality review — terminal
 
 - Thread: `019fe5ba-cf76-76b3-937e-43d8b0c0ba8d`
-- Checked SHA: `6d62640e79a4619d38ad71eb0375744549af537b`
-- Scope: Council implementation and proof chain through E5.
-- Independence: isolated Codex reviewer thread; no implementation writes.
+- Independence: same isolated reviewer thread; strictly read-only.
+- Proof HEAD: `d365e07003e88f5130228f61107ca1b6eded1d9c`.
 
-The reviewer independently matched `_code_commits` to the ledger 16/16, found
-no missing or extra code commits, and confirmed that every command receipt is
-bound to `9689049` with no later code. The rendered suite passed 65/65, merge
-passed 10/10, and both parity suites and hashes were reproduced. E6 was
-explicitly excluded because publication had not occurred yet.
+The reviewer reproduced the early graph and locator probes, matched the
+executable ledger 24/24 and verified 1,817/1,817 added lines in 74 bounded
+portions. The current receipts prove 75/75 rendered tests, 62 Codex markers,
+10/10 merge-contract tests and 62 dual-runtime parity markers.
 
-```text
+The only deferred observation is `D-LABEL-PARITY`: phase/item labels are not
+machine-bound to the graph labels, while edge ID, nodes, objective, tests and
+acceptance are bound. It does not affect current reachability or delivery and
+is recorded in `RUN.md`.
+
+CHECKED-CODE-SHA: cc356d78c147d5b3cc754d18535e9c218db260a8
 QUALITY-REVIEW: SATISFEITO
 GAPS-CRITICOS: 0
-PROXIMA-ACAO: simplificação final com NAO_NECESSARIA e adversarial independente; depois E6 na slice autorizada.
-```
+GAPS-ALTOS: 0
+DEFER_RUN: 1

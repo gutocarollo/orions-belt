@@ -1,18 +1,17 @@
-# Independent simplification review — final
+# Independent simplification review — terminal
 
 - Thread: `019fe5f4-eae1-72e1-86b6-7fc884c7280b`
-- Checked SHA: `6d62640e79a4619d38ad71eb0375744549af537b`
-- Independence: isolated Codex reviewer thread; strictly read-only.
+- Independence: same isolated reviewer thread; strictly read-only.
+- Proof HEAD: `d365e07003e88f5130228f61107ca1b6eded1d9c`.
 
-The reviewer independently confirmed 1,301/1,301 added code lines, 36 bounded
-semantic portions, ranges of 6–103 lines, zero uncovered lines, zero overlap,
-zero portion without an added line, and complete objective/input/output/
-alternative fields. Four nontrivial evidence commands and six focused negative
-tests passed. The EN vocabulary, read-only append rejection and post-replay
-worktree check each closed their reproduced bypass without duplicate machinery.
-E6 remained correctly pending for the authorized publication slice.
+The reviewer first reproduced a mixed-node bypass and duplicated final graph
+scanner. Commit `cc356d7` moved the missing subset guard to the runtime and
+removed 36 duplicate scanner lines. The terminal recheck confirms 1,817/1,817
+added lines, 74 non-overlapping portions, a 120-line maximum, four executable
+proof commands and no remaining material simplification.
 
-```text
+CHECKED-CODE-SHA: cc356d78c147d5b3cc754d18535e9c218db260a8
 SIMPLIFICATION: NAO_NECESSARIA
-GAPS: 0
-```
+GAPS-CRITICOS: 0
+GAPS-ALTOS: 0
+DEFER_RUN: 0
