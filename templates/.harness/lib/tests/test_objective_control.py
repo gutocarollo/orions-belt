@@ -102,8 +102,30 @@ class CodeNecessityTest(unittest.TestCase):
                 verify_code_necessity(root, {"base_sha": report["head_sha"], "head_sha": report["head_sha"], "portions": []})
             with self.assertRaisesRegex(ObjectiveControlError, "uncovered"):
                 verify_code_necessity(root, report)
-            report["portions"] = [{"path": "app.py", "start_line": 2, "end_line": 2, "purpose": "compute result", "inputs": ["value"], "outputs": ["result"], "evidence": ["unit test"], "simpler_alternative": "none", "necessity": "requested behavior"}]
+            portion = {
+                "path": "app.py",
+                "start_line": 2,
+                "end_line": 2,
+                "purpose": "compute result",
+                "inputs": ["value"],
+                "outputs": ["result"],
+                "evidence": [{"path": "app.py", "line": 2, "contains": "result = value + 1", "command": "test -s app.py"}],
+                "simpler_alternative": "none",
+                "necessity": "requested behavior",
+            }
+            report["portions"] = [portion]
             self.assertEqual(1, verify_code_necessity(root, report)["covered_lines"])
+
+            report["portions"] = [{**portion, "evidence": [{"path": "missing.py", "line": 1, "contains": "proof", "command": "true"}]}]
+            with self.assertRaisesRegex(ObjectiveControlError, "evidence path"):
+                verify_code_necessity(root, report)
+            report["portions"] = [{**portion, "evidence": [{"path": "app.py", "line": 2, "contains": "fabricated marker", "command": "true"}]}]
+            with self.assertRaisesRegex(ObjectiveControlError, "evidence marker"):
+                verify_code_necessity(root, report)
+            report["portions"] = [{**portion, "evidence": [{"path": "app.py", "line": 2, "contains": "result = value + 1", "command": "false"}]}]
+            with self.assertRaisesRegex(ObjectiveControlError, "evidence command"):
+                verify_code_necessity(root, report)
+            report["portions"] = [portion]
 
             receipt_head = report["head_sha"]
             (root / "receipt.json").write_text("{}\n", encoding="utf-8")

@@ -175,6 +175,22 @@ def verify_code_necessity(root: Path, report: dict[str, Any]) -> dict[str, Any]:
         raise ObjectiveControlError("code necessity report is stale because code was added after head_sha")
     added = _added_code_lines(_git(root, "diff", "--unified=0", "--no-color", f"{base}..{head}", "--"))
     covered: set[tuple[str, int]] = set()
+    blobs: dict[str, list[str]] = {}
+    verified_commands: set[str] = set()
+
+    def blob_lines(path: str, label: str) -> list[str]:
+        candidate = Path(path)
+        if not path or candidate.is_absolute() or ".." in candidate.parts:
+            raise ObjectiveControlError(f"{label} must be a safe repository-relative path")
+        if path not in blobs:
+            process = subprocess.run(
+                ["git", "show", f"{head}:{path}"], cwd=root, capture_output=True, text=True
+            )
+            if process.returncode:
+                raise ObjectiveControlError(f"{label} does not exist at head_sha: {path}")
+            blobs[path] = process.stdout.splitlines()
+        return blobs[path]
+
     required_fields = ("path", "start_line", "end_line", "purpose", "inputs", "outputs", "evidence", "simpler_alternative", "necessity")
     for portion in report.get("portions", []):
         if any(field not in portion or portion[field] in ("", []) for field in required_fields):
@@ -182,12 +198,30 @@ def verify_code_necessity(root: Path, report: dict[str, Any]) -> dict[str, Any]:
         start, end = portion["start_line"], portion["end_line"]
         if not isinstance(start, int) or not isinstance(end, int) or start < 1 or end < start:
             raise ObjectiveControlError("code portion line range is invalid")
+        source_lines = blob_lines(portion["path"], "code portion path")
+        if end > len(source_lines):
+            raise ObjectiveControlError(f"code portion range exceeds head_sha blob: {portion['path']}:{end}")
+        for evidence in portion["evidence"]:
+            if not isinstance(evidence, dict) or any(not evidence.get(field) for field in ("path", "line", "contains", "command")):
+                raise ObjectiveControlError("every evidence receipt requires path, line, contains and command")
+            evidence_lines = blob_lines(evidence["path"], "evidence path")
+            line = evidence["line"]
+            if not isinstance(line, int) or isinstance(line, bool) or not 1 <= line <= len(evidence_lines):
+                raise ObjectiveControlError(f"evidence line is outside head_sha blob: {evidence['path']}:{line}")
+            if evidence["contains"] not in evidence_lines[line - 1]:
+                raise ObjectiveControlError(f"evidence marker is absent at {evidence['path']}:{line}")
+            command = evidence["command"]
+            if command not in verified_commands:
+                process = subprocess.run(command, cwd=root, shell=True, capture_output=True, text=True)
+                if process.returncode:
+                    raise ObjectiveControlError(f"evidence command failed with exit {process.returncode}: {command}")
+                verified_commands.add(command)
         covered.update((portion["path"], line) for line in range(start, end + 1))
     missing = sorted(added - covered)
     if missing:
         sample = ", ".join(f"{path}:{line}" for path, line in missing[:10])
         raise ObjectiveControlError(f"uncovered added code lines: {sample}")
-    return {"status": "PASS", "added_code_lines": len(added), "covered_lines": len(added)}
+    return {"status": "PASS", "added_code_lines": len(added), "covered_lines": len(added), "verified_commands": len(verified_commands)}
 
 
 def _git(root: Path, *args: str) -> str:
