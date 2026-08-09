@@ -67,6 +67,7 @@ def _review_decision(payload: dict[str, Any], state: dict[str, Any], repository_
     deferred: list[dict[str, Any]] = []
     active_phase = state.get("active_phase", {})
     graph = state.get("execution_graph", {})
+    graph_nodes = set(graph.get("nodes", []))
     critical_nodes = {
         node for edge in graph.get("edges", []) if edge.get("critical")
         for node in (edge.get("from"), edge.get("to"))
@@ -75,6 +76,7 @@ def _review_decision(payload: dict[str, Any], state: dict[str, Any], repository_
     def bind_to_active_phase(value: dict[str, Any], blocking: bool) -> None:
         active_nodes = {active_phase.get("entry_node"), active_phase.get("exit_node")} - {None}
         assessed_nodes = set(value.get("graph_nodes", []))
+        _require(assessed_nodes <= graph_nodes, "impact graph_nodes must exist in the anchored execution graph")
         affects_current = bool(active_nodes & assessed_nodes)
         _require(
             value.get("affects_current_phase") is affects_current,

@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from engine.integration.council_pipeline import IntegrationError, _code_commits, _validate_graph_bindings, _validate_semantic_evidence, integrate_events  # noqa: E402
+from engine.integration.council_pipeline import IntegrationError, _code_commits, _validate_semantic_evidence, integrate_events  # noqa: E402
 
 TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
 COMMANDS = [
@@ -119,25 +119,12 @@ class CouncilPipelineTest(unittest.TestCase):
             with self.assertRaisesRegex(IntegrationError, "impact evidence marker"):
                 _validate_semantic_evidence(root, {"edges": []}, events, "b" * 40)
 
-    def test_graph_binding_rejects_fabricated_phase_nodes(self):
+    def test_integrated_runtime_rejects_fabricated_phase_nodes(self):
         events = complex_events()
-        graph = {
-            "objective": "deliver",
-            "start_node": "request",
-            "goal_node": "done",
-            "nodes": ["request", "done"],
-            "edges": [{
-                "edge_id": "E1", "from": "request", "to": "done",
-                "critical": True, "phase": "p1", "item": "i1",
-                "tests": TESTS, "evidence": ["events.jsonl"],
-            }],
-        }
         events[1]["payload"]["entry_node"] = "fabricated-entry"
         events[1]["payload"]["exit_node"] = "fabricated-exit"
-        with self.assertRaisesRegex(IntegrationError, "PHASE-PLAN.*graph edge"):
-            _validate_graph_bindings(graph, events)
-        events = complex_events()
-        self.assertEqual({"E1": graph["edges"][0]}, _validate_graph_bindings(graph, events))
+        with self.assertRaisesRegex(IntegrationError, "anchored execution graph"):
+            integrate_events(events, "b" * 40)
 
     def test_direct_read_only_transition_writes_nothing(self):
         with tempfile.TemporaryDirectory() as directory:

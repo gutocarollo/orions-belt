@@ -15,7 +15,7 @@ from council_runtime import (  # noqa: E402
 
 
 TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
-GRAPH = {"objective": "deliver", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "p1", "item": "i1", "tests": TESTS, "evidence": ["proof.txt"]}]}
+GRAPH = {"objective": "deliver", "start_node": "request", "goal_node": "done", "nodes": ["request", "done", "later"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "p1", "item": "i1", "tests": TESTS, "evidence": ["proof.txt"]}]}
 ANCHOR = {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline", "base_sha": "0" * 40, "worktree_baseline": [], "execution_graph": GRAPH}
 
 
@@ -216,8 +216,8 @@ class CouncilRuntimeTest(unittest.TestCase):
     def test_blocking_impact_cannot_self_assign_unknown_graph_nodes(self):
         state = self.walk_to_commit()
         forged = finding("GHOST", "CRITICAL_BLOCK")
-        forged["impact"]["graph_nodes"] = ["node-that-is-not-in-the-active-phase"]
-        with self.assertRaisesRegex(TransitionError, "active phase"):
+        forged["impact"]["graph_nodes"] = ["request", "ghost"]
+        with self.assertRaisesRegex(TransitionError, "anchored execution graph"):
             apply_transition(state, "QUALITY", {
                 "status": "CORRIGIR",
                 "critical": 1,
