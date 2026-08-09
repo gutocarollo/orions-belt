@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from copy import deepcopy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -25,7 +26,7 @@ def complex_events(commit_sha="a" * 40, manifest="delivery.json", base_sha="0" *
         {"event": "PHASE-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "items": ["i1"], "objective": "deliver", "edge_id": "E1", "entry_node": "request", "exit_node": "done", "tests": TESTS}},
         {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "item": "i1", "slice": "s1", "validation": ["test"], "objective": "deliver", "edge_id": "E1", "deliverable": "working result", "tests": TESTS}},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}},
-        {"event": "VALIDATION", "payload": {"status": "PASS", "commands": COMMANDS, "checked_files": ["slice.txt"], "executor": "agent_swarm_ledger", "validated_at": "2026-01-01T00:00:00Z", "file_hashes": [{"path": "slice.txt", "sha256": "971c9401e58679c2670ab91b83db3846e47927d9e9c527ea952f29d11c7515f9"}], "tests": TESTS}},
+        {"event": "VALIDATION", "payload": {"status": "PASS", "commands": deepcopy(COMMANDS), "checked_files": ["slice.txt"], "executor": "agent_swarm_ledger", "validated_at": "2026-01-01T00:00:00Z", "file_hashes": [{"path": "slice.txt", "sha256": "971c9401e58679c2670ab91b83db3846e47927d9e9c527ea952f29d11c7515f9"}], "tests": TESTS}},
         {"event": "LOCAL-COMMIT", "payload": {"sha": commit_sha, "files": ["slice.txt"]}},
         {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "99999999-9999-4999-8999-999999999999"}},
         {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "already minimal"}},
@@ -38,7 +39,7 @@ def delivery_manifest(commit_sha, evidence="events.jsonl"):
     return {"commits": [commit_sha], "execution_graph": "execution-graph.json", "code_necessity_report": "code-necessity.json", "acceptance": [{"criterion": "done", "phase": "p1", "item": "i1", "slice": "s1", "commit": commit_sha, "files": ["slice.txt"], "commands": [item["command"] for item in COMMANDS], "evidence": [evidence], "reviewer_ids": ["99999999-9999-4999-8999-999999999999", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"], "edge_id": "E1", "test_ids": [test_id for ids in TESTS.values() for test_id in ids]}]}
 
 
-def write_delivery_support(folder, base_sha, head_sha, evidence="events.jsonl", branch=False):
+def write_delivery_support(folder, base_sha, head_sha, evidence="events.jsonl", branch=False, portions=None):
     graph = {"objective": "deliver", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "p1", "item": "i1", "tests": TESTS, "evidence": [evidence]}]}
     if branch:
         graph["nodes"].append("alternate")
@@ -47,7 +48,7 @@ def write_delivery_support(folder, base_sha, head_sha, evidence="events.jsonl", 
             {**graph["edges"][0], "edge_id": "E3", "from": "alternate"},
         ])
     (folder / "execution-graph.json").write_text(json.dumps(graph), encoding="utf-8")
-    (folder / "code-necessity.json").write_text(json.dumps({"base_sha": base_sha, "head_sha": head_sha, "portions": []}), encoding="utf-8")
+    (folder / "code-necessity.json").write_text(json.dumps({"base_sha": base_sha, "head_sha": head_sha, "portions": portions or []}), encoding="utf-8")
 
 
 def commit_all(folder, message):
@@ -73,6 +74,60 @@ class CouncilPipelineTest(unittest.TestCase):
     def test_invalid_transition_reports_event_index(self):
         with self.assertRaisesRegex(IntegrationError, "event 2"):
             integrate_events(complex_events()[:1] + [complex_events()[3]], "b" * 40)
+
+    def test_delivery_rejects_code_commit_missing_from_ledger(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=folder, check=True)
+            (folder / "baseline.txt").write_text("baseline\n")
+            base_sha = commit_all(folder, "baseline")
+            (folder / "slice.txt").write_text("slice\n")
+            slice_sha = commit_all(folder, "recorded slice")
+            (folder / "unrecorded.py").write_text("value = 1\n")
+            unrecorded_sha = commit_all(folder, "unrecorded code")
+            write_delivery_support(folder, base_sha, unrecorded_sha, portions=[{
+                "path": "unrecorded.py", "start_line": 1, "end_line": 1,
+                "purpose": "demonstrate unrecorded code", "inputs": ["request"], "outputs": ["value"],
+                "evidence": ["negative regression"], "simpler_alternative": "omit it", "necessity": "test fixture",
+            }])
+            (folder / "delivery.json").write_text(json.dumps(delivery_manifest(slice_sha)))
+            ledger = folder / "events.jsonl"
+            ledger.write_text("".join(json.dumps(item) + "\n" for item in complex_events(slice_sha, base_sha=base_sha)), encoding="utf-8")
+            final_sha = commit_all(folder, "delivery proof")
+            process = subprocess.run(
+                [sys.executable, "engine/integration/council_pipeline.py", str(ledger), "--git-sha", final_sha, "--repo-root", str(folder), "--output-dir", str(folder / "proof")],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(2, process.returncode)
+            self.assertIn("unrecorded code commit", process.stderr)
+
+    def test_delivery_reexecutes_declared_validation_commands(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=folder, check=True)
+            (folder / "baseline.txt").write_text("baseline\n")
+            base_sha = commit_all(folder, "baseline")
+            (folder / "slice.txt").write_text("slice\n")
+            slice_sha = commit_all(folder, "slice")
+            write_delivery_support(folder, base_sha, slice_sha)
+            events = complex_events(slice_sha, base_sha=base_sha)
+            events[4]["payload"]["commands"][0]["command"] = "command-that-does-not-exist"
+            manifest = delivery_manifest(slice_sha)
+            manifest["acceptance"][0]["commands"][0] = "command-that-does-not-exist"
+            (folder / "delivery.json").write_text(json.dumps(manifest))
+            ledger = folder / "events.jsonl"
+            ledger.write_text("".join(json.dumps(item) + "\n" for item in events), encoding="utf-8")
+            final_sha = commit_all(folder, "fabricated validation proof")
+            process = subprocess.run(
+                [sys.executable, "engine/integration/council_pipeline.py", str(ledger), "--git-sha", final_sha, "--repo-root", str(folder), "--output-dir", str(folder / "proof")],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(2, process.returncode)
+            self.assertIn("validation command failed during delivery replay", process.stderr)
 
     def test_cli_materializes_state_and_evidence(self):
         with tempfile.TemporaryDirectory() as directory:

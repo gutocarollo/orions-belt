@@ -171,6 +171,7 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
     elif event == "LOCAL-COMMIT":
         sha = str(payload.get("sha", ""))
         _require(len(sha) == 40 and all(char in "0123456789abcdef" for char in sha.lower()), "LOCAL-COMMIT requires a 40-character SHA")
+        _require(sha not in result["commits"], "LOCAL-COMMIT requires a new SHA for every slice")
         _require(set(payload["files"]) == set(result.get("validated_files", [])), "LOCAL-COMMIT files must equal the validated slice files")
         result["commits"].append(sha)
         result.setdefault("commit_files", {})[sha] = list(payload["files"])

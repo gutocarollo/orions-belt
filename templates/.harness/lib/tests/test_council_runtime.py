@@ -131,6 +131,14 @@ class CouncilRuntimeTest(unittest.TestCase):
         state = apply_transition(state, "ITEM-PLAN", item("p1", "simplify", fix_kind="simplification", consumes_review_round=1))
         self.assertIsNone(state["pending_fix"])
 
+    def test_local_commit_sha_must_be_new_for_every_slice(self):
+        state = self.walk_to_commit()
+        state = apply_transition(state, "ITEM-PLAN", item("p1", "second"))
+        state = apply_transition(state, "SLICE", {"skill": "incremental-implementation", "slice": "second", "changed_files": ["slice.txt"]})
+        state = apply_transition(state, "VALIDATION", validation(["slice.txt"]))
+        with self.assertRaisesRegex(TransitionError, "new SHA"):
+            apply_transition(state, "LOCAL-COMMIT", {"sha": "a" * 40, "files": ["slice.txt"]})
+
     def test_quality_and_adversarial_reviewers_must_be_distinct(self):
         state = self.walk_to_commit()
         reviewer = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"

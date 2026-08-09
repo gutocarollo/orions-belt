@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / ".harness" / "lib"))
 from council_runtime import TransitionError, apply_transition  # noqa: E402
 from mini_schema_validate import validate_instance  # noqa: E402
-from objective_control import ObjectiveControlError, validate_execution_graph, verify_code_necessity  # noqa: E402
+from objective_control import CODE_SUFFIXES, ObjectiveControlError, validate_execution_graph, verify_code_necessity  # noqa: E402
 
 
 class IntegrationError(ValueError):
@@ -43,6 +43,35 @@ def _load_json(repo_root: Path, relative: str, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise IntegrationError(f"{label} must be a JSON object")
     return value
+
+
+def _code_commits(repo_root: Path, base_sha: str, head_sha: str) -> list[str]:
+    commits = subprocess.check_output(
+        ["git", "rev-list", "--reverse", f"{base_sha}..{head_sha}"], cwd=repo_root, text=True,
+    ).splitlines()
+    return [
+        sha for sha in commits
+        if any(
+            Path(name).suffix.lower() in CODE_SUFFIXES
+            for name in subprocess.check_output(
+                ["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", sha],
+                cwd=repo_root, text=True,
+            ).splitlines()
+        )
+    ]
+
+
+def _replay_validation_commands(repo_root: Path, validations: dict[str, dict[str, Any]]) -> None:
+    for validation in validations.values():
+        for item in validation.get("commands", []):
+            command = item["command"]
+            process = subprocess.run(command, cwd=repo_root, shell=True, capture_output=True, text=True)
+            if process.returncode:
+                detail = (process.stderr or process.stdout).strip()[-500:]
+                suffix = f": {detail}" if detail else ""
+                raise IntegrationError(
+                    f"validation command failed during delivery replay with exit {process.returncode}: {command}{suffix}"
+                )
 
 
 def integrate_events(events: list[dict[str, Any]], git_sha: str) -> dict[str, Any]:
@@ -107,6 +136,7 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
             raise IntegrationError(f"commit content differs from validated file hashes: {sha}")
     if _worktree_state(repo_root) != sorted(state.get("worktree_baseline", [])):
         raise IntegrationError("repository has uncommitted drift relative to the Council ANCHOR")
+    _replay_validation_commands(repo_root, validations)
     delivery = next((item["payload"] for item in reversed(state["history"]) if item["event"] == "DELIVERY"), None)
     if state.get("mutation_mode") == "WORKSPACE_WRITE":
         if not delivery:
@@ -138,6 +168,9 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
             raise IntegrationError("execution graph objective differs from the Council macro objective")
         if report["base_sha"] != state.get("base_sha"):
             raise IntegrationError("code necessity base_sha differs from the Council ANCHOR")
+        unrecorded_code = [sha for sha in _code_commits(repo_root, report["base_sha"], report["head_sha"]) if sha not in state.get("commits", [])]
+        if unrecorded_code:
+            raise IntegrationError("unrecorded code commit exists between Council ANCHOR and delivery: " + ", ".join(unrecorded_code))
         for sha in state.get("commits", []):
             if subprocess.run(["git", "merge-base", "--is-ancestor", sha, report["head_sha"]], cwd=repo_root).returncode:
                 raise IntegrationError(f"code necessity report does not cover local commit: {sha}")
