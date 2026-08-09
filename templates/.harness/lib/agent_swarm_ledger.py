@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from _tooling_conf import get_config, project_root
+from council_runtime import TransitionError, apply_transition
 
 
 ROOT = project_root()
@@ -26,6 +27,7 @@ EVENT_STATUSES = {
     ("execution", "fix-request"): {"CORRIGIR"},
     ("execution", "fix-consumed"): {"CORRIGIR"},
 }
+COUNCIL_EVENTS = ("ANCHOR", "PHASE-PLAN", "ITEM-PLAN", "SLICE", "VALIDATION", "LOCAL-COMMIT", "QUALITY", "SIMPLIFICATION", "ADVERSARIAL", "DELIVERY")
 
 
 def utc_now() -> str:
@@ -141,6 +143,35 @@ def summary(args: argparse.Namespace) -> None:
     print(json.dumps({"run_id": args.run_id, "counts": counts, "last_status": last_status}, indent=2, sort_keys=True))
 
 
+def transition(args: argparse.Namespace) -> None:
+    folder = ledger_path(args.run_id).parent
+    folder.mkdir(parents=True, exist_ok=True)
+    event_path = folder / "council-events.jsonl"
+    state_path = folder / "council-state.json"
+    required_path = state_path.with_suffix(".required-next")
+    if required_path.exists() and args.council_event != "VALIDATION":
+        raise SystemExit("invalid Council transition: VALIDATION is required after the last edit")
+    with event_path.open("a+", encoding="utf-8") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        stream.seek(0)
+        events = [json.loads(line) for line in stream if line.strip()]
+        state = None
+        try:
+            for item in events:
+                state = apply_transition(state, item["event"], item["payload"])
+            item = {"seq": len(events) + 1, "ts": utc_now(), "event": args.council_event, "payload": payload(args.payload_json)}
+            state = apply_transition(state, item["event"], item["payload"])
+        except (TransitionError, KeyError, TypeError, ValueError) as exc:
+            raise SystemExit(f"invalid Council transition: {exc}") from exc
+        stream.seek(0, 2)
+        stream.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n")
+        stream.flush()
+        state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        if args.council_event == "VALIDATION" and required_path.exists():
+            required_path.unlink()
+    print(state_path.relative_to(ROOT))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -155,6 +186,11 @@ def main() -> int:
     show = commands.add_parser("summary")
     show.add_argument("--run-id", required=True)
     show.set_defaults(func=summary)
+    move = commands.add_parser("transition")
+    move.add_argument("--run-id", required=True)
+    move.add_argument("--event", dest="council_event", choices=COUNCIL_EVENTS, required=True)
+    move.add_argument("--payload-json", required=True)
+    move.set_defaults(func=transition)
     args = parser.parse_args()
     args.func(args)
     return 0

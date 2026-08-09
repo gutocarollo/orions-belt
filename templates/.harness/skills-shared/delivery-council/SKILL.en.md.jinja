@@ -65,6 +65,89 @@ Defaults:
 - `EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}`
 - `AUTO_EXECUTE_AFTER_PLAN=false` for `START_AT=PLANNING`; effective default `true` for `START_AT=PLAN_REVIEW`
 
+## Operational Contract (mandatory override)
+
+This section overrides any older compact-flow wording below. It applies to every
+Council execution, including trivial work and `START_AT=EXECUTION`.
+
+```text
+MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE
+```
+
+- Use `READ_ONLY` for review, audit or diagnosis without a requested change. It
+  must not edit workspace files, mutate a ledger, commit, push or merge.
+- Use `WORKSPACE_WRITE` only when the user requested implementation or change.
+- Start the enforceable lifecycle with
+  `python3 .harness/lib/council_session.py start --run-id <id> --request-source <source> --mutation-mode WORKSPACE_WRITE`.
+  Advance it with `council_session.py transition`; finish only after `DELIVERY`.
+- Before starting EVERY phase and EVERY execution item, invoke
+  `planning-and-task-breakdown` in read-only preflight. A phase preflight never
+  replaces the item preflight, including for the first item.
+- `incremental-implementation` is the governing execution skill. It is the only
+  authorized way to edit or correct code after `ITEM-PLAN: PRONTO`.
+- Keep each slice small, validate it with real commands, and record the checked
+  files. Every validated slice MUST immediately produce an atomic LOCAL commit
+  containing only the validated files.
+- Push to any remote and merge to remote `main` require explicit authorization.
+  A request to implement, finish or commit does not grant remote authority.
+- A compact/trivial flow may reduce breadth, but it still requires phase/item
+  preflight, incremental implementation, validation, a local commit and quality
+  review.
+
+### Mandatory state machine
+
+| Current state | Required evidence | Next state |
+|---|---|---|
+| `ANCHOR` | original request and mutation mode | `PHASE-PLAN` |
+| `PHASE-PLAN` | `planning-and-task-breakdown`; phase `PRONTO` | `ITEM-PLAN` |
+| `ITEM-PLAN` | `planning-and-task-breakdown`; item `PRONTO` | `SLICE` |
+| `SLICE` | changed files and acceptance target | `VALIDATION` |
+| `VALIDATION` | successful commands over exactly the slice files | `LOCAL-COMMIT` |
+| `LOCAL-COMMIT` | existing local SHA containing exactly those files | `ITEM-PLAN` or `QUALITY` |
+| `QUALITY` | zero `Critical` and zero `Required` | `SIMPLIFICATION` or fix `ITEM-PLAN` |
+| `SIMPLIFICATION` | applied and revalidated, or evidence-based N/A | `ADVERSARIAL` |
+| `ADVERSARIAL` | zero Blocking/High and satisfied sentinel | `DELIVERY` or fix `ITEM-PLAN` |
+| `DELIVERY` | SHA-bound manifest and replayable evidence | terminal |
+| `BLOCKED` | named missing decision/access/evidence | terminal |
+
+`VALIDATION` cannot precede the write it validates. `LOCAL-COMMIT` must consume
+that validation. Review rounds increase exactly by one and retain the same
+reviewer thread for correction rounds. `BLOQUEADO` is terminal.
+
+### Quality, simplification and correction loop
+
+Run `code-review-and-quality` in an isolated `code-reviewer` subagent after the
+implementation commits. The canonical taxonomy is `Critical`, `Required`,
+`Optional`, `Nit`, `FYI`; satisfaction requires zero `Critical` and zero
+`Required`. A blocking finding must return:
+
+```text
+QUALITY-FIX-REQUEST:
+- gap: ...
+- evidence: ...
+- mandatory-change: ...
+```
+
+Turn each quality or adversarial correction into a new planned item: invoke
+`planning-and-task-breakdown`, apply the smallest fix through
+`incremental-implementation`, validate it, create its local commit and continue
+the same reviewer thread. Record consumption as:
+
+```text
+FIX-CONSUMED:
+- source-review-round: ...
+- fixed-gaps: ...
+- changed-files: ...
+- validation-run: ...
+```
+
+Then apply `code-simplification`; if it changes code, revalidate, commit locally
+and rerun quality review. Finally dispatch a `{{ project_name }}-adversarial-reviewer`
+subagent in isolated context. Never self-review inline.
+
+Limit: maximum 2 rounds for plan review.
+Limit: maximum 3 rounds for execution adversarial review.
+
 Limits:
 
 - `PLAN_REVIEW_MAX` can never exceed {{ harness_plan_review_max }}.

@@ -8,6 +8,7 @@ import tomllib
 from pathlib import Path
 
 from _tooling_conf import get_config, get_config_csv, project_root
+from council_contract import ContractError, validate_contract
 
 
 ROOT = project_root()
@@ -86,6 +87,11 @@ def main() -> int:
         validate_skill(skill)
     validate_openai_yaml()
     validate_toml()
+    if COUNCIL_SKILL_NAME:
+        try:
+            validate_contract(ROOT)
+        except ContractError as exc:
+            fail(str(exc))
     print("skill-contract-ok")
     return 0
 

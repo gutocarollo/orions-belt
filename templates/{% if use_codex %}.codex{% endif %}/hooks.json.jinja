@@ -156,6 +156,16 @@
       {%- endif %}
     ],
     "PreToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" pre",
+            "timeout": 10
+          }
+        ]
+      },
       {%- if harness_understand_apps_root %}
       {
         "matcher": "^Bash$",
@@ -180,6 +190,16 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" post",
+            "timeout": 10
+          }
+        ]
+      },
       {%- if use_ds_gate %}
       {
         "matcher": "Edit|Write",
@@ -228,6 +248,11 @@
     "Stop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" stop",
+            "timeout": 10
+          },
           {
             "type": "command",
             "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/completion-gate.py\"",

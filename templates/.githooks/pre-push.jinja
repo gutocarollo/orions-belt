@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# pre-push — Council remote authority plus optional project test gates.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+fail() { printf '\npre-push BLOQUEADO: %s\n\n' "$1" >&2; exit 1; }
+
+# Council is inactive unless a lifecycle pointer or explicit state path exists.
+council_remote_guard() {
+    local pointer="$ROOT/.harness/council-active" marker auth
+    if [ -n "${COUNCIL_STATE_PATH:-}" ]; then
+        marker="$COUNCIL_STATE_PATH"
+    elif [ -f "$pointer" ]; then
+        IFS= read -r marker < "$pointer"
+    else
+        return 0
+    fi
+    [ -f "$marker" ] || fail "Council state pointer is active but corrupt: $marker"
+    auth="${COUNCIL_REMOTE_AUTHORIZATION:-}"
+    [ -n "$auth" ] && [ -f "$auth" ] || fail "Council push requires COUNCIL_REMOTE_AUTHORIZATION evidence."
+    python3 - "$auth" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+ok = data.get("remote_authorized") is True and data.get("authorized_by") and data.get("authorization_evidence")
+if not ok:
+    raise SystemExit("BLOCKED: invalid Council remote authorization evidence")
+PY
+}
+
+council_remote_guard
+
+{% if harness_pre_push_test_command %}
+# Bypass applies only to project tests; it never bypasses Council authority.
+if [ -n "${PUSH_GATE_ACK:-}" ]; then
+    printf 'pre-push: bypass declarado (%s)\n' "$PUSH_GATE_ACK" >&2
+    exit 0
+fi
+
+LOG="$(mktemp -t orions-prepush.XXXXXX)"
+trap 'rm -f "$LOG"' EXIT
+
+printf 'pre-push: rodando a suite...\n' >&2
+if ! ( {{ harness_pre_push_test_command }} ) >"$LOG" 2>&1; then
+    fail "suite vermelha. Últimas linhas:
+$(tail -12 "$LOG" | sed 's/^/    /')"
+fi
+printf 'pre-push: suite OK\n' >&2
+
+if ! python3 "$ROOT/.harness/lib/docs_wiki_lint.py" >"$LOG" 2>&1; then
+    fail "docs-wiki-lint vermelho:
+$(grep '^- ' "$LOG" | head -10 | sed 's/^/    /')"
+fi
+printf 'pre-push: docs-wiki-lint OK\n' >&2
+{% if harness_pre_push_slow_command %}
+{%- if harness_pre_push_slow_probe %}
+if ( {{ harness_pre_push_slow_probe }} ) >/dev/null 2>&1; then
+{%- else %}
+if true; then
+{%- endif %}
+    printf 'pre-push: rodando a suite cara...\n' >&2
+    if ! ( {{ harness_pre_push_slow_command }} ) >"$LOG" 2>&1; then
+        fail "suite cara vermelha. Últimas linhas:
+$(tail -12 "$LOG" | sed 's/^/    /')"
+    fi
+    printf 'pre-push: suite cara OK\n' >&2
+else
+    printf 'pre-push: pré-requisito da suite cara indisponível, PULADA\n' >&2
+fi
+{%- endif %}
+
+printf 'pre-push: gates verdes.\n' >&2
+{% endif %}
+exit 0

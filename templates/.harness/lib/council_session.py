@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Explicit lifecycle for activating and finishing an enforceable Council run."""
+from __future__ import annotations
+import argparse
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+from council_runtime import apply_transition
+
+SOURCE_ROOT = Path(__file__).resolve().parents[2]
+
+
+def start_session(root: Path, run_id: str, anchor_source: str, mutation_mode: str = "WORKSPACE_WRITE") -> Path | None:
+    if mutation_mode == "READ_ONLY":
+        return None
+    folder = root / ".harness/runs/agent-swarm" / run_id
+    folder.mkdir(parents=True, exist_ok=True)
+    event = {"seq": 1, "event": "ANCHOR", "payload": {"mutation_mode": mutation_mode, "anchor_source": anchor_source}}
+    state = apply_transition(None, event["event"], event["payload"])
+    (folder / "council-events.jsonl").write_text(json.dumps(event, sort_keys=True) + "\n", encoding="utf-8")
+    state_path = (folder / "council-state.json").resolve()
+    state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    pointer = root / ".harness/council-active"
+    pointer.parent.mkdir(parents=True, exist_ok=True)
+    pointer.write_text(str(state_path) + "\n", encoding="utf-8")
+    hooks_dir = Path(subprocess.check_output(["git", "rev-parse", "--git-path", "hooks"], cwd=root, text=True).strip())
+    if not hooks_dir.is_absolute():
+        hooks_dir = root / hooks_dir
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    target = hooks_dir / "pre-push"
+    if target.exists() and target.read_bytes() != (SOURCE_ROOT / ".githooks/pre-push").read_bytes():
+        raise RuntimeError(f"existing pre-push hook differs: {target}")
+    shutil.copy2(SOURCE_ROOT / ".githooks/pre-push", target)
+    target.chmod(0o755)
+    return state_path
+
+
+def finish_session(root: Path) -> None:
+    pointer = root / ".harness/council-active"
+    if not pointer.is_file():
+        raise RuntimeError("no active Council session")
+    state_path = Path(pointer.read_text(encoding="utf-8").strip())
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    if state.get("stage") != "DELIVERY":
+        raise RuntimeError("Council session cannot finish before DELIVERY")
+    pointer.unlink()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    start = commands.add_parser("start")
+    start.add_argument("--root", type=Path, default=Path.cwd())
+    start.add_argument("--run-id", required=True)
+    start.add_argument("--anchor-source", required=True)
+    start.add_argument("--mutation-mode", choices=("READ_ONLY", "WORKSPACE_WRITE"), default="WORKSPACE_WRITE")
+    finish = commands.add_parser("finish")
+    finish.add_argument("--root", type=Path, default=Path.cwd())
+    args = parser.parse_args()
+    if args.command == "start":
+        state = start_session(args.root.resolve(), args.run_id, args.anchor_source, args.mutation_mode)
+        print(state if state else "INLINE_READ_ONLY")
+    else:
+        finish_session(args.root.resolve())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
