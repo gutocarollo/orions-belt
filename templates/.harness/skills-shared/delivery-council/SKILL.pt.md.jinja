@@ -302,7 +302,7 @@ Cada rodada de qualidade deve ser registrada no ledger de execucao como `event=r
 2. Se nao houver simplificacao segura, registre `SIMPLIFICATION: NAO_NECESSARIA` com a razao concreta. Isso e um resultado valido; a skill nao autoriza churn.
 3. Se houver simplificacao, aplique uma mudanca por vez, preserve exatamente comportamento, efeitos, erros e ordenacao, e rode os testes apos cada mudanca. Se falhar, desfaça somente a simplificacao recem-aplicada e reavalie.
 4. Quando a passada alterar arquivos, rode novamente `code-review-and-quality` antes do adversarial final. A nova review precisa confirmar que a simplificacao reduziu complexidade sem criar regressao. Se nenhuma alteracao for feita, nao consuma uma rodada extra.
-5. Gere o relatório de necessidade cobrindo cada linha de código adicionada por porção semântica: path/range, motivo, objetivo, entradas, saídas, evidência, alternativa mais simples e necessidade.
+5. Gere o relatório de necessidade (`code-necessity`) cobrindo cada linha de código adicionada por porção semântica: path/range, motivo, objetivo, entradas, saídas, evidência, alternativa mais simples e necessidade.
 
 ### Fechamento do gate
 
