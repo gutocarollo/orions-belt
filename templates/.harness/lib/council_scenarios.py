@@ -61,6 +61,7 @@ def _execute_flow(source: Path, target: Path, run_id: str, actions: list[dict[st
     env = _start(source, target, run_id)
     commits: list[str] = []
     commit_file_sets: list[list[str]] = []
+    commit_commands: list[list[str]] = []
     process_count = 1
     changed_files: list[str] = []
     for index, action in enumerate(actions, 1):
@@ -74,15 +75,20 @@ def _execute_flow(source: Path, target: Path, run_id: str, actions: list[dict[st
             result = _must(command, target)
             payload["commands"] = [{"command": " ".join(command), "exit_code": result.returncode}]
             payload["checked_files"] = changed_files
+            validated_commands = [item["command"] for item in payload["commands"]]
         elif event == "LOCAL-COMMIT":
             sha = _commit_existing(target, changed_files)
             commits.append(sha)
             commit_file_sets.append(list(changed_files))
+            commit_commands.append(validated_commands)
             payload["sha"] = sha
             payload["files"] = changed_files
         elif event == "DELIVERY":
             manifest = target / action["payload"]["manifest"]
-            acceptance = [{"criterion": "slice delivered", "phase": "scenario", "item": f"item-{index}", "slice": f"slice-{index}", "commit": sha, "files": files, "commands": ["git diff --check -> exit 0"], "evidence": ["council-events.jsonl"], "reviewer_ids": ["quality", "adversarial"]} for index, (sha, files) in enumerate(zip(commits, commit_file_sets), 1)]
+            reviewers = [item["payload"]["reviewer_id"] for item in actions if item["event"] in {"QUALITY", "ADVERSARIAL"} and item["payload"].get("status") == "SATISFEITO"]
+            reviewer_ids = list(dict.fromkeys(reviewers))[-2:]
+            ledger_path = f".harness/runs/agent-swarm/{run_id}/council-events.jsonl"
+            acceptance = [{"criterion": "slice delivered", "phase": "scenario", "item": f"item-{index}", "slice": f"slice-{index}", "commit": sha, "files": files, "commands": commands, "evidence": [ledger_path], "reviewer_ids": reviewer_ids} for index, (sha, files, commands) in enumerate(zip(commits, commit_file_sets, commit_commands), 1)]
             manifest.write_text(json.dumps({"acceptance": acceptance, "commits": commits}, indent=2) + "\n", encoding="utf-8")
         _transition(source, target, run_id, event, payload, env)
         process_count += 1

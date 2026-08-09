@@ -27,8 +27,8 @@ def complex_events(commit_sha="a" * 40, manifest="delivery.json"):
     ]
 
 
-def delivery_manifest(commit_sha):
-    return {"commits": [commit_sha], "acceptance": [{"criterion": "done", "phase": "p1", "item": "i1", "slice": "s1", "commit": commit_sha, "files": ["slice.txt"], "commands": ["test -> exit 0"], "evidence": ["events.jsonl"], "reviewer_ids": ["99999999-9999-4999-8999-999999999999", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]}]}
+def delivery_manifest(commit_sha, evidence="events.jsonl"):
+    return {"commits": [commit_sha], "acceptance": [{"criterion": "done", "phase": "p1", "item": "i1", "slice": "s1", "commit": commit_sha, "files": ["slice.txt"], "commands": ["git diff --check"], "evidence": [evidence], "reviewer_ids": ["99999999-9999-4999-8999-999999999999", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]}]}
 
 
 class CouncilPipelineTest(unittest.TestCase):
@@ -122,7 +122,7 @@ class CouncilPipelineTest(unittest.TestCase):
             transition({"event": "LOCAL-COMMIT", "payload": {"sha": commit_sha, "files": ["slice.txt"]}})
             for item in events[6:9]:
                 transition(item)
-            (root / "delivery.json").write_text(json.dumps(delivery_manifest(commit_sha)))
+            (root / "delivery.json").write_text(json.dumps(delivery_manifest(commit_sha, ".harness/runs/agent-swarm/real-flow/council-events.jsonl")))
             transition({"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": "delivery.json"}})
             ledger = root / ".harness/runs/agent-swarm/real-flow/council-events.jsonl"
             output = root / "proof"

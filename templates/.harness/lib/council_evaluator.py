@@ -117,7 +117,9 @@ def evaluate(root: Path, scenario_report: dict[str, Any], review_evidence: dict[
     quality_valid = _review_valid(quality, "quality", sha)
     adversarial_valid = _review_valid(adversarial, "adversarial", sha)
     real_independence = quality_valid and adversarial_valid and quality["reviewer_id"] != adversarial["reviewer_id"]
-    external_attestation = bool(real_independence)
+    # Artifact fields are caller-controlled. Only the orchestration layer can
+    # attest that these UUIDs came from actual multi-agent tool invocations.
+    external_attestation = False
     suite_pass = _core_suite_pass(root)
     clean_checkout = _clean_checkout_pass(root)
     exact_sha = len(sha) == 40 and (expected_sha is None or expected_sha == sha)
@@ -142,7 +144,7 @@ def evaluate(root: Path, scenario_report: dict[str, Any], review_evidence: dict[
         "exact_sha": exact_sha,
         "test_suite": suite_pass,
         "clean_checkout": clean_checkout,
-        "external_attestation_required": external_attestation,
+        "external_attestation_required": True,
     }
     return {
         "git_sha": sha,
@@ -150,7 +152,8 @@ def evaluate(root: Path, scenario_report: dict[str, Any], review_evidence: dict[
         "scores": scores,
         "overall": round(sum(scores.values()) / len(scores), 2),
         "gates": gates,
-        "promotion": min(scores.values()) > 8.5 and all(gates.values()),
+        "promotion": False,
+        "promotion_boundary": "orchestrator_multi_agent_receipt",
     }
 
 

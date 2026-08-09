@@ -13,6 +13,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / ".harness" / "lib"))
 from council_runtime import TransitionError, apply_transition  # noqa: E402
+from mini_schema_validate import validate_instance  # noqa: E402
 
 
 class IntegrationError(ValueError):
@@ -77,12 +78,35 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise IntegrationError(f"delivery manifest is unreadable: {manifest_path}") from exc
-        acceptance = manifest.get("acceptance")
-        required = {"criterion", "phase", "item", "slice", "commit", "files", "commands", "evidence", "reviewer_ids"}
-        if not isinstance(acceptance, list) or not acceptance or any(not isinstance(item, dict) or set(item) != required for item in acceptance):
-            raise IntegrationError("delivery manifest acceptance entries are not fully typed")
+        schema = json.loads((ROOT / ".harness/schemas/delivery-manifest.schema.json").read_text(encoding="utf-8"))
+        errors = validate_instance(manifest, schema)
+        if errors:
+            raise IntegrationError("delivery manifest schema violation: " + "; ".join(errors))
+        acceptance = manifest["acceptance"]
         if {item["commit"] for item in acceptance} != set(state.get("commits", [])) or manifest.get("commits") != state.get("commits"):
             raise IntegrationError("delivery manifest must map acceptance and every local commit")
+        validations: dict[str, dict[str, Any]] = {}
+        pending_validation = None
+        for history_item in state["history"]:
+            if history_item["event"] == "VALIDATION":
+                pending_validation = history_item["payload"]
+            elif history_item["event"] == "LOCAL-COMMIT":
+                validations[history_item["payload"]["sha"]] = pending_validation or {}
+                pending_validation = None
+        expected_reviewers = {state["quality_reviewer_id"], state["adversarial_reviewer_id"]}
+        for item in acceptance:
+            commit = item["commit"]
+            validation = validations.get(commit, {})
+            if set(item["files"]) != set(state["commit_files"][commit]) or set(item["files"]) != set(validation.get("checked_files", [])):
+                raise IntegrationError(f"acceptance files differ from validated commit: {commit}")
+            if item["commands"] != [command["command"] for command in validation.get("commands", [])]:
+                raise IntegrationError(f"acceptance commands differ from validation evidence: {commit}")
+            if set(item["reviewer_ids"]) != expected_reviewers:
+                raise IntegrationError(f"acceptance reviewer_ids differ from final review threads: {commit}")
+            for evidence in item["evidence"]:
+                evidence_path = (repo_root / evidence).resolve()
+                if repo_root.resolve() not in evidence_path.parents or not evidence_path.is_file():
+                    raise IntegrationError(f"acceptance evidence is missing or escapes repository: {evidence}")
 
 
 def main() -> int:

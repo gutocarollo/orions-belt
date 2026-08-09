@@ -21,6 +21,7 @@ SCHEMA_NAMES = (
     "slice-event.schema.json",
     "validation-event.schema.json",
     "local-commit-event.schema.json",
+    "delivery-manifest.schema.json",
 )
 MARKER_GROUPS = (
     ("MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE",),
