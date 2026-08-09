@@ -107,6 +107,7 @@ class CodeNecessityTest(unittest.TestCase):
                 "start_line": 2,
                 "end_line": 2,
                 "purpose": "compute result",
+                "objective": "prove the requested calculation",
                 "inputs": ["value"],
                 "outputs": ["result"],
                 "evidence": [{"path": "app.py", "line": 2, "contains": "result = value + 1", "command": "test -s app.py"}],
@@ -125,6 +126,15 @@ class CodeNecessityTest(unittest.TestCase):
             report["portions"] = [{**portion, "evidence": [{"path": "app.py", "line": 2, "contains": "result = value + 1", "command": "false"}]}]
             with self.assertRaisesRegex(ObjectiveControlError, "evidence command"):
                 verify_code_necessity(root, report)
+            report["portions"] = [{**portion, "evidence": [{"path": "app.py", "line": 2, "contains": "result = value + 1", "command": "true"}]}]
+            with self.assertRaisesRegex(ObjectiveControlError, "no-op"):
+                verify_code_necessity(root, report)
+            report["portions"] = [{**portion, "start_line": 1, "end_line": 1}]
+            with self.assertRaisesRegex(ObjectiveControlError, "added code line"):
+                verify_code_necessity(root, report)
+            report["portions"] = [{key: value for key, value in portion.items() if key != "objective"}]
+            with self.assertRaisesRegex(ObjectiveControlError, "objective"):
+                verify_code_necessity(root, report)
             report["portions"] = [portion]
 
             receipt_head = report["head_sha"]
@@ -138,6 +148,39 @@ class CodeNecessityTest(unittest.TestCase):
             subprocess.run(["git", "commit", "-q", "-m", "later code"], cwd=root, check=True)
             self.assertEqual(receipt_head, report["head_sha"])
             with self.assertRaisesRegex(ObjectiveControlError, "stale"):
+                verify_code_necessity(root, report)
+
+    def test_code_necessity_rejects_vague_large_portion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            (root / "baseline.txt").write_text("baseline\n", encoding="utf-8")
+            subprocess.run(["git", "add", "baseline.txt"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "baseline"], cwd=root, check=True)
+            base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            source = root / "large.py"
+            source.write_text("".join(f"value_{line} = {line}\n" for line in range(1, 122)), encoding="utf-8")
+            subprocess.run(["git", "add", "large.py"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "large addition"], cwd=root, check=True)
+            report = {
+                "base_sha": base,
+                "head_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(),
+                "portions": [{
+                    "path": "large.py",
+                    "start_line": 1,
+                    "end_line": 121,
+                    "purpose": "vague whole-file receipt",
+                    "objective": "demonstrate rejected granularity",
+                    "inputs": ["fixture"],
+                    "outputs": ["large file"],
+                    "evidence": [{"path": "large.py", "line": 1, "contains": "value_1 = 1", "command": "test -s large.py"}],
+                    "simpler_alternative": "split by semantic responsibility",
+                    "necessity": "negative fixture",
+                }],
+            }
+            with self.assertRaisesRegex(ObjectiveControlError, "120 lines"):
                 verify_code_necessity(root, report)
 
 

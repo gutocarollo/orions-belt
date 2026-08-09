@@ -22,6 +22,8 @@ CODE_SUFFIXES = {
     ".cc", ".cpp", ".cs", ".swift", ".scala", ".vue", ".svelte",
 }
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+MAX_PORTION_LINES = 120
+NO_OP_EVIDENCE_COMMANDS = {":", "true", "/bin/true", "/usr/bin/true"}
 
 
 def assess_impact(value: dict[str, Any]) -> dict[str, Any]:
@@ -191,16 +193,21 @@ def verify_code_necessity(root: Path, report: dict[str, Any]) -> dict[str, Any]:
             blobs[path] = process.stdout.splitlines()
         return blobs[path]
 
-    required_fields = ("path", "start_line", "end_line", "purpose", "inputs", "outputs", "evidence", "simpler_alternative", "necessity")
+    required_fields = ("path", "start_line", "end_line", "purpose", "objective", "inputs", "outputs", "evidence", "simpler_alternative", "necessity")
     for portion in report.get("portions", []):
         if any(field not in portion or portion[field] in ("", []) for field in required_fields):
-            raise ObjectiveControlError("every code portion requires purpose, I/O, evidence, alternative and necessity")
+            raise ObjectiveControlError("every code portion requires purpose, objective, I/O, evidence, alternative and necessity")
         start, end = portion["start_line"], portion["end_line"]
         if not isinstance(start, int) or not isinstance(end, int) or start < 1 or end < start:
             raise ObjectiveControlError("code portion line range is invalid")
+        if end - start + 1 > MAX_PORTION_LINES:
+            raise ObjectiveControlError(f"code portion exceeds the reviewable maximum of {MAX_PORTION_LINES} lines")
         source_lines = blob_lines(portion["path"], "code portion path")
         if end > len(source_lines):
             raise ObjectiveControlError(f"code portion range exceeds head_sha blob: {portion['path']}:{end}")
+        portion_lines = {(portion["path"], line) for line in range(start, end + 1)}
+        if not portion_lines & added:
+            raise ObjectiveControlError("every code portion must include at least one added code line")
         for evidence in portion["evidence"]:
             if not isinstance(evidence, dict) or any(not evidence.get(field) for field in ("path", "line", "contains", "command")):
                 raise ObjectiveControlError("every evidence receipt requires path, line, contains and command")
@@ -211,12 +218,14 @@ def verify_code_necessity(root: Path, report: dict[str, Any]) -> dict[str, Any]:
             if evidence["contains"] not in evidence_lines[line - 1]:
                 raise ObjectiveControlError(f"evidence marker is absent at {evidence['path']}:{line}")
             command = evidence["command"]
+            if not isinstance(command, str) or " ".join(command.split()) in NO_OP_EVIDENCE_COMMANDS:
+                raise ObjectiveControlError("evidence command cannot be a no-op")
             if command not in verified_commands:
                 process = subprocess.run(command, cwd=root, shell=True, capture_output=True, text=True)
                 if process.returncode:
                     raise ObjectiveControlError(f"evidence command failed with exit {process.returncode}: {command}")
                 verified_commands.add(command)
-        covered.update((portion["path"], line) for line in range(start, end + 1))
+        covered.update(portion_lines & added)
     missing = sorted(added - covered)
     if missing:
         sample = ", ".join(f"{path}:{line}" for path, line in missing[:10])

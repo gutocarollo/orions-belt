@@ -30,7 +30,7 @@ SKILL_CONTRACTS = {
     "test-driven-development": ("stable IDs", "functional", "quality", "regression"),
     "interview-me": ("Ask one question at a time", "DEFER_RUN"),
     "code-review-and-quality": ("individually assessed findings", "DEFER_RUN"),
-    "code-simplification": ("every added code line", "inputs", "outputs"),
+    "code-simplification": ("every added code line", "inputs", "outputs", "120 physical lines", "non-no-op"),
     "prova-de-conclusao": ("functional", "quality", "regression"),
     "verify": ("functional", "quality", "regression"),
 }
