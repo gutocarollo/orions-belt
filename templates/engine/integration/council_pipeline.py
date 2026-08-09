@@ -81,8 +81,8 @@ def _validate_graph_bindings(graph: dict[str, Any], events: list[dict[str, Any]]
     return edges
 
 
-def _validate_semantic_evidence(repo_root: Path, graph: dict[str, Any], events: list[dict[str, Any]]) -> None:
-    """Resolve REAL finding markers and require terminal review verdicts."""
+def _validate_semantic_evidence(repo_root: Path, graph: dict[str, Any], events: list[dict[str, Any]], checked_code_sha: str) -> None:
+    """Resolve REAL findings and require terminal reviews bound to delivered code."""
     for item in events:
         if item["event"] not in {"QUALITY", "ADVERSARIAL"}:
             continue
@@ -99,18 +99,34 @@ def _validate_semantic_evidence(repo_root: Path, graph: dict[str, Any], events: 
     if not review_edges:
         return
     verdict_lines: set[str] = set()
+    sha_marker = f"CHECKED-CODE-SHA: {checked_code_sha}"
     for edge in review_edges:
         for reference in edge["evidence"]:
             path = _require_repository_file(repo_root, reference, "review evidence")
             if path.suffix == ".md":
-                verdict_lines.update(line.strip() for line in path.read_text(encoding="utf-8").splitlines())
+                lines = {line.strip() for line in path.read_text(encoding="utf-8").splitlines()}
+                relative = path.relative_to(repo_root.resolve()).as_posix()
+                marker_commits = subprocess.run(
+                    ["git", "log", "--format=%H", "-S", sha_marker, "--", relative],
+                    cwd=repo_root, capture_output=True, text=True,
+                ).stdout.splitlines()
+                reviewed_after_code = any(
+                    commit != checked_code_sha
+                    and subprocess.run(
+                        ["git", "merge-base", "--is-ancestor", checked_code_sha, commit],
+                        cwd=repo_root, capture_output=True,
+                    ).returncode == 0
+                    for commit in marker_commits
+                )
+                if sha_marker in lines and reviewed_after_code:
+                    verdict_lines.update(lines)
     required = {
         "QUALITY-REVIEW: SATISFEITO",
         "SIMPLIFICATION: NAO_NECESSARIA",
         "ADVERSARIAL-VERIFICATION: SATISFEITO",
     }
     if not required <= verdict_lines:
-        raise IntegrationError("review edge lacks exact terminal review evidence: " + ", ".join(sorted(required - verdict_lines)))
+        raise IntegrationError("review edge lacks SHA-bound terminal review evidence: " + ", ".join(sorted(required - verdict_lines)))
 
 
 def _code_commits(repo_root: Path, base_sha: str, head_sha: str) -> list[str]:
@@ -241,7 +257,7 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
         for edge in graph["edges"]:
             for evidence in edge["evidence"]:
                 _require_repository_file(repo_root, evidence, "execution graph evidence")
-        _validate_semantic_evidence(repo_root, graph, state["history"])
+        _validate_semantic_evidence(repo_root, graph, state["history"], report["head_sha"])
         if report["base_sha"] != state.get("base_sha"):
             raise IntegrationError("code necessity base_sha differs from the Council ANCHOR")
         unrecorded_code = [sha for sha in _code_commits(repo_root, report["base_sha"], report["head_sha"]) if sha not in state.get("commits", [])]

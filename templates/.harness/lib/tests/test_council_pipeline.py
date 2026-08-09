@@ -71,6 +71,11 @@ class CouncilPipelineTest(unittest.TestCase):
     def test_review_edge_requires_terminal_satisfied_verdicts(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            (root / "code.py").write_text("value = 1\n", encoding="utf-8")
+            checked_sha = commit_all(root, "code under review")
             review = root / "adversarial.md"
             review.write_text("ADVERSARIAL-VERIFICATION: CORRIGIR\n", encoding="utf-8")
             graph = {
@@ -81,16 +86,25 @@ class CouncilPipelineTest(unittest.TestCase):
                     "tests": TESTS, "evidence": [review.name],
                 }],
             }
-            with self.assertRaisesRegex(IntegrationError, "terminal review evidence"):
-                _validate_semantic_evidence(root, graph, [])
+            with self.assertRaisesRegex(IntegrationError, "SHA-bound terminal review evidence"):
+                _validate_semantic_evidence(root, graph, [], checked_sha)
             quality = root / "quality.md"
             simplification = root / "simplification.md"
             adversarial = root / "adversarial-final.md"
-            quality.write_text("QUALITY-REVIEW: SATISFEITO\n", encoding="utf-8")
-            simplification.write_text("SIMPLIFICATION: NAO_NECESSARIA\n", encoding="utf-8")
-            adversarial.write_text("ADVERSARIAL-VERIFICATION: SATISFEITO\n", encoding="utf-8")
             graph["edges"][0]["evidence"].extend([quality.name, simplification.name, adversarial.name])
-            _validate_semantic_evidence(root, graph, [])
+            stale_marker = f"CHECKED-CODE-SHA: {'a' * 40}\n"
+            quality.write_text(stale_marker + "QUALITY-REVIEW: SATISFEITO\n", encoding="utf-8")
+            simplification.write_text(stale_marker + "SIMPLIFICATION: NAO_NECESSARIA\n", encoding="utf-8")
+            adversarial.write_text(stale_marker + "ADVERSARIAL-VERIFICATION: SATISFEITO\n", encoding="utf-8")
+            commit_all(root, "stale reviews")
+            with self.assertRaisesRegex(IntegrationError, "SHA-bound terminal review evidence"):
+                _validate_semantic_evidence(root, graph, [], checked_sha)
+            current_marker = f"CHECKED-CODE-SHA: {checked_sha}\n"
+            quality.write_text(current_marker + "QUALITY-REVIEW: SATISFEITO\n", encoding="utf-8")
+            simplification.write_text(current_marker + "SIMPLIFICATION: NAO_NECESSARIA\n", encoding="utf-8")
+            adversarial.write_text(current_marker + "ADVERSARIAL-VERIFICATION: SATISFEITO\n", encoding="utf-8")
+            commit_all(root, "current reviews")
+            _validate_semantic_evidence(root, graph, [], checked_sha)
 
     def test_real_impact_marker_must_resolve_in_repository(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -103,7 +117,7 @@ class CouncilPipelineTest(unittest.TestCase):
             }
             events = [{"event": "QUALITY", "payload": {"findings": [{"impact": impact}]}}]
             with self.assertRaisesRegex(IntegrationError, "impact evidence marker"):
-                _validate_semantic_evidence(root, {"edges": []}, events)
+                _validate_semantic_evidence(root, {"edges": []}, events, "b" * 40)
 
     def test_graph_binding_rejects_fabricated_phase_nodes(self):
         events = complex_events()

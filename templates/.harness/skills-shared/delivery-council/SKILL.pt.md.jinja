@@ -321,7 +321,7 @@ QUALITY-GATE: NAO_APLICAVEL
 ```
 
 `PENDENTE` ou `BLOQUEADO` exige reporte explicito e impede declarar `ADVERSARIAL-VERIFICATION: SATISFEITO`.
-Na entrega, a aresta de review só fecha quando seus arquivos de evidência contêm, como linhas terminais exatas, `QUALITY-REVIEW: SATISFEITO`, `SIMPLIFICATION: NAO_NECESSARIA` e `ADVERSARIAL-VERIFICATION: SATISFEITO`. Rodada histórica `CORRIGIR` pode permanecer como histórico, mas nunca satisfaz esse gate.
+Na entrega, a aresta de review só fecha quando seus arquivos de evidência contêm, como linhas terminais exatas, `QUALITY-REVIEW: SATISFEITO`, `SIMPLIFICATION: NAO_NECESSARIA` e `ADVERSARIAL-VERIFICATION: SATISFEITO`. Cada arquivo que fornece um veredicto também deve conter a linha exata `CHECKED-CODE-SHA: <head_sha do code-necessity>`, introduzida por commit posterior a esse SHA. Rodada histórica, vinculada a SHA obsoleto ou anterior ao código pode permanecer como histórico, mas nunca satisfaz esse gate.
 
 ## Planning Adversarial Loop
 
