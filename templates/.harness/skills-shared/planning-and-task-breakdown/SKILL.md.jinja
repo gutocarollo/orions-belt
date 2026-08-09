@@ -1,0 +1,12 @@
+---
+name: planning-and-task-breakdown
+description: Break work into ordered, graph-bound phases and items with deterministic acceptance tests. Mandatory before every Council phase and item.
+---
+
+# Planning and Task Breakdown
+
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL." ~ harness_language ~ ".md.jinja" %}
+
+Treat the plan as a directed execution graph. Declare the observable `START`, observable `GOAL`, all user journeys, nodes, edges, dependencies, interfaces, and failure transitions required for start-to-goal reachability. Every critical edge must belong to a complete path.
+
+Before every phase and every item, emit: unchanged macro objective, `edge_id`, entry/exit nodes, observable deliverable, likely files, dependencies, and stable test IDs in all three classes: `functional`, `quality`, and `regression`. Acceptance names the input, expected output, execution surface, command, and evidence artifact. No execution begins before this preflight is `PRONTO`.

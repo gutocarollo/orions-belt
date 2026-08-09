@@ -97,7 +97,7 @@ class CouncilMergeRegressionTest(unittest.TestCase):
                 "incremental-implementation",
                 "Cada slice validado DEVE produzir imediatamente um commit LOCAL atomico",
                 "Push para qualquer remoto e merge para `main` no remoto exigem autorizacao explicita",
-                "Critical`, `Required`, `Optional`, `Nit`, `FYI",
+                "`CRITICAL_BLOCK`, `HIGH_FIX_NOW`, `DEFER_RUN`",
                 "zero `Critical` e zero `Required`",
                 "| `ANCHOR` |",
                 "| `LOCAL-COMMIT` |",
@@ -105,7 +105,25 @@ class CouncilMergeRegressionTest(unittest.TestCase):
             ),
             "Council incremental contract",
         )
+        assert_contains_all(self, council, ("Grafo e testes obrigatórios", "functional", "quality", "regression", "relatório de necessidade"), "Council objective graph contract")
         self.assertNotIn("commit/push dependem da autoridade", council)
+
+    def test_all_operating_skill_sources_are_present_and_role_specific(self):
+        markers = {
+            "planning-and-task-breakdown": "directed execution graph",
+            "incremental-implementation": "governing execution skill",
+            "test-driven-development": "stable IDs",
+            "interview-me": "Ask one question at a time",
+            "code-review-and-quality": "individually assessed findings",
+            "code-simplification": "every added code line",
+        }
+        for skill, marker in markers.items():
+            source = ROOT / ".harness/skills-shared" / skill / "SKILL.md.jinja"
+            with self.subTest(skill=skill):
+                self.assertTrue(source.is_file())
+                text = read(source)
+                self.assertIn(marker, text)
+                self.assertIn("objective-control/CONTROL", text)
 
     def test_plan_loop_requires_request_and_consumption_handoff(self):
         for path in (COUNCIL, REVIEWER, ADVERSARIAL):

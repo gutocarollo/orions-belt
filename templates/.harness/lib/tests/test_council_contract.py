@@ -15,6 +15,19 @@ from council_hooks import git_guard, post_tool_guard, pre_tool_guard, stop_guard
 from council_session import finish_session, start_session  # noqa: E402
 from sync_council import council_paths, sync_council  # noqa: E402
 
+SKILL_CONTRACTS = {
+    "adversarial-review": ("CRITICAL_BLOCK", "HIGH_FIX_NOW", "DEFER_RUN"),
+    "clarification-plan": ("CRITICAL_BLOCK", "HIGH_FIX_NOW", "DEFER_RUN"),
+    "planning-and-task-breakdown": ("directed execution graph", "functional", "quality", "regression"),
+    "incremental-implementation": ("governing execution skill", "LOCAL commit", "Push"),
+    "test-driven-development": ("stable IDs", "functional", "quality", "regression"),
+    "interview-me": ("Ask one question at a time", "DEFER_RUN"),
+    "code-review-and-quality": ("individually assessed findings", "DEFER_RUN"),
+    "code-simplification": ("every added code line", "inputs", "outputs"),
+    "prova-de-conclusao": ("functional", "quality", "regression"),
+    "verify": ("functional", "quality", "regression"),
+}
+
 
 class CouncilContractTest(unittest.TestCase):
     def test_installed_contract_is_valid(self):
@@ -26,6 +39,19 @@ class CouncilContractTest(unittest.TestCase):
         source, target = council_paths(ROOT)
         self.assertEqual(source.read_bytes(), target.read_bytes())
         self.assertFalse(sync_council(ROOT, check=True))
+
+    def test_operating_skills_render_on_both_runtimes_with_role_contracts(self):
+        for skill, markers in SKILL_CONTRACTS.items():
+            claude = ROOT / ".claude/skills" / skill / "SKILL.md"
+            agents = ROOT / ".agents/skills" / skill / "SKILL.md"
+            with self.subTest(skill=skill):
+                self.assertEqual(claude.read_bytes(), agents.read_bytes())
+                text = claude.read_text(encoding="utf-8")
+                for marker in markers:
+                    self.assertIn(marker, text)
+        council = council_paths(ROOT)[0].read_text(encoding="utf-8")
+        for marker in ("interview-me", "clarification-plan", "test-driven-development", "prova-de-conclusao", "code-necessity"):
+            self.assertIn(marker, council)
 
     def test_semantic_drift_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

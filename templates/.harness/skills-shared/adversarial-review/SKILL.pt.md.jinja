@@ -23,6 +23,10 @@ description: "Revisor adversarial fundamentado em evidencia para o {{ project_na
 
 # Adversarial Review
 
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL.pt.md.jinja" %}
+
+Seja adversarial nas transições que impedem START→GOAL. Cada finding carrega o assessment calculado; `DEFER_RUN` não vira pergunta nem fix imediato.
+
 {#
 PROVENIENCIA (vive SO no repo do framework — comentario Jinja nao renderiza no
 projeto-alvo; requisito F9-fixes: zero conteudo do doador no render): fusao de

@@ -28,6 +28,10 @@ description: >-
 
 # Clarification Plan
 
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL.pt.md.jinja" %}
+
+Só crie D[n] para `CRITICAL_BLOCK` ou `HIGH_FIX_NOW`; decisões `DEFER_RUN` são registradas sem consumir atenção do usuário.
+
 Use esta skill sempre que houver mais de uma opção possível para resolver, planejar, corrigir,
 auditar ou clarificar qualquer coisa. Ela é o procedimento operacional da §6 de
 [`AGENTS.md`](../../../AGENTS.md) — aquela seção define a REGRA, esta skill entrega o CONTRATO

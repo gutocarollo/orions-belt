@@ -74,7 +74,13 @@ Interprete:
 
 Use o fluxo completo quando a tarefa tiver risco medio/alto, tocar multiplos arquivos, alterar contrato de dominio, UI, dados, auth, tenancy, seguranca, arquitetura ou teste. Para ajuste trivial, compacte somente a amplitude: fase e item implicitos, preflight `planning-and-task-breakdown`, ciclo `incremental-implementation`, validacao, commit local e quality review continuam obrigatorios; apenas a review adversarial completa pode ser proporcionalmente dispensada com justificativa e evidencia.
 
-Nao delegue ambiguidade crua ao usuario. Explore codigo, docs e dados reais primeiro. O unico mecanismo de clarificacao e `$grill-me`, chamado apenas pelo Gate Condicional de Grill.
+Nao delegue ambiguidade crua ao usuario. Explore codigo, docs e dados reais primeiro. Use `interview-me` para descobrir objetivo/START/GOAL ainda indefinidos, `clarification-plan` para decisões materiais e `$grill-me` quando o Gate Condicional de Grill autorizar a sabatina.
+
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL.pt.md.jinja" %}
+
+## Grafo e testes obrigatórios
+
+Materialize o plano como grafo START→GOAL: jornadas, nós, arestas, dependências, interfaces e transições de falha. Toda fase/item referencia `edge_id`, entrada, saída, entregável e IDs deterministas `functional`, `quality` e `regression`. Antes de `DELIVERY`, `prova-de-conclusao` reconstrói o caminho; `verify` prova cada mudança pontual; `test-driven-development` cria os testes. O manifesto final liga grafo, testes, evidências e commits.
 
 ## Fluxo Obrigatorio
 
@@ -195,7 +201,10 @@ Feche o preflight de fase com:
 PHASE-PLAN: PRONTO | REPLANEJAR | SABATINAR | BLOQUEADO
 PLANNING-SKILL: planning-and-task-breakdown
 FASE: [id e nome]
+NORTE-MACRO: [objetivo imutável]
+ARESTA: [edge_id; entry_node -> exit_node]
 ITENS-ORDENADOS: [...]
+TESTES: {functional: [...], quality: [...], regression: [...]}
 CHECKPOINTS: [...]
 RISCO-CRITICO-ABERTO: SIM | NAO
 PROXIMA-ACAO: iniciar-item | replanejar | sabatinar | parar
@@ -212,10 +221,14 @@ ITEM-PLAN: PRONTO | DIVIDIR | REPLANEJAR | SABATINAR | BLOQUEADO
 PLANNING-SKILL: planning-and-task-breakdown
 FASE: [id]
 ITEM: [id e titulo]
+NORTE-MACRO: [mesmo objetivo]
+ARESTA: [edge_id]
+ENTREGAVEL: [saída observável]
 DEPENDENCIAS-SATISFEITAS: SIM | NAO
 CRITERIOS-DE-ACEITE: [...]
 ARQUIVOS-PROVAVEIS: [...]
 VALIDACAO-FOCADA: [...]
+TESTES: {functional: [...], quality: [...], regression: [...]}
 SLICE-INICIAL: [menor entrega vertical completa]
 PROXIMA-ACAO: executar-slice | dividir | replanejar | sabatinar | parar
 ```
@@ -278,7 +291,7 @@ QUALITY-FIX-REQUEST:
 - alteracao-obrigatoria: [mudanca objetiva]
 ```
 
-3. A taxonomia canonica e `Critical`, `Required`, `Optional`, `Nit`, `FYI`. `SATISFEITO` exige zero `Critical` e zero `Required`; as demais categorias nao bloqueiam. Em `CORRIGIR`, o Council consome o `QUALITY-FIX-REQUEST` como novo item, executa `planning-and-task-breakdown` no preflight, aplica a menor correcao via `incremental-implementation`, roda validacao real, cria o commit local do fix e submete o resultado a nova rodada. Em `BLOQUEADO`, pare para a decisao, acesso ou evidencia que falta.
+3. A taxonomia executável é `CRITICAL_BLOCK`, `HIGH_FIX_NOW`, `DEFER_RUN`. Cada finding inclui assessment ponderado; `critical` e `required` devem igualar os dois primeiros grupos. `DEFER_RUN` vai para RUN.md e não bloqueia. `BLOQUEADO` exige crítico mais bloqueador externo nominal; correção local usa `CORRIGIR`, `planning-and-task-breakdown`, `incremental-implementation`, testes e commit local.
 4. Limite a esta qualidade a 3 rodadas. Se a rodada final ainda retornar `CORRIGIR`, o gate fica `PENDENTE` e o Council nao pode declarar a execucao satisfeita.
 
 Cada rodada de qualidade deve ser registrada no ledger de execucao como `event=review`, com `payload.review_kind=quality` e `payload.skill=code-review-and-quality`. Quando houver `QUALITY-FIX-REQUEST`, use os eventos `fix-request` e `fix-consumed` existentes; nao invente eventos novos. A passada de simplificacao deve aparecer no payload da review seguinte ou na evidencia de validacao.
@@ -289,6 +302,7 @@ Cada rodada de qualidade deve ser registrada no ledger de execucao como `event=r
 2. Se nao houver simplificacao segura, registre `SIMPLIFICATION: NAO_NECESSARIA` com a razao concreta. Isso e um resultado valido; a skill nao autoriza churn.
 3. Se houver simplificacao, aplique uma mudanca por vez, preserve exatamente comportamento, efeitos, erros e ordenacao, e rode os testes apos cada mudanca. Se falhar, desfaça somente a simplificacao recem-aplicada e reavalie.
 4. Quando a passada alterar arquivos, rode novamente `code-review-and-quality` antes do adversarial final. A nova review precisa confirmar que a simplificacao reduziu complexidade sem criar regressao. Se nenhuma alteracao for feita, nao consuma uma rodada extra.
+5. Gere o relatório de necessidade cobrindo cada linha de código adicionada por porção semântica: path/range, motivo, objetivo, entradas, saídas, evidência, alternativa mais simples e necessidade.
 
 ### Fechamento do gate
 
@@ -330,10 +344,11 @@ PROXIMA-ACAO: [executar | replanejar | sabatinar | pedir decisao]
 REPLAN-REQUEST:
 - gap: [achado REAL que exige mudanca no plano]
 - evidencia: [fonte/codigo/doc/teste que prova o gap]
+- assessment: [id, notas 0-4, score, nós, workaround, CRITICAL_BLOCK|HIGH_FIX_NOW]
 - alteracao-obrigatoria: [mudanca objetiva que o plano revisado deve incorporar]
 ```
 
-O reviewer so pode retornar `SABATINAR` se provar o Gate Condicional de Grill para um achado `REAL` `ALTA`/`BLOQUEANTE`: a decisao e subjetividade material, nao foi resolvida por evidencia e a resposta do usuario muda o plano. Nao use esse status para fato ainda pesquisavel, preferencia sem impacto material ou gap `MEDIA`/`BAIXA`.
+O reviewer só pode retornar `SABATINAR` para `CRITICAL_BLOCK`/`HIGH_FIX_NOW` que dependa de subjetividade material. Qualquer `DEFER_RUN` vai para RUN.md e o fluxo continua.
 
 Se o review retornar `SABATINAR`, interrompa o loop antes de replanejar automaticamente, invoque `$grill-me`, registre D[n] e retome o **mesmo** subagent com o plano atualizado e as respostas. `SABATINAR` e um estado suspenso, nao uma rodada concluida: ele nao consome o limite de 2 rodadas ate o mesmo reviewer emitir `SATISFEITO`, `REPLANEJAR` ou `BLOQUEADO`. Evite repeticao: o reviewer so pode pedir nova sabatina para uma D[n] material nova que as respostas anteriores nao resolveram.
 
@@ -408,14 +423,15 @@ ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
 GAPS-CRITICOS: N
 PROXIMA-ACAO: [corrigir | parar | pedir decisao]
 FIX-REQUEST:
-- gap: [achado REAL BLOQUEANTE/ALTA que exige mudanca na execucao]
+- gap: [achado REAL CRITICAL_BLOCK/HIGH_FIX_NOW que exige mudança]
 - evidencia: [fonte/codigo/doc/teste/log que prova o gap]
+- assessment: [id, notas 0-4, score, nós, workaround, disposição]
 - alteracao-obrigatoria: [mudanca objetiva que a correcao deve incorporar]
 ```
 
 ### Criterio de correcao
 
-Corrija sequencialmente e rode nova rodada quando houver gap `REAL` com severidade `BLOQUEANTE` ou `ALTA`.
+Corrija sequencialmente somente `CRITICAL_BLOCK` ou `HIGH_FIX_NOW`; `DEFER_RUN` não consome rodada.
 
 Se o review retornar `CORRIGIR`, o Council deve corrigir usando o bloco `FIX-REQUEST` como input obrigatorio. O reviewer nao corrige; ele acusa e especifica a mudanca minima. O Council transforma o fix em item, roda `planning-and-task-breakdown`, implementa a correcao via `incremental-implementation`, registra o que mudou, revalida e so entao roda a proxima rodada de execution review.
 
@@ -444,7 +460,7 @@ Nao corrija automaticamente:
 - acao destrutiva;
 - credencial, pagamento ou acesso externo;
 - deploy/prod sem procedimento especifico;
-- gap `NAO-PROVADO` que precise de evidencia indisponivel.
+- gap `UNVERIFIED`, `REFUTED` ou `DEFER_RUN`.
 
 ### Criterio de parada
 
@@ -452,7 +468,7 @@ Pare quando:
 
 - o review retornar `ADVERSARIAL-VERIFICATION: SATISFEITO`;
 - completar 3 rodadas;
-- sobrar apenas gap `MEDIA`/`BAIXA` aceito explicitamente como pendencia;
+- sobrar apenas `DEFER_RUN` registrado no RUN.md;
 - sobrar bloqueio real fora do alcance da sessao.
 
 Em `CORRIGIR` na rodada final:
@@ -512,6 +528,7 @@ Para tarefas completas, entregue nesta ordem:
 7. Resultado do Quality and Simplification Gate.
 8. Resultado do Adversarial Verification Loop ou justificativa de por que nao se aplicava.
 9. Pendencias reais.
+10. Relatório de necessidade de código com cobertura integral.
 
 ## Uso Com Subagents
 

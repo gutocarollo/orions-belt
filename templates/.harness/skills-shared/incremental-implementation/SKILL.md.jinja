@@ -1,0 +1,12 @@
+---
+name: incremental-implementation
+description: Governs Council execution through minimal vertical slices, validation, and immediate local commits.
+---
+
+# Incremental Implementation
+
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL." ~ harness_language ~ ".md.jinja" %}
+
+This is **the governing execution skill**. Consume the current item plan; restate its macro objective, graph edge, deliverable, and test IDs. Implement only enough to make that edge traversable. Run its `functional`, `quality`, and `regression` tests and verify the real output.
+
+Every validated slice MUST immediately produce an atomic LOCAL commit containing only its files. Local commits need no extra authorization. Push to any remote and merge to remote `main` require explicit human authorization. Do not accumulate a whole phase before testing or mix unrelated refactors.

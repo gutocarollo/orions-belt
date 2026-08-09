@@ -98,6 +98,12 @@ MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE
   preflight, incremental implementation, validation, a local commit and quality
   review.
 
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL.en.md.jinja" %}
+
+### Mandatory graph and test binding
+
+Materialize the plan as a START→GOAL graph: journeys, nodes, edges, dependencies, interfaces, and failure transitions. Every phase/item references an `edge_id`, entry, exit, observable deliverable, and stable `functional`, `quality`, and `regression` IDs. Use `interview-me` only to discover an unresolved objective, `clarification-plan` for material alternatives, `test-driven-development` to create the tests, `verify` per focused change, and `prova-de-conclusao` before delivery. The final manifest binds graph, tests, evidence, and commits.
+
 ### Mandatory state machine
 
 | Current state | Required evidence | Next state |
@@ -121,9 +127,9 @@ reviewer thread for correction rounds. `BLOQUEADO` is terminal.
 ### Quality, simplification and correction loop
 
 Run `code-review-and-quality` in an isolated `code-reviewer` subagent after the
-implementation commits. The canonical taxonomy is `Critical`, `Required`,
-`Optional`, `Nit`, `FYI`; satisfaction requires zero `Critical` and zero
-`Required`. A blocking finding must return:
+implementation commits. The executable taxonomy is `CRITICAL_BLOCK`,
+`HIGH_FIX_NOW`, `DEFER_RUN`; blocking counts must equal individually assessed
+findings, while `DEFER_RUN` is persisted and does not block. A blocking finding must return:
 
 ```text
 QUALITY-FIX-REQUEST:
@@ -148,6 +154,8 @@ FIX-CONSUMED:
 Then apply `code-simplification`; if it changes code, revalidate, commit locally
 and rerun quality review. Finally dispatch a `{{ project_name }}-adversarial-reviewer`
 subagent in isolated context. Never self-review inline.
+
+The final code-necessity report covers every added code line by semantic portion: path/range, purpose, objective, inputs, outputs, real evidence, simpler alternative, and necessity.
 
 Limit: maximum 2 rounds for plan review.
 Limit: maximum 3 rounds for execution adversarial review.
@@ -272,10 +280,11 @@ PROXIMA-ACAO: [executar | replanejar | sabatinar | pedir decisao]
 REPLAN-REQUEST:
 - gap: [REAL finding that requires a change in the plan]
 - evidencia: [source/code/doc/test that proves the gap]
+- assessment: [id, 0-4 ratings, score, nodes, workaround, CRITICAL_BLOCK|HIGH_FIX_NOW]
 - alteracao-obrigatoria: [objective change the revised plan must incorporate]
 ```
 
-The reviewer may only return `SABATINAR` if it proves the Conditional Grill Gate for a `REAL` `ALTA`/`BLOQUEANTE` finding: the decision is a material subjectivity, was not resolved by evidence and the user's answer changes the plan. Do not use this status for a still-researchable fact, a preference with no material impact or a `MEDIA`/`BAIXA` gap.
+The reviewer may return `SABATINAR` only for a `CRITICAL_BLOCK`/`HIGH_FIX_NOW` issue that depends on material subjectivity. Every `DEFER_RUN` goes to RUN.md and work continues.
 
 If the review returns `SABATINAR`, interrupt the loop before automatically replanning, invoke `$grill-me`, record D[n] and resume the **same** subagent with the updated plan and the answers. `SABATINAR` is a suspended state, not a completed round: it does not consume the limit of {{ harness_plan_review_max }} rounds until the same reviewer emits `SATISFEITO`, `REPLANEJAR` or `BLOQUEADO`. Avoid repetition: the reviewer may only request a new grill for a new material D[n] that the previous answers did not resolve.
 
@@ -350,14 +359,15 @@ ADVERSARIAL-VERIFICATION: SATISFEITO | CORRIGIR | BLOQUEADO
 GAPS-CRITICOS: N
 PROXIMA-ACAO: [corrigir | parar | pedir decisao]
 FIX-REQUEST:
-- gap: [REAL BLOQUEANTE/ALTA finding that requires a change in the execution]
+- gap: [REAL CRITICAL_BLOCK/HIGH_FIX_NOW finding that requires a change]
 - evidencia: [source/code/doc/test/log that proves the gap]
+- assessment: [id, 0-4 ratings, score, nodes, workaround, disposition]
 - alteracao-obrigatoria: [objective change the correction must incorporate]
 ```
 
 ### Correction criterion
 
-Fix sequentially and run a new round when there is a `REAL` gap with `BLOQUEANTE` or `ALTA` severity.
+Fix sequentially only for `CRITICAL_BLOCK` or `HIGH_FIX_NOW`; `DEFER_RUN` does not consume a correction round.
 
 If the review returns `CORRIGIR`, the Council must fix using the `FIX-REQUEST` block as mandatory input. The reviewer does not fix; it accuses and specifies the minimal change. The Council implements the correction, records what changed, revalidates and only then runs the next execution review round.
 
@@ -386,7 +396,7 @@ Do not automatically fix:
 - a destructive action;
 - credential, payment or external access;
 - deploy/prod without a specific procedure;
-- a `NAO-PROVADO` gap that needs unavailable evidence.
+- an `UNVERIFIED`, `REFUTED`, or `DEFER_RUN` gap.
 
 ### Stop criterion
 
@@ -394,7 +404,7 @@ Stop when:
 
 - the review returns `ADVERSARIAL-VERIFICATION: SATISFEITO`;
 - {{ harness_execution_review_max }} rounds are completed;
-- only a `MEDIA`/`BAIXA` gap explicitly accepted as pending remains;
+- only `DEFER_RUN` findings recorded in RUN.md remain;
 - a real blocker beyond the reach of the session remains.
 
 On `CORRIGIR` in the final round:
@@ -453,6 +463,7 @@ For complete tasks, deliver in this order:
 5. Validation commands with results.
 6. Result of the Adversarial Verification Loop or justification for why it did not apply.
 7. Real pending items.
+8. Complete code-necessity report.
 
 ## Use With Subagents
 

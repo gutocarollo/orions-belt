@@ -38,6 +38,7 @@ fi
 
 PROJECT_NAME="skillparity"
 COUNCIL_SKILL="${PROJECT_NAME}-delivery-council"
+OPERATING_SKILLS="adversarial-review clarification-plan planning-and-task-breakdown incremental-implementation test-driven-development interview-me code-review-and-quality code-simplification prova-de-conclusao verify"
 
 # =============================================================================
 # 1. Real CLAUDE-ONLY render
@@ -55,6 +56,9 @@ assert "(symmetric gate) claude-only: .claude/skills/$COUNCIL_SKILL/SKILL.md exi
   '[ -f "$CLAUDE_ONLY/.claude/skills/$COUNCIL_SKILL/SKILL.md" ]'
 assert "(symmetric gate) claude-only: .claude/skills/adversarial-review/SKILL.md exists" \
   '[ -f "$CLAUDE_ONLY/.claude/skills/adversarial-review/SKILL.md" ]'
+for name in $OPERATING_SKILLS; do
+  assert "claude-only: operating skill '$name' exists" '[ -f "$CLAUDE_ONLY/.claude/skills/$name/SKILL.md" ]'
+done
 assert "claude-only: .agents/skills does NOT have the council or adversarial-review (use_codex=false; .agents/skills itself may exist empty -- same preexisting asymmetry as the other 6 skills-shared, out of scope for this gap)" \
   '[ ! -e "$CLAUDE_ONLY/.agents/skills/$COUNCIL_SKILL" ] && [ ! -e "$CLAUDE_ONLY/.agents/skills/adversarial-review" ]'
 assert "claude-only: CLAUDE.md cites the council skill" \
@@ -80,6 +84,9 @@ assert "(symmetric gate) codex-only: .agents/skills/$COUNCIL_SKILL/SKILL.md exis
   '[ -f "$CODEX_ONLY/.agents/skills/$COUNCIL_SKILL/SKILL.md" ]'
 assert "(symmetric gate) codex-only: .agents/skills/adversarial-review/SKILL.md exists" \
   '[ -f "$CODEX_ONLY/.agents/skills/adversarial-review/SKILL.md" ]'
+for name in $OPERATING_SKILLS; do
+  assert "codex-only: operating skill '$name' exists" '[ -f "$CODEX_ONLY/.agents/skills/$name/SKILL.md" ]'
+done
 assert "codex-only: .claude/ does NOT exist (use_claude=false)" \
   '[ ! -d "$CODEX_ONLY/.claude" ]'
 assert "codex-only: the council's companion openai.yaml exists (.agents/skills/$COUNCIL_SKILL/agents/openai.yaml)" \
@@ -127,7 +134,7 @@ if ! uvx copier copy "$REPO_ROOT" "$BOTH" --vcs-ref HEAD \
   exit 1
 fi
 
-for name in "$COUNCIL_SKILL" "adversarial-review"; do
+for name in "$COUNCIL_SKILL" $OPERATING_SKILLS; do
   A="$BOTH/.claude/skills/$name/SKILL.md"
   B="$BOTH/.agents/skills/$name/SKILL.md"
   if [ -f "$A" ] && [ -f "$B" ]; then

@@ -32,7 +32,7 @@ MARKER_GROUPS = (
     ("incremental-implementation",),
     ("Cada slice validado DEVE produzir imediatamente um commit LOCAL atomico", "Every validated slice MUST immediately produce an atomic LOCAL commit"),
     ("Push para qualquer remoto e merge para `main` no remoto exigem autorizacao explicita", "Push to any remote and merge to remote `main` require explicit authorization"),
-    ("Critical`, `Required`, `Optional`, `Nit`, `FYI", "canonical taxonomy is `Critical`"),
+    ("`CRITICAL_BLOCK`, `HIGH_FIX_NOW`, `DEFER_RUN`",),
     ("zero `Critical` e zero `Required`", "zero `Critical` and zero `Required`"),
     ("Maquina de estados obrigatoria", "Mandatory state machine"),
     ("QUALITY-FIX-REQUEST",),
@@ -40,6 +40,9 @@ MARKER_GROUPS = (
     ("Limite: maximo de 2 rodadas", "Limit: maximum 2 rounds"),
     ("Limite: maximo de 3 rodadas", "Limit: maximum 3 rounds"),
     ("subagent isolado `code-reviewer`", "isolated `code-reviewer` subagent"),
+    ("Grafo e testes obrigatórios", "Mandatory graph and test binding"),
+    ("## Pendências não bloqueantes", "## Non-blocking pending items"),
+    ("relatório de necessidade", "code-necessity report"),
 )
 
 

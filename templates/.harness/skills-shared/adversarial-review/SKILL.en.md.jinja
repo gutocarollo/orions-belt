@@ -23,6 +23,10 @@ description: "Evidence-grounded adversarial reviewer for the {{ project_name }}.
 
 # Adversarial Review
 
+{%- include "templates/.harness/skills-shared/objective-control/CONTROL.en.md.jinja" %}
+
+Be adversarial at transitions that prevent START→GOAL. Every finding carries its calculated assessment; `DEFER_RUN` becomes neither a question nor an immediate fix.
+
 {#
 PROVENANCE (lives ONLY in the framework repo — a Jinja comment does not render in the
 target project; F9-fixes requirement: zero donor content in the render): a merge of
