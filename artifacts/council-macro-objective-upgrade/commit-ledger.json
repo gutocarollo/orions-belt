@@ -1,6 +1,6 @@
 {
   "base_sha": "e373cce492df347ad4a3a2da94e1f6bacf19fad9",
-  "code_head_sha": "fdb041924853cf1f4e3cb0467202ef196fb92d28",
+  "code_head_sha": "cc356d78c147d5b3cc754d18535e9c218db260a8",
   "entries": [
     {"sha":"0d2c42cfbf74a75a9859e827fdaa60261d513413","edge_ids":["E1","E2"],"subject":"feat(council): enforce macro-objective delivery"},
     {"sha":"d35621598df2ff12cc50d9125714de2e5328184c","edge_ids":["E2","E4"],"subject":"feat(council): render objective-focused operating skills"},
@@ -24,6 +24,7 @@
     {"sha":"0546f4b7f6dd11b4ae43731bc586ede0eae204d3","edge_ids":["E1","E3","E5"],"subject":"fix(council): require semantic review evidence"},
     {"sha":"fa9cf4b6ee8caa00d22204ad66617cb0c891a380","edge_ids":["E2","E3"],"subject":"refactor(council): reuse validated graph bindings"},
     {"sha":"5d93054858255735f964d886c354e0e7628c8e47","edge_ids":["E1","E2","E3"],"subject":"fix(council): validate execution evidence before work"},
-    {"sha":"fdb041924853cf1f4e3cb0467202ef196fb92d28","edge_ids":["E3","E5"],"subject":"fix(council): bind final reviews to code head"}
+    {"sha":"fdb041924853cf1f4e3cb0467202ef196fb92d28","edge_ids":["E3","E5"],"subject":"fix(council): bind final reviews to code head"},
+    {"sha":"cc356d78c147d5b3cc754d18535e9c218db260a8","edge_ids":["E1","E2","E3"],"subject":"refactor(council): validate graph nodes at runtime"}
   ]
 }
