@@ -20,7 +20,7 @@
       "phase": "objective-control",
       "item": "score findings and preserve the macro north",
       "tests": {"functional": ["F-IMPACT"], "quality": ["Q-MACRO"], "regression": ["R-DEFER"]},
-      "evidence": ["artifacts/council-macro-objective-upgrade/delivery-report.md"]
+      "evidence": ["artifacts/council-macro-objective-upgrade/code-necessity.json", "artifacts/council-macro-objective-upgrade/command-receipts.json#C-RENDERED"]
     },
     {
       "edge_id": "E2",
@@ -30,7 +30,7 @@
       "phase": "planning-and-execution",
       "item": "bind every critical edge to functional quality and regression tests",
       "tests": {"functional": ["F-GRAPH"], "quality": ["Q-ALL-CRITICAL"], "regression": ["R-BRANCH"]},
-      "evidence": ["artifacts/council-macro-objective-upgrade/delivery-report.md"]
+      "evidence": ["artifacts/council-macro-objective-upgrade/execution-graph.json", "artifacts/council-macro-objective-upgrade/command-receipts.json#C-RENDERED"]
     },
     {
       "edge_id": "E3",
@@ -40,7 +40,7 @@
       "phase": "evidence",
       "item": "prove commands commits blobs and code necessity",
       "tests": {"functional": ["F-COMMIT"], "quality": ["Q-REPLAY"], "regression": ["R-MERGE"]},
-      "evidence": ["artifacts/council-macro-objective-upgrade/code-necessity.json"]
+      "evidence": ["artifacts/council-macro-objective-upgrade/code-necessity.json", "artifacts/council-macro-objective-upgrade/command-receipts.json", "artifacts/council-macro-objective-upgrade/commit-ledger.json"]
     },
     {
       "edge_id": "E4",
@@ -50,7 +50,7 @@
       "phase": "portability",
       "item": "render the same operating contract in Claude and Codex",
       "tests": {"functional": ["F-RENDER"], "quality": ["Q-PARITY"], "regression": ["R-LOCALE"]},
-      "evidence": ["artifacts/council-macro-objective-upgrade/delivery-report.md"]
+      "evidence": ["artifacts/council-macro-objective-upgrade/command-receipts.json#C-CODEX", "artifacts/council-macro-objective-upgrade/command-receipts.json#C-RUNTIME-PARITY"]
     },
     {
       "edge_id": "E5",
@@ -60,7 +60,7 @@
       "phase": "review",
       "item": "close independent quality and adversarial findings",
       "tests": {"functional": ["F-QUALITY"], "quality": ["Q-ADVERSARIAL"], "regression": ["R-NONBLOCK"]},
-      "evidence": ["artifacts/council-macro-objective-upgrade/delivery-report.md"]
+      "evidence": ["artifacts/council-macro-objective-upgrade/reviews/quality-final.md", "artifacts/council-macro-objective-upgrade/reviews/adversarial-round-1.md"]
     },
     {
       "edge_id": "E6",
@@ -70,7 +70,7 @@
       "phase": "delivery",
       "item": "publish an authorized branch without merging main",
       "tests": {"functional": ["F-AUTHORIZED-PUSH"], "quality": ["Q-PR-EVIDENCE"], "regression": ["R-NO-MERGE"]},
-      "evidence": ["artifacts/council-macro-objective-upgrade/delivery-report.md"]
+      "evidence": ["artifacts/council-macro-objective-upgrade/delivery-manifest.json"]
     }
   ]
 }

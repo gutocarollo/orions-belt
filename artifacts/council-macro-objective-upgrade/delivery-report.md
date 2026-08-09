@@ -39,15 +39,15 @@ Both `.claude` and `.agents` renders include the same operating contract for:
 
 ## Deterministic evidence
 
-Fresh rendered installation at commit `7b9a02e`:
+Fresh rendered installation at code commit `0f4b144`:
 
 - objective control: 8/8 PASS;
 - runtime: 19/19 PASS;
-- delivery pipeline: 10/10 PASS;
+- delivery pipeline: 12/12 PASS;
 - contract: 19/19 PASS;
 - evaluator and real scenarios: 3/3 PASS;
-- total rendered Python checks: 59/59 PASS;
-- template merge checks: 9/9 PASS;
+- total rendered Python checks: 61/61 PASS;
+- template merge checks: 10/10 PASS;
 - Claude-only, Codex-only and dual-runtime PT/EN render matrix: PASS;
 - `.claude`/`.agents` operating skills: byte-identical in dual-runtime render;
 - donor-brand leakage check: zero hits.
@@ -60,13 +60,26 @@ Quality reviewer thread: `019fe5ba-cf76-76b3-937e-43d8b0c0ba8d`.
 
 The first round reproduced four proof gaps. The second round reproduced reused slice SHAs, unrecorded code commits and declared-only commands. The third round found merge-resolution provenance. All blocking findings were corrected and rechecked in the same thread.
 
-Final quality verdict: `QUALITY-REVIEW: SATISFEITO`, `GAPS-CRITICOS: 0`.
+That verdict preceded the final adversarial corrections. A continuation of the
+same quality thread is required before final publication evidence is closed.
+
+The independent adversarial round reproduced three critical and two high gaps:
+invalid EN lifecycle commands, a direct read-only write bypass, lost planning
+deferrals, narrative-only edge evidence and unverified code-necessity prose.
+The operational and evidence corrections are captured in commits `f98a62a`
+through `0f4b144`; the same adversarial thread must re-verify them.
 
 ## Simplification and line necessity
 
-Across `e373cce..7b9a02e`, code files contain 950 added and 94 removed lines. Every added code line is covered by `code-necessity.json`, grouped into semantic portions with purpose, inputs, outputs, evidence, simpler alternative and necessity.
+Across `e373cce..0f4b144`, code files contain 1,138 added lines. Every added code
+line is covered by `code-necessity.json`. Each semantic portion now carries a
+repository path, exact line marker and command that the validator resolves at
+the bound SHA and executes. Four distinct proof commands passed.
 
-`SIMPLIFICATION: NAO_NECESSARIA`: the final operational delta is three direct checks—unique slice SHA, complete Git code-commit enumeration and validation-command replay—plus negative regressions. Removing or merging one of these checks would reopen a reproduced bypass. Test fixtures remain explicit because each constructs a distinct invalid Git history.
+The previous simplification verdict must be repeated after the final corrections.
+The current added mechanisms correspond one-to-one to reproduced bypasses:
+read-only rejection, planning deferral persistence, executable evidence receipts
+and a reusable rendered-runtime harness.
 
 ## Local commit chain
 
@@ -79,6 +92,10 @@ Orion’s Belt commits, oldest to newest:
 - `5e291ab` — proof bound to execution;
 - `95dbfd4` — commit and command provenance;
 - `7b9a02e` — code-changing merge provenance.
+- `f98a62a` — read-only, planning deferral and EN lifecycle corrections;
+- `02c6f63` — executable code-necessity evidence;
+- `0d59764` — rendered-runtime proof harness;
+- `0f4b144` — path-normalized cross-render parity.
 
 Tengwar remains local-only for this task. The Orion’s Belt branch is the authorized publication target. No merge to remote `main` is authorized.
 
