@@ -62,15 +62,29 @@ def _test_map(tests: dict[str, list[str]]) -> dict[str, str]:
     return mapped
 
 
-def _review_decision(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _review_decision(payload: dict[str, Any], active_phase: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     immediate: list[dict[str, Any]] = []
     deferred: list[dict[str, Any]] = []
+
+    def bind_to_active_phase(value: dict[str, Any], blocking: bool) -> None:
+        active_nodes = {active_phase.get("entry_node"), active_phase.get("exit_node")} - {None}
+        assessed_nodes = set(value.get("graph_nodes", []))
+        affects_current = bool(active_nodes & assessed_nodes)
+        _require(
+            value.get("affects_current_phase") is affects_current,
+            "impact affects_current_phase must be derived from the active phase graph nodes",
+        )
+        if blocking:
+            _require(affects_current, "blocking findings must reference a node in the active phase")
+
     try:
         for finding in payload.get("findings", []):
+            bind_to_active_phase(finding["impact"], True)
             decision = assess_impact(finding["impact"])
             _require(decision["disposition"] in {"CRITICAL_BLOCK", "HIGH_FIX_NOW"}, "blocking findings must be CRITICAL_BLOCK or HIGH_FIX_NOW")
             immediate.append({**deepcopy(finding), "impact": decision})
         for finding in payload.get("deferred_findings", []):
+            bind_to_active_phase(finding["impact"], False)
             decision = assess_impact(finding["impact"])
             _require(decision["disposition"] == "DEFER_RUN", "deferred findings must be DEFER_RUN")
             deferred.append({**deepcopy(finding), "impact": decision})
@@ -178,7 +192,7 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         result.setdefault("commit_tests", {})[sha] = deepcopy(result.get("validated_tests", {}))
         result.setdefault("commit_edges", {})[sha] = result["active_phase"]["edge_id"]
     elif event == "QUALITY":
-        findings, deferred = _review_decision(payload)
+        findings, deferred = _review_decision(payload, result.get("active_phase", {}))
         status = payload.get("status")
         reviewer = payload.get("reviewer_id")
         round_number = payload.get("round", 1)
@@ -201,7 +215,7 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         if status == "APLICAR":
             result["pending_fix"] = {"kind": "simplification", "round": result.get("quality_round", 1), "findings": []}
     elif event == "ADVERSARIAL":
-        findings, deferred = _review_decision(payload)
+        findings, deferred = _review_decision(payload, result.get("active_phase", {}))
         reviewer = payload.get("reviewer_id")
         round_number = payload.get("round", 1)
         _require(bool(reviewer) and reviewer != result.get("implementer_id"), "ADVERSARIAL requires an independent reviewer_id")

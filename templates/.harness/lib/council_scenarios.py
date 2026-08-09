@@ -13,7 +13,7 @@ TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
 
 
 def _impact(finding_id: str) -> dict[str, Any]:
-    return {"id": finding_id, "evidence_status": "REAL", "evidence": "isolated scenario", "objective_impact": 3, "journey_reachability": 3, "acceptance_impact": 3, "irreversibility": 3, "dependency_urgency": 3, "on_critical_path": False, "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["request", "done"], "score": 75, "disposition": "HIGH_FIX_NOW"}
+    return {"id": finding_id, "evidence_status": "REAL", "evidence": "isolated scenario", "objective_impact": 3, "journey_reachability": 3, "acceptance_impact": 3, "irreversibility": 3, "dependency_urgency": 3, "on_critical_path": True, "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["request", "done"], "score": 75, "disposition": "HIGH_FIX_NOW"}
 
 
 def _finding(finding_id: str, gap: str) -> dict[str, Any]:

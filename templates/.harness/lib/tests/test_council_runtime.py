@@ -186,9 +186,26 @@ class CouncilRuntimeTest(unittest.TestCase):
             apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 1, "required": 0, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "findings": [finding()]})
         deferred = finding("D1")
         deferred["impact"] = {**impact("D1"), "evidence_status": "UNVERIFIED", "disposition": "DEFER_RUN"}
+        deferred["impact"]["graph_nodes"] = ["later"]
+        deferred["impact"]["on_critical_path"] = False
+        deferred["impact"]["affects_current_phase"] = False
         deferred.update({"reason": "outside the current path", "review_after": "phase two"})
         state = apply_transition(state, "QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "deferred_findings": [deferred]})
         self.assertEqual("D1", state["deferred_findings"][0]["impact"]["id"])
+
+    def test_blocking_impact_cannot_self_assign_unknown_graph_nodes(self):
+        state = self.walk_to_commit()
+        forged = finding("GHOST", "CRITICAL_BLOCK")
+        forged["impact"]["graph_nodes"] = ["node-that-is-not-in-the-active-phase"]
+        with self.assertRaisesRegex(TransitionError, "active phase"):
+            apply_transition(state, "QUALITY", {
+                "status": "CORRIGIR",
+                "critical": 1,
+                "required": 0,
+                "reviewer_id": "33333333-3333-4333-8333-333333333333",
+                "round": 1,
+                "findings": [forged],
+            })
 
     def test_validation_ids_must_equal_the_planned_graph_edge(self):
         state = apply_transition(None, "ANCHOR", ANCHOR)

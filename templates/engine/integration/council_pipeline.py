@@ -45,6 +45,41 @@ def _require_repository_file(repo_root: Path, reference: str, label: str) -> Pat
     return path
 
 
+def _validate_graph_bindings(graph: dict[str, Any], events: list[dict[str, Any]]) -> None:
+    """Bind phase plans and review impact flags to the delivered graph."""
+    edges = {edge["edge_id"]: edge for edge in graph["edges"]}
+    graph_nodes = set(graph["nodes"])
+    critical_nodes = {
+        node
+        for edge in graph["edges"]
+        if edge["critical"]
+        for node in (edge["from"], edge["to"])
+    }
+    active_edge: dict[str, Any] | None = None
+    for item in events:
+        event, payload = item["event"], item["payload"]
+        if event == "PHASE-PLAN":
+            active_edge = edges.get(payload["edge_id"])
+            if not active_edge or any(
+                payload[field] != active_edge[graph_field]
+                for field, graph_field in (("entry_node", "from"), ("exit_node", "to"), ("tests", "tests"))
+            ):
+                raise IntegrationError("PHASE-PLAN does not match its execution graph edge")
+            if payload["objective"] != graph["objective"]:
+                raise IntegrationError("PHASE-PLAN objective differs from the execution graph")
+        elif event in {"QUALITY", "ADVERSARIAL"}:
+            current_nodes = {active_edge["from"], active_edge["to"]} if active_edge else set()
+            for finding in payload.get("findings", []) + payload.get("deferred_findings", []):
+                impact = finding["impact"]
+                assessed_nodes = set(impact["graph_nodes"])
+                if not assessed_nodes <= graph_nodes:
+                    raise IntegrationError("review impact references a node absent from the execution graph")
+                if impact["on_critical_path"] is not bool(assessed_nodes & critical_nodes):
+                    raise IntegrationError("review on_critical_path differs from the execution graph")
+                if impact["affects_current_phase"] is not bool(assessed_nodes & current_nodes):
+                    raise IntegrationError("review affects_current_phase differs from the active graph edge")
+
+
 def _code_commits(repo_root: Path, base_sha: str, head_sha: str) -> list[str]:
     commits = subprocess.check_output(
         ["git", "rev-list", "--reverse", f"{base_sha}..{head_sha}"], cwd=repo_root, text=True,
@@ -164,6 +199,7 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
                 raise IntegrationError(f"{label} schema violation: " + "; ".join(value_errors))
         try:
             graph_result = validate_execution_graph(graph)
+            _validate_graph_bindings(graph, state["history"])
             verify_code_necessity(repo_root, report)
         except ObjectiveControlError as exc:
             raise IntegrationError(str(exc)) from exc
