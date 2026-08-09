@@ -36,14 +36,15 @@ class CouncilEvaluationTest(unittest.TestCase):
             quality_path.write_text(f"SHA: {sha}\nQUALITY-REVIEW: SATISFEITO\n", encoding="utf-8")
             adversarial_path.write_text(f"SHA: {sha}\nADVERSARIAL-VERIFICATION: SATISFEITO\n", encoding="utf-8")
             reviewed = evaluate(ROOT, report, {
-                "quality": {"reviewer_id": "11111111-1111-4111-8111-111111111111", "verdict": "SATISFEITO", "critical": 0, "required": 0, "git_sha": sha, "report_path": str(quality_path), "report_sha256": hashlib.sha256(quality_path.read_bytes()).hexdigest()},
-                "adversarial": {"reviewer_id": "22222222-2222-4222-8222-222222222222", "verdict": "SATISFEITO", "blocking": 0, "high": 0, "git_sha": sha, "report_path": str(adversarial_path), "report_sha256": hashlib.sha256(adversarial_path.read_bytes()).hexdigest()},
+                "quality": {"reviewer_id": "11111111-1111-4111-8111-111111111111", "attestation_source": "multi_agent_tool", "verdict": "SATISFEITO", "critical": 0, "required": 0, "git_sha": sha, "report_path": str(quality_path), "report_sha256": hashlib.sha256(quality_path.read_bytes()).hexdigest()},
+                "adversarial": {"reviewer_id": "22222222-2222-4222-8222-222222222222", "attestation_source": "multi_agent_tool", "verdict": "SATISFEITO", "blocking": 0, "high": 0, "git_sha": sha, "report_path": str(adversarial_path), "report_sha256": hashlib.sha256(adversarial_path.read_bytes()).hexdigest()},
             })
-        self.assertFalse(reviewed["gates"]["independent_reviewer_evidence"])
+        self.assertTrue(reviewed["gates"]["independent_reviewer_evidence"])
         self.assertTrue(reviewed["gates"]["external_attestation_required"])
         self.assertEqual(min(result["scores"].values()) > 8.5 and all(result["gates"].values()), result["promotion"])
         self.assertGreater(min(reviewed["scores"].values()), 8.5)
         self.assertGreaterEqual(reviewed["overall"], 9.1)
+        self.assertEqual(min(reviewed["scores"].values()) > 8.5 and all(reviewed["gates"].values()), reviewed["promotion"])
         self.assertEqual(40, len(result["git_sha"]))
 
     def test_cli_materializes_machine_readable_report(self):

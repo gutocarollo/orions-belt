@@ -96,6 +96,7 @@ def main() -> int:
         events = [json.loads(line) for line in args.ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
         result = integrate_events(events, args.git_sha)
         verify_repository_evidence(result, args.repo_root.resolve())
+        result["state"]["delivery_verified"] = True
         args.output_dir.mkdir(parents=True, exist_ok=True)
         (args.output_dir / "run-state.json").write_text(json.dumps(result["state"], indent=2, sort_keys=True) + "\n", encoding="utf-8")
         (args.output_dir / "evidence-manifest.json").write_text(json.dumps(result["evidence"], indent=2, sort_keys=True) + "\n", encoding="utf-8")

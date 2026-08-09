@@ -56,6 +56,12 @@ class CouncilContractTest(unittest.TestCase):
             self.assertTrue(data["required"])
             self.assertFalse(data["additionalProperties"])
 
+    def test_codex_registers_council_pre_post_and_stop_gates(self):
+        hooks = json.loads((ROOT / ".codex/hooks.json").read_text(encoding="utf-8"))["hooks"]
+        for event, suffix in (("PreToolUse", " pre"), ("PostToolUse", " post"), ("Stop", " stop")):
+            commands = [hook.get("command", "") for group in hooks[event] for hook in group.get("hooks", [])]
+            self.assertTrue(any("council-gate.py" in command and command.endswith(suffix) for command in commands), event)
+
     def test_pre_tool_blocks_edit_without_ready_item(self):
         decision = pre_tool_guard({"tool_name": "Edit", "state": {"stage": "PHASE-PLAN"}})
         self.assertFalse(decision["allow"])
@@ -69,12 +75,26 @@ class CouncilContractTest(unittest.TestCase):
 
     def test_stop_requires_delivery_and_evidence(self):
         self.assertFalse(stop_guard({"state": {"stage": "ADVERSARIAL"}})["allow"])
-        self.assertTrue(stop_guard({"state": {"stage": "DELIVERY", "history": [{"event": "DELIVERY"}]}})["allow"])
+        self.assertFalse(stop_guard({"state": {"stage": "DELIVERY", "history": [{"event": "DELIVERY"}]}})["allow"])
+        self.assertTrue(stop_guard({"state": {"stage": "DELIVERY", "delivery_verified": True, "history": [{"event": "DELIVERY"}]}})["allow"])
 
     def test_git_guard_allows_local_commit_but_blocks_unauthorized_remote(self):
         self.assertTrue(git_guard({"action": "local-commit"})["allow"])
         self.assertFalse(git_guard({"action": "push"})["allow"])
         self.assertTrue(git_guard({"action": "merge-main", "authority": {"remote_authorized": True, "authorized_by": "user", "authorization_evidence": "prompt"}})["allow"])
+
+    def test_council_git_executes_remote_action_only_with_authority(self):
+        tool = ROOT / ".harness/lib/council_git.py"
+        blocked = subprocess.run([sys.executable, str(tool), "merge-main", "--", sys.executable, "-c", "raise SystemExit(0)"], cwd=ROOT, capture_output=True, text=True)
+        self.assertNotEqual(0, blocked.returncode)
+        with tempfile.TemporaryDirectory() as directory:
+            authority = Path(directory) / "authority.json"
+            authority.write_text(json.dumps({"remote_authorized": True, "authorized_by": "user", "authorization_evidence": "prompt"}))
+            allowed = subprocess.run([sys.executable, str(tool), "merge-main", "--authorization", str(authority), "--", sys.executable, "-c", "raise SystemExit(0)"], cwd=ROOT, capture_output=True, text=True)
+            bypass = subprocess.run([sys.executable, str(tool), "push", "--authorization", str(authority), "--", "git", "push", "--no-verify"], cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(0, allowed.returncode, allowed.stderr)
+        self.assertNotEqual(0, bypass.returncode)
+        self.assertIn("forbids --no-verify", bypass.stderr)
 
     def test_missing_required_semantic_marker_fails(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -124,6 +144,22 @@ class CouncilContractTest(unittest.TestCase):
             )
             self.assertEqual(2, process.returncode)
             self.assertIn("active Council state", process.stderr)
+
+    def test_active_state_that_differs_from_ledger_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            state_path = start_session(root, "tampered", "inline")
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state["stage"] = "DELIVERY"
+            state["delivery_verified"] = True
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            process = subprocess.run(
+                [sys.executable, str(ROOT / ".harness/hooks/council-gate.py"), "stop"],
+                cwd=root, env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)}, input="{}", capture_output=True, text=True,
+            )
+            self.assertEqual(2, process.returncode)
+            self.assertIn("differs from event-ledger replay", process.stderr)
 
     def test_corrupt_active_state_blocks_real_git_push(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -234,6 +234,8 @@ Somente depois de `ITEM-PLAN: PRONTO`, carregue e siga integralmente `incrementa
 
 Nao escreva mais de aproximadamente 100 linhas sem testar, nao misture refactor alheio, nao atravesse itens em paralelo quando compartilham estado e nao acumule uma fase inteira para validar no final. Cada slice validado DEVE produzir imediatamente um commit LOCAL atomico, contendo somente seus arquivos. Push para qualquer remoto e merge para `main` no remoto exigem autorizacao explicita; nunca inferir essa autoridade do pedido de implementar, finalizar ou commitar.
 
+Toda operacao remota do agente DEVE passar por `python3 .harness/lib/council_git.py push|merge-main --authorization <evidencia.json> -- <comando-remoto>`. `git push --no-verify` e proibido. O pre-push e defesa adicional do fluxo local, nao uma fronteira de seguranca contra um usuario hostil com controle do cliente Git.
+
 Registre checkpoints no ledger existente como `loop=execution`, `event=validation`, com payload contendo `phase`, `item`, `slice`, `skill=incremental-implementation`, comandos e resultados; nao invente um novo tipo de evento.
 
 Feche cada item com:

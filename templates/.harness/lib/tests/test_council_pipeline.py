@@ -18,17 +18,17 @@ def complex_events(commit_sha="a" * 40, manifest="delivery.json"):
         {"event": "PHASE-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "items": ["i1"]}},
         {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "item": "i1", "slice": "s1", "validation": ["test"]}},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}},
-        {"event": "VALIDATION", "payload": {"status": "PASS", "commands": [{"command": "test", "exit_code": 0}], "checked_files": ["slice.txt"]}},
+        {"event": "VALIDATION", "payload": {"status": "PASS", "commands": [{"command": "git diff --check", "exit_code": 0}], "checked_files": ["slice.txt"], "executor": "agent_swarm_ledger", "validated_at": "2026-01-01T00:00:00Z", "file_hashes": [{"path": "slice.txt", "sha256": "971c9401e58679c2670ab91b83db3846e47927d9e9c527ea952f29d11c7515f9"}]}},
         {"event": "LOCAL-COMMIT", "payload": {"sha": commit_sha, "files": ["slice.txt"]}},
-        {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "q-thread"}},
+        {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "99999999-9999-4999-8999-999999999999"}},
         {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA"}},
-        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "reviewer_id": "a-thread"}},
+        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "reviewer_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}},
         {"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": manifest}},
     ]
 
 
 def delivery_manifest(commit_sha):
-    return {"commits": [commit_sha], "acceptance": [{"criterion": "done", "phase": "p1", "item": "i1", "slice": "s1", "commit": commit_sha, "files": ["slice.txt"], "commands": ["test -> exit 0"], "evidence": ["events.jsonl"], "reviewer_ids": ["q-thread", "a-thread"]}]}
+    return {"commits": [commit_sha], "acceptance": [{"criterion": "done", "phase": "p1", "item": "i1", "slice": "s1", "commit": commit_sha, "files": ["slice.txt"], "commands": ["test -> exit 0"], "evidence": ["events.jsonl"], "reviewer_ids": ["99999999-9999-4999-8999-999999999999", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]}]}
 
 
 class CouncilPipelineTest(unittest.TestCase):
@@ -36,7 +36,7 @@ class CouncilPipelineTest(unittest.TestCase):
         result = integrate_events(complex_events(), "b" * 40)
         self.assertEqual("DELIVERY", result["state"]["stage"])
         self.assertEqual("b" * 40, result["evidence"]["git_sha"])
-        self.assertEqual(["q-thread", "a-thread"], result["evidence"]["reviewer_ids"])
+        self.assertEqual(["99999999-9999-4999-8999-999999999999", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"], result["evidence"]["reviewer_ids"])
         self.assertEqual(["a" * 40], result["evidence"]["local_commits"])
 
     def test_invalid_transition_reports_event_index(self):
@@ -62,7 +62,9 @@ class CouncilPipelineTest(unittest.TestCase):
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(0, process.returncode, process.stdout + process.stderr)
-            self.assertEqual("DELIVERY", json.loads((output / "run-state.json").read_text())["stage"])
+            delivered = json.loads((output / "run-state.json").read_text())
+            self.assertEqual("DELIVERY", delivered["stage"])
+            self.assertTrue(delivered["delivery_verified"])
 
     def test_contract_entrypoints_pass(self):
         for command in ([sys.executable, "engine/contract/scripts/validate_contract.py"], [sys.executable, "scripts/validate_contract.py"]):
@@ -78,6 +80,20 @@ class CouncilPipelineTest(unittest.TestCase):
             )
         self.assertNotEqual(0, process.returncode)
         self.assertIn("invalid Council transition", process.stderr)
+
+    def test_installed_ledger_rejects_fabricated_local_commit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            (root / "slice.txt").write_text("slice\n", encoding="utf-8")
+            env = {**os.environ, "HARNESS_PROJECT_ROOT": str(root)}
+            for item in complex_events("a" * 40)[:6]:
+                process = subprocess.run(
+                    [sys.executable, str(ROOT / ".harness/lib/agent_swarm_ledger.py"), "transition", "--run-id", "fake-commit", "--event", item["event"], "--payload-json", json.dumps(item["payload"])],
+                    cwd=ROOT, env=env, capture_output=True, text=True,
+                )
+            self.assertNotEqual(0, process.returncode)
+            self.assertIn("local commit does not exist", process.stderr)
 
     def test_transition_ledger_is_consumed_by_documented_pipeline(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -104,7 +120,9 @@ class CouncilPipelineTest(unittest.TestCase):
                 cwd=ROOT, capture_output=True, text=True,
             )
             self.assertEqual(0, process.returncode, process.stdout + process.stderr)
-            self.assertEqual("DELIVERY", json.loads((output / "run-state.json").read_text())["stage"])
+            delivered = json.loads((output / "run-state.json").read_text())
+            self.assertEqual("DELIVERY", delivered["stage"])
+            self.assertTrue(delivered["delivery_verified"])
 
 
 if __name__ == "__main__":

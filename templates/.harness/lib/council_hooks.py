@@ -23,7 +23,7 @@ def post_tool_guard(payload: dict[str, Any]) -> dict[str, Any]:
 
 def stop_guard(payload: dict[str, Any]) -> dict[str, Any]:
     state = payload.get("state", {})
-    delivered = state.get("stage") == "DELIVERY" and any(item.get("event") == "DELIVERY" for item in state.get("history", []))
+    delivered = state.get("stage") == "DELIVERY" and state.get("delivery_verified") is True and any(item.get("event") == "DELIVERY" for item in state.get("history", []))
     return {"allow": delivered, "reason": None if delivered else "Council completion requires DELIVERY evidence"}
 
 

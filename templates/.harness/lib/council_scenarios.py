@@ -121,9 +121,9 @@ def run_scenarios(root: Path, workspace: Path) -> dict[str, Any]:
     _must(["git", "init", "--bare", "-q", str(remote)], workspace)
     _must(["git", "remote", "add", "origin", str(remote)], trivial)
     trivial_actions = _base_actions("trivial") + [
-        {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "quality-trivial-thread", "round": 1}},
+        {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "77777777-7777-4777-8777-777777777777", "round": 1}},
         {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "single clear slice", "validations": []}},
-        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "reviewer_id": "adversarial-trivial-thread", "round": 1}},
+        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "reviewer_id": "88888888-8888-4888-8888-888888888888", "round": 1}},
         {"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": "trivial-delivery.json"}},
     ]
     trivial_commits, trivial_processes = _execute_flow(root, trivial, "trivial-e2e", trivial_actions)
@@ -135,21 +135,21 @@ def run_scenarios(root: Path, workspace: Path) -> dict[str, Any]:
     complex_repo = workspace / "complex"
     _init_repo(complex_repo)
     complex_actions = _base_actions("phase-1") + _base_actions("phase-2") + [
-        {"event": "QUALITY", "payload": {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "quality-complex-thread", "round": 1, "findings": [{"gap": "quality", "evidence": "quality review", "required_change": "apply quality fix"}]}},
+        {"event": "QUALITY", "payload": {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 1, "findings": [{"gap": "quality", "evidence": "quality review", "required_change": "apply quality fix"}]}},
         {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "quality", "item": "quality-fix", "slice": "quality-fix", "validation": ["git diff --check"], "fix_kind": "quality", "consumes_review_round": 1}},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": "quality-fix", "changed_files": ["quality-fix.txt"]}, "file": "quality-fix.txt", "content": "quality fix\n"},
         {"event": "VALIDATION", "payload": {"status": "PASS"}},
         {"event": "LOCAL-COMMIT", "payload": {}},
-        {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "quality-complex-thread", "round": 2}},
+        {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 2}},
         {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "already minimal", "validations": []}},
-        {"event": "ADVERSARIAL", "payload": {"status": "CORRIGIR", "reviewer_id": "adversarial-complex-thread", "round": 1, "findings": [{"gap": "adversarial", "evidence": "adversarial review", "required_change": "apply adversarial fix"}]}},
+        {"event": "ADVERSARIAL", "payload": {"status": "CORRIGIR", "reviewer_id": "66666666-6666-4666-8666-666666666666", "round": 1, "findings": [{"gap": "adversarial", "evidence": "adversarial review", "required_change": "apply adversarial fix"}]}},
         {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "adversarial", "item": "adversarial-fix", "slice": "adversarial-fix", "validation": ["git diff --check"], "fix_kind": "adversarial", "consumes_review_round": 1}},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": "adversarial-fix", "changed_files": ["adversarial-fix.txt"]}, "file": "adversarial-fix.txt", "content": "adversarial fix\n"},
         {"event": "VALIDATION", "payload": {"status": "PASS"}},
         {"event": "LOCAL-COMMIT", "payload": {}},
-        {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "quality-complex-thread", "round": 3}},
+        {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 3}},
         {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "already minimal", "validations": []}},
-        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "reviewer_id": "adversarial-complex-thread", "round": 2}},
+        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "reviewer_id": "66666666-6666-4666-8666-666666666666", "round": 2}},
         {"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": "complex-delivery.json"}},
     ]
     complex_commits, complex_processes = _execute_flow(root, complex_repo, "complex-e2e", complex_actions)

@@ -90,6 +90,10 @@ MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE
   containing only the validated files.
 - Push to any remote and merge to remote `main` require explicit authorization.
   A request to implement, finish or commit does not grant remote authority.
+- Every agent remote operation MUST run through
+  `python3 .harness/lib/council_git.py push|merge-main --authorization <evidence.json> -- <remote-command>`.
+  `git push --no-verify` is forbidden. The pre-push hook is defense in depth for
+  the local workflow, not a security boundary against a hostile Git client owner.
 - A compact/trivial flow may reduce breadth, but it still requires phase/item
   preflight, incremental implementation, validation, a local commit and quality
   review.

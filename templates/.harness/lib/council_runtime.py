@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+import re
 from pathlib import Path
 from typing import Any
 from mini_schema_validate import validate_instance
@@ -12,6 +13,9 @@ from mini_schema_validate import validate_instance
 
 class TransitionError(ValueError):
     """Raised when evidence does not authorize the requested transition."""
+
+
+REVIEWER_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
 NEXT = {
@@ -103,7 +107,9 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
     elif event == "VALIDATION":
         _require(payload.get("status") == "PASS" and payload.get("commands"), "VALIDATION requires PASS and commands")
         _require(set(payload["checked_files"]) == set(result.get("slice_files", [])), "VALIDATION checked_files must equal the current slice files")
+        _require({item["path"] for item in payload["file_hashes"]} == set(payload["checked_files"]), "VALIDATION file hashes must equal checked_files")
         result["validated_files"] = list(payload["checked_files"])
+        result["validation_evidence"] = deepcopy(payload)
     elif event == "LOCAL-COMMIT":
         sha = str(payload.get("sha", ""))
         _require(len(sha) == 40 and all(char in "0123456789abcdef" for char in sha.lower()), "LOCAL-COMMIT requires a 40-character SHA")
@@ -119,6 +125,7 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         reviewer = payload.get("reviewer_id")
         round_number = payload.get("round", 1)
         _require(bool(reviewer) and reviewer != result.get("implementer_id"), "QUALITY requires an independent reviewer_id")
+        _require(bool(REVIEWER_ID_RE.fullmatch(str(reviewer))), "QUALITY reviewer_id must be a thread UUID")
         _require(isinstance(round_number, int) and 1 <= round_number <= 3, "QUALITY round must be between 1 and 3")
         previous = result.get("quality_reviewer_id")
         _require(not previous or previous == reviewer, "QUALITY rounds must continue the same reviewer thread")
@@ -138,6 +145,7 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         reviewer = payload.get("reviewer_id")
         round_number = payload.get("round", 1)
         _require(bool(reviewer) and reviewer != result.get("implementer_id"), "ADVERSARIAL requires an independent reviewer_id")
+        _require(bool(REVIEWER_ID_RE.fullmatch(str(reviewer))), "ADVERSARIAL reviewer_id must be a thread UUID")
         _require(isinstance(round_number, int) and 1 <= round_number <= 3, "ADVERSARIAL round must be between 1 and 3")
         previous = result.get("adversarial_reviewer_id")
         _require(not previous or previous == reviewer, "ADVERSARIAL rounds must continue the same reviewer thread")

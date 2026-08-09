@@ -6,8 +6,11 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +31,31 @@ EVENT_STATUSES = {
     ("execution", "fix-consumed"): {"CORRIGIR"},
 }
 COUNCIL_EVENTS = ("ANCHOR", "PHASE-PLAN", "ITEM-PLAN", "SLICE", "VALIDATION", "LOCAL-COMMIT", "QUALITY", "SIMPLIFICATION", "ADVERSARIAL", "DELIVERY")
+
+
+def verify_repository_transition(event: str, state: dict[str, Any], root: Path) -> None:
+    if event == "LOCAL-COMMIT":
+        sha = state["commits"][-1]
+        if subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=root, capture_output=True).returncode:
+            raise SystemExit(f"invalid Council transition: local commit does not exist: {sha}")
+        actual = set(subprocess.check_output(["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", sha], cwd=root, text=True).splitlines())
+        if actual != set(state["commit_files"][sha]):
+            raise SystemExit(f"invalid Council transition: local commit files differ from validated slice: {sha}")
+        expected_hashes = {item["path"]: item["sha256"] for item in state["validation_evidence"]["file_hashes"]}
+        actual_hashes = {path: hashlib.sha256(subprocess.check_output(["git", "show", f"{sha}:{path}"], cwd=root)).hexdigest() for path in actual}
+        if actual_hashes != expected_hashes:
+            raise SystemExit(f"invalid Council transition: commit content differs from validated file hashes: {sha}")
+    if event == "DELIVERY":
+        if state.get("mutation_mode") == "WORKSPACE_WRITE":
+            source_root = Path(__file__).resolve().parents[2]
+            sys.path.insert(0, str(source_root))
+            from engine.integration.council_pipeline import IntegrationError, verify_repository_evidence
+            head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            try:
+                verify_repository_evidence({"state": state, "evidence": {"git_sha": head}}, root)
+            except IntegrationError as exc:
+                raise SystemExit(f"invalid Council transition: {exc}") from exc
+        state["delivery_verified"] = True
 
 
 def utc_now() -> str:
@@ -159,10 +187,22 @@ def transition(args: argparse.Namespace) -> None:
         try:
             for item in events:
                 state = apply_transition(state, item["event"], item["payload"])
-            item = {"seq": len(events) + 1, "ts": utc_now(), "event": args.council_event, "payload": payload(args.payload_json)}
+            event_payload = payload(args.payload_json)
+            if args.council_event == "VALIDATION":
+                for command in event_payload.get("commands", []):
+                    process = subprocess.run(command.get("command", ""), cwd=ROOT, shell=True)
+                    if process.returncode != 0:
+                        raise TransitionError(f"validation command failed with exit {process.returncode}: {command.get('command')}")
+                    command["exit_code"] = process.returncode
+                checked = event_payload.get("checked_files", [])
+                event_payload["executor"] = "agent_swarm_ledger"
+                event_payload["validated_at"] = utc_now()
+                event_payload["file_hashes"] = [{"path": name, "sha256": hashlib.sha256((ROOT / name).read_bytes()).hexdigest()} for name in checked]
+            item = {"seq": len(events) + 1, "ts": utc_now(), "event": args.council_event, "payload": event_payload}
             state = apply_transition(state, item["event"], item["payload"])
         except (TransitionError, KeyError, TypeError, ValueError) as exc:
             raise SystemExit(f"invalid Council transition: {exc}") from exc
+        verify_repository_transition(args.council_event, state, ROOT)
         stream.seek(0, 2)
         stream.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n")
         stream.flush()
