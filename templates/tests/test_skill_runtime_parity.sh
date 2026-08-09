@@ -100,7 +100,7 @@ assert "codex-only: required skills default includes the generated council" \
 assert "codex-only: installed validator passes inside the rendered destination" \
   '(cd "$CODEX_ONLY" && python3 .harness/lib/validate_skills.py >/dev/null)'
 assert "codex-only: installed session starts a writable Council run" \
-  '(cd "$CODEX_ONLY" && git init -q && git config user.email test@example.invalid && git config user.name Test && git add -A && git commit -q -m baseline && python3 .harness/lib/council_session.py start --run-id render-e2e --anchor-source parity-test --mutation-mode WORKSPACE_WRITE >/dev/null)'
+  '(cd "$CODEX_ONLY" && printf "%s\n" "{\"objective\":\"parity\",\"start_node\":\"request\",\"goal_node\":\"done\",\"nodes\":[\"request\",\"done\"],\"edges\":[{\"edge_id\":\"E1\",\"from\":\"request\",\"to\":\"done\",\"critical\":true,\"phase\":\"test\",\"item\":\"test\",\"tests\":{\"functional\":[\"F1\"],\"quality\":[\"Q1\"],\"regression\":[\"R1\"]},\"evidence\":[\"execution-graph.json\"]}]}" > execution-graph.json && git init -q && git config user.email test@example.invalid && git config user.name Test && git add -A && git commit -q -m baseline && python3 .harness/lib/council_session.py start --run-id render-e2e --anchor-source parity-test --mutation-mode WORKSPACE_WRITE --execution-graph execution-graph.json >/dev/null)'
 assert "codex-only: installed ledger records a request" \
   '(cd "$CODEX_ONLY" && python3 .harness/lib/agent_swarm_ledger.py append --run-id render-e2e --loop execution --round 1 --event fix-request --status CORRIGIR --payload-json '\''{"gap":"g"}'\'' >/dev/null)'
 assert "codex-only: installed ledger links the consumed event to its request" \

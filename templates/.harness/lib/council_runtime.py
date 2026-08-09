@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 from mini_schema_validate import validate_instance
-from objective_control import ObjectiveControlError, TEST_CLASSES, assess_impact
+from objective_control import ObjectiveControlError, TEST_CLASSES, assess_impact, validate_execution_graph, verify_impact_evidence
 
 
 class TransitionError(ValueError):
@@ -62,9 +62,15 @@ def _test_map(tests: dict[str, list[str]]) -> dict[str, str]:
     return mapped
 
 
-def _review_decision(payload: dict[str, Any], active_phase: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _review_decision(payload: dict[str, Any], state: dict[str, Any], repository_root: Path | None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     immediate: list[dict[str, Any]] = []
     deferred: list[dict[str, Any]] = []
+    active_phase = state.get("active_phase", {})
+    graph = state.get("execution_graph", {})
+    critical_nodes = {
+        node for edge in graph.get("edges", []) if edge.get("critical")
+        for node in (edge.get("from"), edge.get("to"))
+    }
 
     def bind_to_active_phase(value: dict[str, Any], blocking: bool) -> None:
         active_nodes = {active_phase.get("entry_node"), active_phase.get("exit_node")} - {None}
@@ -76,6 +82,13 @@ def _review_decision(payload: dict[str, Any], active_phase: dict[str, Any]) -> t
         )
         if blocking:
             _require(affects_current, "blocking findings must reference a node in the active phase")
+        _require(
+            value.get("on_critical_path") is bool(assessed_nodes & critical_nodes),
+            "impact on_critical_path must be derived from the anchored execution graph",
+        )
+        if value.get("evidence_status") == "REAL":
+            _require(repository_root is not None, "REAL impact evidence requires repository resolution")
+            verify_impact_evidence(repository_root, value)
 
     try:
         for finding in payload.get("findings", []):
@@ -114,7 +127,7 @@ def remote_action_allowed(action: str, authority: dict[str, Any]) -> bool:
     )
 
 
-def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str, Any]) -> dict[str, Any]:
+def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str, Any], repository_root: Path | None = None) -> dict[str, Any]:
     """Apply one Council event after validating its predecessor and evidence."""
     current = state.get("stage") if state else None
     if state and current == "QUALITY" and state.get("quality_status") == "CORRIGIR":
@@ -145,6 +158,14 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
             _require(isinstance(payload.get("worktree_baseline"), list), "workspace ANCHOR requires worktree_baseline")
             result["base_sha"] = base_sha
             result["worktree_baseline"] = sorted(str(item) for item in payload["worktree_baseline"])
+            graph = payload.get("execution_graph")
+            _require(isinstance(graph, dict), "workspace ANCHOR requires execution_graph")
+            try:
+                validate_execution_graph(graph)
+            except ObjectiveControlError as exc:
+                raise TransitionError(str(exc)) from exc
+            result["execution_graph"] = deepcopy(graph)
+            result["objective"] = graph["objective"]
     else:
         read_only_delivery = result.get("mutation_mode") == "READ_ONLY" and event == "DELIVERY"
         _require(result.get("mutation_mode") != "READ_ONLY" or read_only_delivery, "read-only Council runs cannot enter execution")
@@ -155,6 +176,11 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         if event == "PHASE-PLAN":
             _require(payload["entry_node"] != payload["exit_node"], "PHASE-PLAN entry_node and exit_node must differ")
             _require(not result.get("objective") or result["objective"] == payload["objective"], "PHASE-PLAN cannot change the macro objective")
+            edge = next((item for item in result["execution_graph"]["edges"] if item["edge_id"] == payload["edge_id"]), None)
+            _require(
+                bool(edge) and payload["entry_node"] == edge["from"] and payload["exit_node"] == edge["to"] and payload["tests"] == edge["tests"],
+                "PHASE-PLAN must match the anchored execution graph edge",
+            )
             result["objective"] = payload["objective"]
             result["active_phase"] = {key: deepcopy(payload[key]) for key in ("phase", "edge_id", "entry_node", "exit_node", "tests")}
         else:
@@ -192,7 +218,7 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         result.setdefault("commit_tests", {})[sha] = deepcopy(result.get("validated_tests", {}))
         result.setdefault("commit_edges", {})[sha] = result["active_phase"]["edge_id"]
     elif event == "QUALITY":
-        findings, deferred = _review_decision(payload, result.get("active_phase", {}))
+        findings, deferred = _review_decision(payload, result, repository_root)
         status = payload.get("status")
         reviewer = payload.get("reviewer_id")
         round_number = payload.get("round", 1)
@@ -215,7 +241,7 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         if status == "APLICAR":
             result["pending_fix"] = {"kind": "simplification", "round": result.get("quality_round", 1), "findings": []}
     elif event == "ADVERSARIAL":
-        findings, deferred = _review_decision(payload, result.get("active_phase", {}))
+        findings, deferred = _review_decision(payload, result, repository_root)
         reviewer = payload.get("reviewer_id")
         round_number = payload.get("round", 1)
         _require(bool(reviewer) and reviewer != result.get("implementer_id"), "ADVERSARIAL requires an independent reviewer_id")

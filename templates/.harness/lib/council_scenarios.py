@@ -12,6 +12,10 @@ from typing import Any
 TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
 
 
+def _execution_graph(ledger_path: str) -> dict[str, Any]:
+    return {"objective": "scenario delivery", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "scenario", "item": "delivery", "tests": TESTS, "evidence": [ledger_path]}]}
+
+
 def _impact(finding_id: str) -> dict[str, Any]:
     return {"id": finding_id, "evidence_status": "REAL", "evidence": {"path": "baseline.txt", "line": 1, "contains": "baseline"}, "objective_impact": 3, "journey_reachability": 3, "acceptance_impact": 3, "irreversibility": 3, "dependency_urgency": 3, "on_critical_path": True, "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["request", "done"], "score": 75, "disposition": "HIGH_FIX_NOW"}
 
@@ -57,10 +61,14 @@ def _commit_existing(path: Path, files: list[str]) -> str:
 
 def _start(source: Path, target: Path, run_id: str, mode: str = "WORKSPACE_WRITE") -> dict[str, str]:
     env = {**os.environ, "HARNESS_PROJECT_ROOT": str(target)}
+    graph = target / "execution-graph.json"
+    graph.write_text(json.dumps(_execution_graph(f".harness/runs/agent-swarm/{run_id}/council-events.jsonl"), indent=2) + "\n", encoding="utf-8")
+    _must(["git", "add", graph.name], target)
+    _must(["git", "commit", "-q", "-m", "anchor execution graph"], target)
     _must([
         sys.executable, str(source / ".harness/lib/council_session.py"), "start",
         "--root", str(target), "--run-id", run_id, "--anchor-source", "inline-verbatim",
-        "--mutation-mode", mode,
+        "--mutation-mode", mode, "--execution-graph", str(graph),
     ], target, env)
     return env
 
@@ -112,7 +120,7 @@ def _execute_flow(source: Path, target: Path, run_id: str, actions: list[dict[st
             ledger_path = f".harness/runs/agent-swarm/{run_id}/council-events.jsonl"
             acceptance = [{"criterion": "slice delivered", "phase": "scenario", "item": f"item-{index}", "slice": f"slice-{index}", "commit": sha, "files": files, "commands": commands, "evidence": [ledger_path], "reviewer_ids": reviewer_ids, "edge_id": "E1", "test_ids": [test_id for ids in TESTS.values() for test_id in ids]} for index, (sha, files, commands) in enumerate(zip(commits, commit_file_sets, commit_commands), 1)]
             graph_path = target / "execution-graph.json"
-            graph_path.write_text(json.dumps({"objective": "scenario delivery", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "scenario", "item": "delivery", "tests": TESTS, "evidence": [ledger_path]}]}, indent=2) + "\n", encoding="utf-8")
+            graph_path.write_text(json.dumps(_execution_graph(ledger_path), indent=2) + "\n", encoding="utf-8")
             report_path = target / "code-necessity.json"
             base_sha = _must(["git", "rev-parse", f"{commits[0]}^"], target).stdout.strip()
             report_path.write_text(json.dumps({"base_sha": base_sha, "head_sha": commits[-1], "portions": []}, indent=2) + "\n", encoding="utf-8")

@@ -21,13 +21,21 @@ def worktree_state(root: Path) -> list[str]:
     return sorted(item for item in subprocess.check_output(command, cwd=root, text=True).split("\0") if item)
 
 
-def start_session(root: Path, run_id: str, anchor_source: str, mutation_mode: str = "WORKSPACE_WRITE") -> Path | None:
+def start_session(root: Path, run_id: str, anchor_source: str, mutation_mode: str = "WORKSPACE_WRITE", execution_graph: Path | None = None) -> Path | None:
     if mutation_mode == "READ_ONLY":
         return None
+    if execution_graph is not None and not execution_graph.is_absolute():
+        execution_graph = root / execution_graph
+    if execution_graph is None or not execution_graph.is_file():
+        raise RuntimeError("writable Council session requires --execution-graph")
+    try:
+        graph = json.loads(execution_graph.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"execution graph is unreadable: {execution_graph}") from exc
     folder = root / ".harness/runs/agent-swarm" / run_id
     folder.mkdir(parents=True, exist_ok=True)
     base_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-    event = {"seq": 1, "event": "ANCHOR", "payload": {"mutation_mode": mutation_mode, "anchor_source": anchor_source, "base_sha": base_sha, "worktree_baseline": worktree_state(root)}}
+    event = {"seq": 1, "event": "ANCHOR", "payload": {"mutation_mode": mutation_mode, "anchor_source": anchor_source, "base_sha": base_sha, "worktree_baseline": worktree_state(root), "execution_graph": graph}}
     state = apply_transition(None, event["event"], event["payload"])
     (folder / "council-events.jsonl").write_text(json.dumps(event, sort_keys=True) + "\n", encoding="utf-8")
     state_path = (folder / "council-state.json").resolve()
@@ -75,11 +83,12 @@ def main() -> int:
     start.add_argument("--run-id", required=True)
     start.add_argument("--anchor-source", required=True)
     start.add_argument("--mutation-mode", choices=("READ_ONLY", "WORKSPACE_WRITE"), default="WORKSPACE_WRITE")
+    start.add_argument("--execution-graph", type=Path)
     finish = commands.add_parser("finish")
     finish.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
     if args.command == "start":
-        state = start_session(args.root.resolve(), args.run_id, args.anchor_source, args.mutation_mode)
+        state = start_session(args.root.resolve(), args.run_id, args.anchor_source, args.mutation_mode, args.execution_graph)
         print(state if state else "INLINE_READ_ONLY")
     else:
         finish_session(args.root.resolve())

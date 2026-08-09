@@ -82,6 +82,8 @@ Nao delegue ambiguidade crua ao usuario. Explore codigo, docs e dados reais prim
 
 Materialize o plano como grafo START→GOAL: jornadas, nós, arestas, dependências, interfaces e transições de falha. Toda fase/item referencia `edge_id`, entrada, saída, entregável e IDs deterministas `functional`, `quality` e `regression`. Antes de `DELIVERY`, `prova-de-conclusao` reconstrói o caminho; `verify` prova cada mudança pontual; `test-driven-development` cria os testes. O manifesto final liga grafo, testes, evidências e commits.
 
+Antes do primeiro slice executável, inicie o run com `python3 .harness/lib/council_session.py start --run-id <id> --anchor-source <fonte> --mutation-mode WORKSPACE_WRITE --execution-graph <grafo-validado.json>`. O `ANCHOR` armazena esse grafo; `PHASE-PLAN` com nós, testes ou aresta inventados falha antes de qualquer edição.
+
 ## Fluxo Obrigatorio
 
 0. **Ancore o pedido original (fidelidade ao estimand).** Em `WORKSPACE_WRITE`, escreva/atualize `.harness/requests/CURRENT-TASK.md` com o objetivo ORIGINAL do usuario VERBATIM + emendas acordadas, preferindo o ledger append-only `.harness/requests/session-*.md`. Em `READ_ONLY`, e proibido criar, atualizar, arquivar ou apagar arquivos: use como `ANCHOR_SOURCE` o ledger existente ou um bloco inline verbatim no prompt dos reviewers. Toda review recebe `ANCHOR_SOURCE` e julga contra ele, nunca apenas contra o plano derivado.

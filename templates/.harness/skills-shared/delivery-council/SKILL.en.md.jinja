@@ -78,7 +78,8 @@ MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE
   must not edit workspace files, mutate a ledger, commit, push or merge.
 - Use `WORKSPACE_WRITE` only when the user requested implementation or change.
 - Start the enforceable lifecycle with
-  `python3 .harness/lib/council_session.py start --run-id <id> --anchor-source <source> --mutation-mode WORKSPACE_WRITE`.
+  `python3 .harness/lib/council_session.py start --run-id <id> --anchor-source <source> --mutation-mode WORKSPACE_WRITE --execution-graph <validated-graph.json>`.
+  Build and validate the graph before the first execution slice; ANCHOR stores it so `PHASE-PLAN` cannot guide edits with invented nodes or tests.
   Advance it with `python3 .harness/lib/agent_swarm_ledger.py transition`; finish only after `DELIVERY`.
 - Before starting EVERY phase and EVERY execution item, invoke
   `planning-and-task-breakdown` in read-only preflight. A phase preflight never

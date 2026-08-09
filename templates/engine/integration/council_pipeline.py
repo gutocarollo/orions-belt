@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT / ".harness" / "lib"))
 from council_runtime import TransitionError, apply_transition  # noqa: E402
 from council_session import worktree_state  # noqa: E402
 from mini_schema_validate import validate_instance  # noqa: E402
-from objective_control import CODE_SUFFIXES, ObjectiveControlError, validate_execution_graph, verify_code_necessity  # noqa: E402
+from objective_control import CODE_SUFFIXES, ObjectiveControlError, validate_execution_graph, verify_code_necessity, verify_impact_evidence  # noqa: E402
 
 
 class IntegrationError(ValueError):
@@ -90,14 +90,10 @@ def _validate_semantic_evidence(repo_root: Path, graph: dict[str, Any], events: 
             impact = finding["impact"]
             if impact.get("evidence_status") != "REAL":
                 continue
-            evidence = impact.get("evidence", {})
-            path = _require_repository_file(repo_root, str(evidence.get("path", "")), "impact evidence")
-            lines = path.read_text(encoding="utf-8").splitlines()
-            line = evidence.get("line")
-            if not isinstance(line, int) or isinstance(line, bool) or not 1 <= line <= len(lines):
-                raise IntegrationError(f"impact evidence line is outside repository file: {path}")
-            if str(evidence.get("contains", "")) not in lines[line - 1]:
-                raise IntegrationError(f"impact evidence marker is absent at {path}:{line}")
+            try:
+                verify_impact_evidence(repo_root, impact)
+            except ObjectiveControlError as exc:
+                raise IntegrationError(str(exc)) from exc
 
     review_edges = [edge for edge in graph["edges"] if edge["phase"] == "review"]
     if not review_edges:
@@ -146,7 +142,7 @@ def _replay_validation_commands(repo_root: Path, validations: dict[str, dict[str
                 )
 
 
-def integrate_events(events: list[dict[str, Any]], git_sha: str) -> dict[str, Any]:
+def integrate_events(events: list[dict[str, Any]], git_sha: str, repo_root: Path | None = None) -> dict[str, Any]:
     if not events:
         raise IntegrationError("event ledger is empty")
     if len(git_sha) != 40 or any(char not in "0123456789abcdef" for char in git_sha.lower()):
@@ -158,7 +154,7 @@ def integrate_events(events: list[dict[str, Any]], git_sha: str) -> dict[str, An
         if item.get("seq", index) != index:
             raise IntegrationError(f"event {index}: invalid sequence")
         try:
-            state = apply_transition(state, str(item.get("event", "")), item.get("payload", {}))
+            state = apply_transition(state, str(item.get("event", "")), item.get("payload", {}), repository_root=repo_root)
         except (TransitionError, TypeError, ValueError) as exc:
             raise IntegrationError(f"event {index}: {exc}") from exc
     assert state is not None
@@ -234,6 +230,8 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
             value_errors = validate_instance(value, value_schema)
             if value_errors:
                 raise IntegrationError(f"{label} schema violation: " + "; ".join(value_errors))
+        if graph != state.get("execution_graph"):
+            raise IntegrationError("delivered execution graph differs from the Council ANCHOR")
         try:
             graph_result = validate_execution_graph(graph)
             edges = _validate_graph_bindings(graph, state["history"])
@@ -288,7 +286,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         events = [json.loads(line) for line in args.ledger.read_text(encoding="utf-8").splitlines() if line.strip()]
-        result = integrate_events(events, args.git_sha)
+        result = integrate_events(events, args.git_sha, args.repo_root.resolve())
         verify_repository_evidence(result, args.repo_root.resolve())
         result["state"]["delivery_verified"] = True
         args.output_dir.mkdir(parents=True, exist_ok=True)

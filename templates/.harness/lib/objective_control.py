@@ -67,6 +67,22 @@ def assess_impact(value: dict[str, Any]) -> dict[str, Any]:
     return {**value, "score": score, "disposition": disposition}
 
 
+def verify_impact_evidence(root: Path, value: dict[str, Any]) -> None:
+    """Resolve a REAL impact receipt before it can influence execution."""
+    if value.get("evidence_status") != "REAL":
+        return
+    evidence = value["evidence"]
+    path = (root / evidence["path"]).resolve()
+    if root.resolve() not in path.parents or not path.is_file():
+        raise ObjectiveControlError(f"impact evidence is missing or escapes repository: {evidence['path']}")
+    lines = path.read_text(encoding="utf-8").splitlines()
+    line = evidence["line"]
+    if not 1 <= line <= len(lines):
+        raise ObjectiveControlError(f"impact evidence line is outside repository file: {evidence['path']}:{line}")
+    if evidence["contains"] not in lines[line - 1]:
+        raise ObjectiveControlError(f"impact evidence marker is absent at {evidence['path']}:{line}")
+
+
 def validate_execution_graph(graph: dict[str, Any]) -> dict[str, Any]:
     """Prove that graph edges and their phase tests connect start to goal."""
     for field in ("objective", "start_node", "goal_node", "nodes", "edges"):

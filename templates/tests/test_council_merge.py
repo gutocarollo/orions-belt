@@ -90,6 +90,7 @@ class CouncilMergeRegressionTest(unittest.TestCase):
     def test_english_lifecycle_commands_and_read_only_anchor_are_safe(self):
         council = read(COUNCIL_EN)
         self.assertIn("--anchor-source <source>", council)
+        self.assertIn("--execution-graph <validated-graph.json>", council)
         self.assertIn("agent_swarm_ledger.py transition", council)
         self.assertNotIn("--request-source", council)
         self.assertNotIn("council_session.py transition", council)

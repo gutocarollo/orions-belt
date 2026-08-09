@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 LIB = Path(__file__).resolve().parents[1]
+ROOT = LIB.parents[1]
 sys.path.insert(0, str(LIB))
 
 from council_runtime import (  # noqa: E402
@@ -14,7 +15,8 @@ from council_runtime import (  # noqa: E402
 
 
 TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
-ANCHOR = {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline", "base_sha": "0" * 40, "worktree_baseline": []}
+GRAPH = {"objective": "deliver", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "p1", "item": "i1", "tests": TESTS, "evidence": ["proof.txt"]}]}
+ANCHOR = {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline", "base_sha": "0" * 40, "worktree_baseline": [], "execution_graph": GRAPH}
 
 
 def phase(name="p1"):
@@ -31,7 +33,7 @@ def validation(files, command="test"):
 
 def impact(finding_id, disposition="HIGH_FIX_NOW"):
     rating = 4 if disposition == "CRITICAL_BLOCK" else 3
-    return {"id": finding_id, "evidence_status": "REAL", "evidence": {"path": "proof.txt", "line": 1, "contains": "test evidence"}, "objective_impact": rating, "journey_reachability": rating, "acceptance_impact": rating, "irreversibility": rating, "dependency_urgency": rating, "on_critical_path": disposition == "CRITICAL_BLOCK", "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["request", "done"], "score": rating * 25, "disposition": disposition}
+    return {"id": finding_id, "evidence_status": "REAL", "evidence": {"path": ".harness/lib/tests/test_council_runtime.py", "line": 34, "contains": "def impact"}, "objective_impact": rating, "journey_reachability": rating, "acceptance_impact": rating, "irreversibility": rating, "dependency_urgency": rating, "on_critical_path": True, "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["request", "done"], "score": rating * 25, "disposition": disposition}
 
 
 def finding(finding_id="R1", disposition="HIGH_FIX_NOW"):
@@ -39,6 +41,24 @@ def finding(finding_id="R1", disposition="HIGH_FIX_NOW"):
 
 
 class CouncilRuntimeTest(unittest.TestCase):
+    def test_phase_plan_is_rejected_before_slice_when_not_in_anchored_graph(self):
+        state = apply_transition(None, "ANCHOR", ANCHOR)
+        forged = phase()
+        forged.update({"entry_node": "invented-start", "exit_node": "invented-end"})
+        with self.assertRaisesRegex(TransitionError, "anchored execution graph"):
+            apply_transition(state, "PHASE-PLAN", forged)
+
+    def test_real_finding_locator_is_resolved_before_pending_fix(self):
+        state = self.walk_to_commit()
+        forged = finding("FORGED", "CRITICAL_BLOCK")
+        forged["impact"]["evidence"] = {"path": "missing-proof.txt", "line": 1, "contains": "fabricated"}
+        with self.assertRaisesRegex(TransitionError, "impact evidence"):
+            apply_transition(state, "QUALITY", {
+                "status": "CORRIGIR", "critical": 1, "required": 0,
+                "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1,
+                "findings": [forged],
+            }, repository_root=ROOT)
+
     def walk_to_commit(self):
         state = None
         events = [
@@ -100,7 +120,7 @@ class CouncilRuntimeTest(unittest.TestCase):
 
     def test_quality_corrigir_cannot_advance_to_simplification(self):
         state = self.walk_to_commit()
-        state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "findings": [finding()]})
+        state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "findings": [finding()]}, repository_root=ROOT)
         with self.assertRaisesRegex(TransitionError, "ITEM-PLAN"):
             apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA", "reason": "already minimal"})
 
@@ -108,7 +128,7 @@ class CouncilRuntimeTest(unittest.TestCase):
         state = self.walk_to_commit()
         state = apply_transition(state, "QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1})
         state = apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA", "reason": "already minimal"})
-        state = apply_transition(state, "ADVERSARIAL", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "44444444-4444-4444-8444-444444444444", "round": 1, "findings": [finding()]})
+        state = apply_transition(state, "ADVERSARIAL", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "44444444-4444-4444-8444-444444444444", "round": 1, "findings": [finding()]}, repository_root=ROOT)
         with self.assertRaisesRegex(TransitionError, "ITEM-PLAN"):
             apply_transition(state, "DELIVERY", {"status": "SATISFEITO", "manifest": "delivery.json"})
 
@@ -149,7 +169,7 @@ class CouncilRuntimeTest(unittest.TestCase):
 
     def test_review_round_cannot_repeat_after_fix(self):
         state = self.walk_to_commit()
-        state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "round": 1, "findings": [finding()]})
+        state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "round": 1, "findings": [finding()]}, repository_root=ROOT)
         state = apply_transition(state, "ITEM-PLAN", item("p1", "fix", fix_kind="quality", consumes_review_round=1))
         state = apply_transition(state, "SLICE", {"skill": "incremental-implementation", "slice": "fix", "changed_files": ["fix.txt"]})
         state = apply_transition(state, "VALIDATION", validation(["fix.txt"]))
@@ -183,7 +203,7 @@ class CouncilRuntimeTest(unittest.TestCase):
     def test_reviews_are_bound_to_impact_and_nonblocking_work_continues(self):
         state = self.walk_to_commit()
         with self.assertRaisesRegex(TransitionError, "counts disagree"):
-            apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 1, "required": 0, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "findings": [finding()]})
+            apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 1, "required": 0, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "findings": [finding()]}, repository_root=ROOT)
         deferred = finding("D1")
         deferred["impact"] = {**impact("D1"), "evidence_status": "UNVERIFIED", "disposition": "DEFER_RUN"}
         deferred["impact"]["graph_nodes"] = ["later"]
@@ -205,7 +225,7 @@ class CouncilRuntimeTest(unittest.TestCase):
                 "reviewer_id": "33333333-3333-4333-8333-333333333333",
                 "round": 1,
                 "findings": [forged],
-            })
+            }, repository_root=ROOT)
 
     def test_validation_ids_must_equal_the_planned_graph_edge(self):
         state = apply_transition(None, "ANCHOR", ANCHOR)

@@ -20,9 +20,13 @@ COMMANDS = [
 ]
 
 
-def complex_events(commit_sha="a" * 40, manifest="delivery.json", base_sha="0" * 40):
+def graph_fixture(evidence="events.jsonl"):
+    return {"objective": "deliver", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "p1", "item": "i1", "tests": TESTS, "evidence": [evidence]}]}
+
+
+def complex_events(commit_sha="a" * 40, manifest="delivery.json", base_sha="0" * 40, graph_evidence="events.jsonl"):
     return [
-        {"event": "ANCHOR", "payload": {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "prompt", "base_sha": base_sha, "worktree_baseline": []}},
+        {"event": "ANCHOR", "payload": {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "prompt", "base_sha": base_sha, "worktree_baseline": [], "execution_graph": graph_fixture(graph_evidence)}},
         {"event": "PHASE-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "items": ["i1"], "objective": "deliver", "edge_id": "E1", "entry_node": "request", "exit_node": "done", "tests": TESTS}},
         {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "item": "i1", "slice": "s1", "validation": ["test"], "objective": "deliver", "edge_id": "E1", "deliverable": "working result", "tests": TESTS}},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}},
@@ -40,7 +44,7 @@ def delivery_manifest(commit_sha, evidence="events.jsonl"):
 
 
 def write_delivery_support(folder, base_sha, head_sha, evidence="events.jsonl", branch=False, portions=None):
-    graph = {"objective": "deliver", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "p1", "item": "i1", "tests": TESTS, "evidence": [evidence]}]}
+    graph = graph_fixture(evidence)
     if branch:
         graph["nodes"].append("alternate")
         graph["edges"].extend([
@@ -384,7 +388,7 @@ class CouncilPipelineTest(unittest.TestCase):
             write_delivery_support(folder, base_sha, slice_sha, evidence="missing-proof.json")
             (folder / "delivery.json").write_text(json.dumps(delivery_manifest(slice_sha)))
             ledger = folder / "events.jsonl"
-            ledger.write_text("".join(json.dumps(item) + "\n" for item in complex_events(slice_sha, base_sha=base_sha)), encoding="utf-8")
+            ledger.write_text("".join(json.dumps(item) + "\n" for item in complex_events(slice_sha, base_sha=base_sha, graph_evidence="missing-proof.json")), encoding="utf-8")
             final_sha = commit_all(folder, "missing graph evidence")
             process = subprocess.run(
                 [sys.executable, "engine/integration/council_pipeline.py", str(ledger), "--git-sha", final_sha, "--repo-root", str(folder), "--output-dir", str(folder / "proof")],
@@ -422,7 +426,7 @@ class CouncilPipelineTest(unittest.TestCase):
             branch_sha = commit_all(folder, "uncovered critical branch")
             branch_rejected = subprocess.run([sys.executable, "engine/integration/council_pipeline.py", str(ledger), "--git-sha", branch_sha, "--repo-root", str(folder), "--output-dir", str(output)], cwd=ROOT, capture_output=True, text=True)
             self.assertEqual(2, branch_rejected.returncode)
-            self.assertIn("every critical graph edge", branch_rejected.stderr)
+            self.assertIn("differs from the Council ANCHOR", branch_rejected.stderr)
 
             write_delivery_support(folder, base_sha, commit_sha)
             invalid = delivery_manifest(commit_sha)
@@ -490,7 +494,7 @@ class CouncilPipelineTest(unittest.TestCase):
                 )
                 self.assertEqual(0, process.returncode, process.stdout + process.stderr)
 
-            events = complex_events(base_sha=base_sha)
+            events = complex_events(base_sha=base_sha, graph_evidence=".harness/runs/agent-swarm/real-flow/council-events.jsonl")
             for item in events[:3]:
                 transition(item)
             (root / "slice.txt").write_text("slice\n")

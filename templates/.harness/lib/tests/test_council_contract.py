@@ -22,6 +22,20 @@ def init_committed_repo(root):
     subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
     subprocess.run(["git", "commit", "-q", "--allow-empty", "-m", "initial"], cwd=root, check=True)
 
+
+def write_execution_graph(root):
+    path = root / "execution-graph.json"
+    path.write_text(json.dumps({
+        "objective": "test delivery", "start_node": "request", "goal_node": "done",
+        "nodes": ["request", "done"],
+        "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True,
+                   "phase": "test", "item": "test", "tests": {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]},
+                   "evidence": ["execution-graph.json"]}],
+    }), encoding="utf-8")
+    subprocess.run(["git", "add", path.name], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "anchor execution graph"], cwd=root, check=True)
+    return path
+
 SKILL_CONTRACTS = {
     "adversarial-review": ("CRITICAL_BLOCK", "HIGH_FIX_NOW", "DEFER_RUN"),
     "clarification-plan": ("CRITICAL_BLOCK", "HIGH_FIX_NOW", "DEFER_RUN"),
@@ -37,6 +51,13 @@ SKILL_CONTRACTS = {
 
 
 class CouncilContractTest(unittest.TestCase):
+    def test_writable_session_requires_an_execution_graph(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            init_committed_repo(root)
+            with self.assertRaisesRegex(RuntimeError, "execution-graph"):
+                start_session(root, "missing-graph", "inline")
+
     def test_installed_contract_is_valid(self):
         report = validate_contract(ROOT)
         self.assertEqual("PASS", report["status"])
@@ -144,7 +165,7 @@ class CouncilContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             init_committed_repo(root)
-            state_path = start_session(root, "lifecycle", "inline")
+            state_path = start_session(root, "lifecycle", "inline", execution_graph=write_execution_graph(root))
             pointer = root / ".harness/council-active"
             self.assertEqual(state_path, Path(pointer.read_text().strip()))
             self.assertTrue((root / ".git/hooks/pre-push").is_file())
@@ -158,7 +179,7 @@ class CouncilContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             init_committed_repo(root)
-            state_path = start_session(root, "finished", "inline")
+            state_path = start_session(root, "finished", "inline", execution_graph=write_execution_graph(root))
             state = json.loads(state_path.read_text(encoding="utf-8"))
             state["stage"] = "DELIVERY"
             state_path.write_text(json.dumps(state), encoding="utf-8")
@@ -196,7 +217,7 @@ class CouncilContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             init_committed_repo(root)
-            state_path = start_session(root, "tampered", "inline")
+            state_path = start_session(root, "tampered", "inline", execution_graph=write_execution_graph(root))
             state = json.loads(state_path.read_text(encoding="utf-8"))
             state["stage"] = "DELIVERY"
             state["delivery_verified"] = True
