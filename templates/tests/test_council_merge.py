@@ -95,6 +95,9 @@ class CouncilMergeRegressionTest(unittest.TestCase):
         self.assertNotIn("council_session.py transition", council)
         self.assertIn("In `READ_ONLY`, never create, update, archive or delete files", council)
         self.assertIn("In `READ_ONLY`, never clear, move or change the anchor", council)
+        self.assertIn("`APLICAR` with reason", council)
+        self.assertIn("record `APLICAR`", council)
+        self.assertNotIn("record `APPLY`", council)
 
     def test_incremental_execution_and_remote_authority_contract(self):
         council = read(COUNCIL)

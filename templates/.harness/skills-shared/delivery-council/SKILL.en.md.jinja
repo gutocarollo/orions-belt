@@ -115,7 +115,7 @@ Materialize the plan as a START→GOAL graph: journeys, nodes, edges, dependenci
 | `VALIDATION` | every functional/quality/regression ID bound to a successful executed command | `LOCAL-COMMIT` |
 | `LOCAL-COMMIT` | existing local SHA containing exactly those files | `ITEM-PLAN` or `QUALITY` |
 | `QUALITY` | zero `Critical` and zero `Required` | `SIMPLIFICATION` or fix `ITEM-PLAN` |
-| `SIMPLIFICATION` | `APPLY` with reason or evidence-based N/A | new `ITEM-PLAN` to apply, or `ADVERSARIAL` |
+| `SIMPLIFICATION` | `APLICAR` with reason or evidence-based N/A | new `ITEM-PLAN` to apply, or `ADVERSARIAL` |
 | `ADVERSARIAL` | zero Blocking/High and satisfied sentinel | `DELIVERY` or fix `ITEM-PLAN` |
 | `DELIVERY` | SHA-bound manifest and replayable evidence | terminal |
 | `BLOCKED` | named missing decision/access/evidence | terminal |
@@ -151,7 +151,7 @@ FIX-CONSUMED:
 - validation-run: ...
 ```
 
-Then apply `code-simplification`; if it proposes a code change, record `APPLY` and return through
+Then apply `code-simplification`; if it proposes a code change, record `APLICAR` and return through
 `planning-and-task-breakdown`, `incremental-implementation`, validation, a fresh local commit,
 quality review and simplification again. An older commit cannot prove the simplification. Finally dispatch a `{{ project_name }}-adversarial-reviewer`
 subagent in isolated context. Never self-review inline.
