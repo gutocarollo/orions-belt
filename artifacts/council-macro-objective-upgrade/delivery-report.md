@@ -39,8 +39,8 @@ Both `.claude` and `.agents` renders include the same operating contract for:
 
 ## Deterministic evidence
 
-Fresh rendered installation at receipt commit `15a3d64`, covering code through
-`0546f4b`:
+The latest full rendered installation passed at code commit `fa9cf4b`; fresh
+hashed receipts are regenerated after this simplification evidence slice.
 
 - objective control: 11/11 PASS;
 - runtime: 20/20 PASS;
@@ -80,8 +80,8 @@ quality, simplification and adversarial rechecks are required before E6.
 
 ## Simplification and line necessity
 
-Across `e373cce..0546f4b`, executable code and Jinja templates contain 1,720
-added lines. Every added line is covered by 66 semantic portions in
+Across `e373cce..fa9cf4b`, executable code and Jinja templates contain 1,717
+added lines. Every added line is covered by 74 semantic portions in
 `code-necessity.json`; the largest portion is 120 lines. Each portion carries a repository path, bounded source
 range, objective, inputs, outputs and a command that the validator resolves at
 the bound SHA and executes. Four distinct nontrivial proof commands passed.
@@ -117,6 +117,7 @@ Orion’s Belt commits, oldest to newest:
 - `37c6b12` — graph-bound blockers and phase plans;
 - `71cc8d1` — executable Jinja provenance;
 - `0546f4b` — structured impact evidence and terminal review semantics.
+- `fa9cf4b` — reuse of the validated edge map without duplicate guards.
 
 Tengwar remains local-only for this task. The Orion’s Belt branch is the authorized publication target. No merge to remote `main` is authorized.
 

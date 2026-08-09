@@ -1,6 +1,6 @@
 {
   "base_sha": "e373cce492df347ad4a3a2da94e1f6bacf19fad9",
-  "code_head_sha": "0546f4b7f6dd11b4ae43731bc586ede0eae204d3",
+  "code_head_sha": "fa9cf4b6ee8caa00d22204ad66617cb0c891a380",
   "entries": [
     {"sha":"0d2c42cfbf74a75a9859e827fdaa60261d513413","edge_ids":["E1","E2"],"subject":"feat(council): enforce macro-objective delivery"},
     {"sha":"d35621598df2ff12cc50d9125714de2e5328184c","edge_ids":["E2","E4"],"subject":"feat(council): render objective-focused operating skills"},
@@ -21,6 +21,7 @@
     {"sha":"979c82598c9c1b80eed06d1ff8b352a8ec0363d3","edge_ids":["E4"],"subject":"test(council): initialize parity ledger lifecycle"},
     {"sha":"37c6b127f3ed9bb9d8dcec2a579f611d435a8674","edge_ids":["E1","E2","E3"],"subject":"fix(council): bind blockers and plans to graph"},
     {"sha":"71cc8d117eca10b196ec41dc7f120a6d6a458d46","edge_ids":["E3","E4"],"subject":"fix(council): track executable jinja provenance"},
-    {"sha":"0546f4b7f6dd11b4ae43731bc586ede0eae204d3","edge_ids":["E1","E3","E5"],"subject":"fix(council): require semantic review evidence"}
+    {"sha":"0546f4b7f6dd11b4ae43731bc586ede0eae204d3","edge_ids":["E1","E3","E5"],"subject":"fix(council): require semantic review evidence"},
+    {"sha":"fa9cf4b6ee8caa00d22204ad66617cb0c891a380","edge_ids":["E2","E3"],"subject":"refactor(council): reuse validated graph bindings"}
   ]
 }
