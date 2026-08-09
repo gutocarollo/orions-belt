@@ -39,7 +39,8 @@ Both `.claude` and `.agents` renders include the same operating contract for:
 
 ## Deterministic evidence
 
-Fresh rendered installation covering code through `0546f4b`:
+Fresh rendered installation at receipt commit `15a3d64`, covering code through
+`0546f4b`:
 
 - objective control: 11/11 PASS;
 - runtime: 20/20 PASS;
