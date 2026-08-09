@@ -54,7 +54,7 @@ def _code_commits(repo_root: Path, base_sha: str, head_sha: str) -> list[str]:
         if any(
             Path(name).suffix.lower() in CODE_SUFFIXES
             for name in subprocess.check_output(
-                ["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", sha],
+                ["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "-m", sha],
                 cwd=repo_root, text=True,
             ).splitlines()
         )

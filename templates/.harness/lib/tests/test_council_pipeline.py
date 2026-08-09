@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from engine.integration.council_pipeline import IntegrationError, integrate_events  # noqa: E402
+from engine.integration.council_pipeline import IntegrationError, _code_commits, integrate_events  # noqa: E402
 
 TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
 COMMANDS = [
@@ -102,6 +102,27 @@ class CouncilPipelineTest(unittest.TestCase):
             )
             self.assertEqual(2, process.returncode)
             self.assertIn("unrecorded code commit", process.stderr)
+
+    def test_code_commit_detection_includes_merge_resolutions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=folder, check=True)
+            (folder / "value.py").write_text("value = 0\n")
+            base_sha = commit_all(folder, "baseline")
+            main_branch = subprocess.check_output(["git", "branch", "--show-current"], cwd=folder, text=True).strip()
+            subprocess.run(["git", "checkout", "-q", "-b", "side"], cwd=folder, check=True)
+            (folder / "value.py").write_text("value = 1\n")
+            commit_all(folder, "side code")
+            subprocess.run(["git", "checkout", "-q", main_branch], cwd=folder, check=True)
+            (folder / "value.py").write_text("value = 2\n")
+            commit_all(folder, "main code")
+            conflict = subprocess.run(["git", "merge", "side", "-m", "merge resolution"], cwd=folder, capture_output=True, text=True)
+            self.assertNotEqual(0, conflict.returncode)
+            (folder / "value.py").write_text("value = 3\n")
+            merge_sha = commit_all(folder, "merge resolution")
+            self.assertIn(merge_sha, _code_commits(folder, base_sha, merge_sha))
 
     def test_delivery_reexecutes_declared_validation_commands(self):
         with tempfile.TemporaryDirectory() as directory:
