@@ -15,21 +15,13 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / ".harness" / "lib"))
 from council_runtime import TransitionError, apply_transition  # noqa: E402
+from council_session import worktree_state  # noqa: E402
 from mini_schema_validate import validate_instance  # noqa: E402
 from objective_control import CODE_SUFFIXES, ObjectiveControlError, validate_execution_graph, verify_code_necessity  # noqa: E402
 
 
 class IntegrationError(ValueError):
     pass
-
-
-def _worktree_state(repo_root: Path) -> list[str]:
-    command = [
-        "git", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".",
-        ":(exclude).harness/runs/**", ":(exclude).harness/council-active",
-        ":(exclude).harness/council-active.required-next",
-    ]
-    return sorted(item for item in subprocess.check_output(command, cwd=repo_root, text=True).split("\0") if item)
 
 
 def _load_json(repo_root: Path, relative: str, label: str) -> dict[str, Any]:
@@ -43,6 +35,14 @@ def _load_json(repo_root: Path, relative: str, label: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise IntegrationError(f"{label} must be a JSON object")
     return value
+
+
+def _require_repository_file(repo_root: Path, reference: str, label: str) -> Path:
+    relative = reference.partition("#")[0]
+    path = (repo_root / relative).resolve()
+    if not relative or repo_root.resolve() not in path.parents or not path.is_file():
+        raise IntegrationError(f"{label} is missing or escapes repository: {reference}")
+    return path
 
 
 def _code_commits(repo_root: Path, base_sha: str, head_sha: str) -> list[str]:
@@ -134,9 +134,12 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
         actual_hashes = {path: hashlib.sha256(subprocess.check_output(["git", "show", f"{sha}:{path}"], cwd=repo_root)).hexdigest() for path in actual_files}
         if actual_hashes != expected_hashes:
             raise IntegrationError(f"commit content differs from validated file hashes: {sha}")
-    if _worktree_state(repo_root) != sorted(state.get("worktree_baseline", [])):
+    baseline = sorted(state.get("worktree_baseline", []))
+    if worktree_state(repo_root) != baseline:
         raise IntegrationError("repository has uncommitted drift relative to the Council ANCHOR")
     _replay_validation_commands(repo_root, validations)
+    if worktree_state(repo_root) != baseline:
+        raise IntegrationError("validation replay mutated the repository relative to the Council ANCHOR")
     delivery = next((item["payload"] for item in reversed(state["history"]) if item["event"] == "DELIVERY"), None)
     if state.get("mutation_mode") == "WORKSPACE_WRITE":
         if not delivery:
@@ -164,6 +167,9 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
             verify_code_necessity(repo_root, report)
         except ObjectiveControlError as exc:
             raise IntegrationError(str(exc)) from exc
+        for edge in graph["edges"]:
+            for evidence in edge["evidence"]:
+                _require_repository_file(repo_root, evidence, "execution graph evidence")
         if graph["objective"] != state.get("objective"):
             raise IntegrationError("execution graph objective differs from the Council macro objective")
         if report["base_sha"] != state.get("base_sha"):
@@ -200,9 +206,7 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
                 raise IntegrationError(f"acceptance test_ids differ from validation or graph edge: {commit}")
             covered_edges.add(item["edge_id"])
             for evidence in item["evidence"]:
-                evidence_path = (repo_root / evidence).resolve()
-                if repo_root.resolve() not in evidence_path.parents or not evidence_path.is_file():
-                    raise IntegrationError(f"acceptance evidence is missing or escapes repository: {evidence}")
+                _require_repository_file(repo_root, evidence, "acceptance evidence")
         if not set(graph_result["critical_edges"]) <= covered_edges:
             raise IntegrationError("delivery acceptance does not cover every critical graph edge")
 

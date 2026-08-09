@@ -275,6 +275,55 @@ class CouncilPipelineTest(unittest.TestCase):
             self.assertEqual(2, process.returncode)
             self.assertIn("validation command failed during delivery replay", process.stderr)
 
+    def test_delivery_rejects_validation_replay_side_effect(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=folder, check=True)
+            (folder / "baseline.txt").write_text("baseline\n")
+            base_sha = commit_all(folder, "baseline")
+            (folder / "slice.txt").write_text("slice\n")
+            slice_sha = commit_all(folder, "slice")
+            write_delivery_support(folder, base_sha, slice_sha)
+            events = complex_events(slice_sha, base_sha=base_sha)
+            events[4]["payload"]["commands"][0]["command"] = "touch replay-side-effect"
+            manifest = delivery_manifest(slice_sha)
+            manifest["acceptance"][0]["commands"][0] = "touch replay-side-effect"
+            (folder / "delivery.json").write_text(json.dumps(manifest))
+            ledger = folder / "events.jsonl"
+            ledger.write_text("".join(json.dumps(item) + "\n" for item in events), encoding="utf-8")
+            final_sha = commit_all(folder, "side-effecting validation proof")
+            process = subprocess.run(
+                [sys.executable, "engine/integration/council_pipeline.py", str(ledger), "--git-sha", final_sha, "--repo-root", str(folder), "--output-dir", str(folder / "proof")],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(2, process.returncode)
+            self.assertIn("validation replay mutated the repository", process.stderr)
+            self.assertTrue((folder / "replay-side-effect").exists())
+
+    def test_delivery_rejects_missing_execution_graph_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=folder, check=True)
+            (folder / "baseline.txt").write_text("baseline\n")
+            base_sha = commit_all(folder, "baseline")
+            (folder / "slice.txt").write_text("slice\n")
+            slice_sha = commit_all(folder, "slice")
+            write_delivery_support(folder, base_sha, slice_sha, evidence="missing-proof.json")
+            (folder / "delivery.json").write_text(json.dumps(delivery_manifest(slice_sha)))
+            ledger = folder / "events.jsonl"
+            ledger.write_text("".join(json.dumps(item) + "\n" for item in complex_events(slice_sha, base_sha=base_sha)), encoding="utf-8")
+            final_sha = commit_all(folder, "missing graph evidence")
+            process = subprocess.run(
+                [sys.executable, "engine/integration/council_pipeline.py", str(ledger), "--git-sha", final_sha, "--repo-root", str(folder), "--output-dir", str(folder / "proof")],
+                cwd=ROOT, capture_output=True, text=True,
+            )
+            self.assertEqual(2, process.returncode)
+            self.assertIn("execution graph evidence is missing", process.stderr)
+
     def test_cli_materializes_state_and_evidence(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
