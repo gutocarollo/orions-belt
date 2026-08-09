@@ -267,6 +267,18 @@ class CouncilPipelineTest(unittest.TestCase):
             merge_sha = commit_all(folder, "merge resolution")
             self.assertIn(merge_sha, _code_commits(folder, base_sha, merge_sha))
 
+    def test_code_commit_detection_includes_jinja_templates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=folder, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=folder, check=True)
+            (folder / "baseline.txt").write_text("baseline\n")
+            base_sha = commit_all(folder, "baseline")
+            (folder / "SKILL.md.jinja").write_text("generated contract\n")
+            template_sha = commit_all(folder, "template source")
+            self.assertEqual([template_sha], _code_commits(folder, base_sha, template_sha))
+
     def test_delivery_reexecutes_declared_validation_commands(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)

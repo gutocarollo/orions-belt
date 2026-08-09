@@ -20,6 +20,7 @@ CODE_SUFFIXES = {
     ".py", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".sh", ".bash",
     ".zsh", ".go", ".rs", ".java", ".kt", ".rb", ".php", ".c", ".h",
     ".cc", ".cpp", ".cs", ".swift", ".scala", ".vue", ".svelte",
+    ".jinja",
 }
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 MAX_PORTION_LINES = 120

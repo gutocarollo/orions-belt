@@ -83,6 +83,39 @@ class DeferredRunTest(unittest.TestCase):
 
 
 class CodeNecessityTest(unittest.TestCase):
+    def test_jinja_template_lines_are_code_and_make_receipts_stale(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            (root / "baseline.txt").write_text("baseline\n", encoding="utf-8")
+            subprocess.run(["git", "add", "baseline.txt"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "baseline"], cwd=root, check=True)
+            base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            template = root / "SKILL.md.jinja"
+            template.write_text("generated contract\n", encoding="utf-8")
+            subprocess.run(["git", "add", template.name], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "template"], cwd=root, check=True)
+            head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            report = {
+                "base_sha": base,
+                "head_sha": head,
+                "portions": [{
+                    "path": template.name, "start_line": 1, "end_line": 1,
+                    "purpose": "render the generated contract", "objective": "cover executable template source",
+                    "inputs": ["Copier render"], "outputs": ["generated skill"],
+                    "evidence": [{"path": template.name, "line": 1, "contains": "generated contract", "command": f"test -s {template.name}"}],
+                    "simpler_alternative": "hardcode generated files", "necessity": "one source must drive both runtimes",
+                }],
+            }
+            self.assertEqual(1, verify_code_necessity(root, report)["covered_lines"])
+            template.write_text("generated contract\nnew gate\n", encoding="utf-8")
+            subprocess.run(["git", "add", template.name], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "later template drift"], cwd=root, check=True)
+            with self.assertRaisesRegex(ObjectiveControlError, "stale"):
+                verify_code_necessity(root, report)
+
     def test_every_added_code_line_must_belong_to_a_justified_portion(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
