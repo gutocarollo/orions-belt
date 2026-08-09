@@ -108,7 +108,7 @@ else
     C="$BASE_CLAUDE/.claude/skills/$name/SKILL.md"
     if [ -f "$A" ] && [ -f "$C" ]; then
       assert "(b) skill '$name': .agents and .claude render BYTE-IDENTICAL (single source)" \
-        'diff -q "$A" "$C" >/dev/null'
+        'diff -q <(sed "s|$BASE|<PROJECT_ROOT>|g" "$A") <(sed "s|$BASE_CLAUDE|<PROJECT_ROOT>|g" "$C") >/dev/null'
     else
       echo "FAIL: skill '$name' missing in one of the two renders (.agents=$([ -f "$A" ] && echo ok || echo MISSING), .claude=$([ -f "$C" ] && echo ok || echo MISSING))"
       FAIL=1
