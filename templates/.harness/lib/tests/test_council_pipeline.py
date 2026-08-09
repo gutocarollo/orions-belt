@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
-from engine.integration.council_pipeline import IntegrationError, _code_commits, _validate_graph_bindings, integrate_events  # noqa: E402
+from engine.integration.council_pipeline import IntegrationError, _code_commits, _validate_graph_bindings, _validate_semantic_evidence, integrate_events  # noqa: E402
 
 TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
 COMMANDS = [
@@ -64,6 +64,43 @@ def commit_files(folder, message, *files):
 
 
 class CouncilPipelineTest(unittest.TestCase):
+    def test_review_edge_requires_terminal_satisfied_verdicts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            review = root / "adversarial.md"
+            review.write_text("ADVERSARIAL-VERIFICATION: CORRIGIR\n", encoding="utf-8")
+            graph = {
+                "nodes": ["review", "done"],
+                "edges": [{
+                    "edge_id": "E5", "from": "review", "to": "done",
+                    "critical": True, "phase": "review", "item": "close reviews",
+                    "tests": TESTS, "evidence": [review.name],
+                }],
+            }
+            with self.assertRaisesRegex(IntegrationError, "terminal review evidence"):
+                _validate_semantic_evidence(root, graph, [])
+            quality = root / "quality.md"
+            simplification = root / "simplification.md"
+            adversarial = root / "adversarial-final.md"
+            quality.write_text("QUALITY-REVIEW: SATISFEITO\n", encoding="utf-8")
+            simplification.write_text("SIMPLIFICATION: NAO_NECESSARIA\n", encoding="utf-8")
+            adversarial.write_text("ADVERSARIAL-VERIFICATION: SATISFEITO\n", encoding="utf-8")
+            graph["edges"][0]["evidence"].extend([quality.name, simplification.name, adversarial.name])
+            _validate_semantic_evidence(root, graph, [])
+
+    def test_real_impact_marker_must_resolve_in_repository(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.py"
+            source.write_text("actual marker\n", encoding="utf-8")
+            impact = {
+                "evidence_status": "REAL",
+                "evidence": {"path": source.name, "line": 1, "contains": "fabricated marker"},
+            }
+            events = [{"event": "QUALITY", "payload": {"findings": [{"impact": impact}]}}]
+            with self.assertRaisesRegex(IntegrationError, "impact evidence marker"):
+                _validate_semantic_evidence(root, {"edges": []}, events)
+
     def test_graph_binding_rejects_fabricated_phase_nodes(self):
         events = complex_events()
         graph = {
@@ -124,7 +161,7 @@ class CouncilPipelineTest(unittest.TestCase):
             impact = {
                 "id": "D-PLAN",
                 "evidence_status": "UNVERIFIED",
-                "evidence": "not on the current critical path",
+                "evidence": {"path": "RUN.md", "line": 1, "contains": "RUN"},
                 "objective_impact": 1,
                 "journey_reachability": 1,
                 "acceptance_impact": 1,

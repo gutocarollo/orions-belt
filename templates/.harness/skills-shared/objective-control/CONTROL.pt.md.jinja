@@ -6,4 +6,6 @@ Antes de perguntar, sugerir mudança, criar finding ou impor gate, declare `NORT
 - `HIGH_FIX_NOW`: evidência `REAL`, fase atual, sem workaround e score >=70.
 - `DEFER_RUN`: qualquer outro caso; persistir em `RUN.md`, seção `## Pendências não bloqueantes`, e continuar.
 
+Evidência `REAL` nunca é prosa livre: o assessment usa `evidence: {path, line, contains}` com caminho relativo ao repositório. O runtime rejeita locator incompleto; a entrega resolve a linha no arquivo e rejeita marker ausente. `on_critical_path` e `affects_current_phase` devem coincidir com o grafo e a aresta ativa, não com a opinião do reviewer.
+
 `BLOQUEADO` exige `CRITICAL_BLOCK` e dependência externa nominal (autoridade, acesso ou fato). Questão corrigível retorna `CORRIGIR`. Para desligar ou adiar restrição excessiva, apresente dados, impacto e recomendação, e espere aprovação humana explícita.

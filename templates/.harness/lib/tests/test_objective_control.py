@@ -11,7 +11,7 @@ from objective_control import ObjectiveControlError, assess_impact, record_defer
 
 
 def impact(**overrides):
-    value = {"id": "F-1", "evidence_status": "REAL", "evidence": "test evidence", "objective_impact": 4, "journey_reachability": 4, "acceptance_impact": 4, "irreversibility": 3, "dependency_urgency": 4, "on_critical_path": True, "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["start", "goal"]}
+    value = {"id": "F-1", "evidence_status": "REAL", "evidence": {"path": "proof.txt", "line": 1, "contains": "test evidence"}, "objective_impact": 4, "journey_reachability": 4, "acceptance_impact": 4, "irreversibility": 3, "dependency_urgency": 4, "on_critical_path": True, "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["start", "goal"]}
     value.update(overrides)
     return value
 
@@ -26,6 +26,10 @@ def graph():
 
 
 class ObjectiveImpactTest(unittest.TestCase):
+    def test_real_impact_rejects_unresolved_prose_evidence(self):
+        with self.assertRaisesRegex(ObjectiveControlError, "repository locator"):
+            assess_impact(impact(evidence="asserted prose only"))
+
     def test_disposition_is_computed_from_evidence_path_and_weighted_score(self):
         critical = assess_impact(impact())
         high = assess_impact(impact(objective_impact=3, journey_reachability=3, acceptance_impact=3, irreversibility=3, dependency_urgency=3))

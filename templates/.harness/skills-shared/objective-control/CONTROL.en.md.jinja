@@ -6,4 +6,6 @@ Before asking, suggesting a change, creating a finding, or imposing a gate, stat
 - `HIGH_FIX_NOW`: `REAL` evidence, current phase, no workaround, score >=70.
 - `DEFER_RUN`: every other case; persist it in `RUN.md` under the canonical heading `## Pendências não bloqueantes` and continue.
 
+`REAL` evidence is never free-form prose: the assessment uses `evidence: {path, line, contains}` with a repository-relative path. Runtime rejects an incomplete locator; delivery resolves the exact line and rejects an absent marker. `on_critical_path` and `affects_current_phase` must match the graph and active edge, not reviewer opinion.
+
 `BLOQUEADO` requires a `CRITICAL_BLOCK` plus a named external dependency (authority, access, or fact). Agent-fixable issues return `CORRIGIR`. To disable or defer an excessive restriction, present data, impact, and a recommendation, then wait for explicit human approval.

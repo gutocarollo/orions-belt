@@ -31,7 +31,7 @@ def validation(files, command="test"):
 
 def impact(finding_id, disposition="HIGH_FIX_NOW"):
     rating = 4 if disposition == "CRITICAL_BLOCK" else 3
-    return {"id": finding_id, "evidence_status": "REAL", "evidence": "test evidence", "objective_impact": rating, "journey_reachability": rating, "acceptance_impact": rating, "irreversibility": rating, "dependency_urgency": rating, "on_critical_path": disposition == "CRITICAL_BLOCK", "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["request", "done"], "score": rating * 25, "disposition": disposition}
+    return {"id": finding_id, "evidence_status": "REAL", "evidence": {"path": "proof.txt", "line": 1, "contains": "test evidence"}, "objective_impact": rating, "journey_reachability": rating, "acceptance_impact": rating, "irreversibility": rating, "dependency_urgency": rating, "on_critical_path": disposition == "CRITICAL_BLOCK", "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["request", "done"], "score": rating * 25, "disposition": disposition}
 
 
 def finding(finding_id="R1", disposition="HIGH_FIX_NOW"):

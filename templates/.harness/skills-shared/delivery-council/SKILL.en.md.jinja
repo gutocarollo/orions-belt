@@ -158,6 +158,8 @@ subagent in isolated context. Never self-review inline.
 
 The final code-necessity report covers every added code line by semantic portion: path/range, purpose, objective, inputs, outputs, real evidence, simpler alternative, and necessity. The final pipeline proves `base_sha != head_sha`, binds the base to ANCHOR, covers every critical edge and every slice commit, rejects new uncommitted drift, and accepts test IDs only through commands the ledger actually executed.
 
+At delivery, the review edge closes only when its evidence files contain the exact terminal lines `QUALITY-REVIEW: SATISFEITO`, `SIMPLIFICATION: NAO_NECESSARIA`, and `ADVERSARIAL-VERIFICATION: SATISFEITO`. A historical `CORRIGIR` round may remain as history but never satisfies this gate.
+
 Limit: maximum 2 rounds for plan review.
 Limit: maximum 3 rounds for execution adversarial review.
 

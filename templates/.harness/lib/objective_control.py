@@ -29,9 +29,17 @@ NO_OP_EVIDENCE_COMMANDS = {":", "true", "/bin/true", "/usr/bin/true"}
 
 def assess_impact(value: dict[str, Any]) -> dict[str, Any]:
     """Calculate the only severity disposition accepted by Council."""
-    for field in ("id", "evidence_status", "evidence", "graph_nodes"):
+    for field in ("id", "evidence_status", "graph_nodes"):
         if not value.get(field):
             raise ObjectiveControlError(f"impact assessment requires {field}")
+    evidence = value.get("evidence")
+    if not isinstance(evidence, dict) or any(not evidence.get(field) for field in ("path", "line", "contains")):
+        raise ObjectiveControlError("impact assessment requires a concrete repository locator in evidence")
+    evidence_path = Path(str(evidence["path"]))
+    if evidence_path.is_absolute() or ".." in evidence_path.parts:
+        raise ObjectiveControlError("impact evidence path must be repository-relative")
+    if not isinstance(evidence["line"], int) or isinstance(evidence["line"], bool) or evidence["line"] < 1:
+        raise ObjectiveControlError("impact evidence line must be a positive integer")
     if value["evidence_status"] not in {"REAL", "UNVERIFIED", "REFUTED"}:
         raise ObjectiveControlError("evidence_status must be REAL, UNVERIFIED or REFUTED")
     for field in ("on_critical_path", "affects_current_phase", "validated_workaround"):
@@ -147,7 +155,7 @@ def record_deferred(run_path: Path, assessment: dict[str, Any]) -> bool:
         return False
     entry = (
         f"- `{decision['id']}` — DEFER_RUN score {decision['score']:.2f}; "
-        f"nodes={','.join(decision['graph_nodes'])}; evidence={decision['evidence']}; "
+        f"nodes={','.join(decision['graph_nodes'])}; evidence={decision['evidence']['path']}:{decision['evidence']['line']}; "
         f"reason={assessment.get('reason', 'outside the current critical path')}; "
         f"review_after={assessment.get('review_after', 'next applicable phase')}."
     )

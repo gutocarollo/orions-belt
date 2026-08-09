@@ -80,6 +80,42 @@ def _validate_graph_bindings(graph: dict[str, Any], events: list[dict[str, Any]]
                     raise IntegrationError("review affects_current_phase differs from the active graph edge")
 
 
+def _validate_semantic_evidence(repo_root: Path, graph: dict[str, Any], events: list[dict[str, Any]]) -> None:
+    """Resolve REAL finding markers and require terminal review verdicts."""
+    for item in events:
+        if item["event"] not in {"QUALITY", "ADVERSARIAL"}:
+            continue
+        for finding in item["payload"].get("findings", []) + item["payload"].get("deferred_findings", []):
+            impact = finding["impact"]
+            if impact.get("evidence_status") != "REAL":
+                continue
+            evidence = impact.get("evidence", {})
+            path = _require_repository_file(repo_root, str(evidence.get("path", "")), "impact evidence")
+            lines = path.read_text(encoding="utf-8").splitlines()
+            line = evidence.get("line")
+            if not isinstance(line, int) or isinstance(line, bool) or not 1 <= line <= len(lines):
+                raise IntegrationError(f"impact evidence line is outside repository file: {path}")
+            if str(evidence.get("contains", "")) not in lines[line - 1]:
+                raise IntegrationError(f"impact evidence marker is absent at {path}:{line}")
+
+    review_edges = [edge for edge in graph["edges"] if edge["phase"] == "review"]
+    if not review_edges:
+        return
+    verdict_lines: set[str] = set()
+    for edge in review_edges:
+        for reference in edge["evidence"]:
+            path = _require_repository_file(repo_root, reference, "review evidence")
+            if path.suffix == ".md":
+                verdict_lines.update(line.strip() for line in path.read_text(encoding="utf-8").splitlines())
+    required = {
+        "QUALITY-REVIEW: SATISFEITO",
+        "SIMPLIFICATION: NAO_NECESSARIA",
+        "ADVERSARIAL-VERIFICATION: SATISFEITO",
+    }
+    if not required <= verdict_lines:
+        raise IntegrationError("review edge lacks exact terminal review evidence: " + ", ".join(sorted(required - verdict_lines)))
+
+
 def _code_commits(repo_root: Path, base_sha: str, head_sha: str) -> list[str]:
     commits = subprocess.check_output(
         ["git", "rev-list", "--reverse", f"{base_sha}..{head_sha}"], cwd=repo_root, text=True,
@@ -206,6 +242,7 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
         for edge in graph["edges"]:
             for evidence in edge["evidence"]:
                 _require_repository_file(repo_root, evidence, "execution graph evidence")
+        _validate_semantic_evidence(repo_root, graph, state["history"])
         if graph["objective"] != state.get("objective"):
             raise IntegrationError("execution graph objective differs from the Council macro objective")
         if report["base_sha"] != state.get("base_sha"):
