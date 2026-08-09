@@ -45,7 +45,7 @@ def _require_repository_file(repo_root: Path, reference: str, label: str) -> Pat
     return path
 
 
-def _validate_graph_bindings(graph: dict[str, Any], events: list[dict[str, Any]]) -> None:
+def _validate_graph_bindings(graph: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Bind phase plans and review impact flags to the delivered graph."""
     edges = {edge["edge_id"]: edge for edge in graph["edges"]}
     graph_nodes = set(graph["nodes"])
@@ -78,6 +78,7 @@ def _validate_graph_bindings(graph: dict[str, Any], events: list[dict[str, Any]]
                     raise IntegrationError("review on_critical_path differs from the execution graph")
                 if impact["affects_current_phase"] is not bool(assessed_nodes & current_nodes):
                     raise IntegrationError("review affects_current_phase differs from the active graph edge")
+    return edges
 
 
 def _validate_semantic_evidence(repo_root: Path, graph: dict[str, Any], events: list[dict[str, Any]]) -> None:
@@ -235,7 +236,7 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
                 raise IntegrationError(f"{label} schema violation: " + "; ".join(value_errors))
         try:
             graph_result = validate_execution_graph(graph)
-            _validate_graph_bindings(graph, state["history"])
+            edges = _validate_graph_bindings(graph, state["history"])
             verify_code_necessity(repo_root, report)
         except ObjectiveControlError as exc:
             raise IntegrationError(str(exc)) from exc
@@ -243,8 +244,6 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
             for evidence in edge["evidence"]:
                 _require_repository_file(repo_root, evidence, "execution graph evidence")
         _validate_semantic_evidence(repo_root, graph, state["history"])
-        if graph["objective"] != state.get("objective"):
-            raise IntegrationError("execution graph objective differs from the Council macro objective")
         if report["base_sha"] != state.get("base_sha"):
             raise IntegrationError("code necessity base_sha differs from the Council ANCHOR")
         unrecorded_code = [sha for sha in _code_commits(repo_root, report["base_sha"], report["head_sha"]) if sha not in state.get("commits", [])]
@@ -253,10 +252,6 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
         for sha in state.get("commits", []):
             if subprocess.run(["git", "merge-base", "--is-ancestor", sha, report["head_sha"]], cwd=repo_root).returncode:
                 raise IntegrationError(f"code necessity report does not cover local commit: {sha}")
-        edges = {edge["edge_id"]: edge for edge in graph["edges"]}
-        planned_edges = {item["payload"]["edge_id"] for item in state["history"] if item["event"] == "PHASE-PLAN"}
-        if not planned_edges <= edges.keys():
-            raise IntegrationError("execution graph omits a planned phase edge")
         acceptance = manifest["acceptance"]
         if {item["commit"] for item in acceptance} != set(state.get("commits", [])) or manifest.get("commits") != state.get("commits"):
             raise IntegrationError("delivery manifest must map acceptance and every local commit")

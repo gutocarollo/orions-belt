@@ -118,6 +118,8 @@ class CouncilPipelineTest(unittest.TestCase):
         events[1]["payload"]["exit_node"] = "fabricated-exit"
         with self.assertRaisesRegex(IntegrationError, "PHASE-PLAN.*graph edge"):
             _validate_graph_bindings(graph, events)
+        events = complex_events()
+        self.assertEqual({"E1": graph["edges"][0]}, _validate_graph_bindings(graph, events))
 
     def test_direct_read_only_transition_writes_nothing(self):
         with tempfile.TemporaryDirectory() as directory:
