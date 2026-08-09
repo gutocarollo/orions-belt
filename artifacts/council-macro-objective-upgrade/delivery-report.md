@@ -39,15 +39,14 @@ Both `.claude` and `.agents` renders include the same operating contract for:
 
 ## Deterministic evidence
 
-Fresh rendered installation at receipt commit `9689049`, covering code through
-`979c825`:
+Fresh rendered installation covering code through `0546f4b`:
 
-- objective control: 9/9 PASS;
-- runtime: 19/19 PASS;
-- delivery pipeline: 15/15 PASS;
+- objective control: 11/11 PASS;
+- runtime: 20/20 PASS;
+- delivery pipeline: 19/19 PASS;
 - contract: 19/19 PASS;
 - evaluator and real scenarios: 3/3 PASS;
-- total rendered Python checks: 65/65 PASS;
+- total rendered Python checks: 72/72 PASS;
 - template merge checks: 10/10 PASS;
 - Claude-only, Codex-only and dual-runtime PT/EN render matrix: PASS;
 - `.claude`/`.agents` operating skills: byte-identical in dual-runtime render;
@@ -66,17 +65,23 @@ receipts and commit ledger stopped at `0f4b144`. After both were refreshed, the
 same thread matched the executable code history 16/16 and returned
 `QUALITY-REVIEW: SATISFEITO` with zero critical gaps.
 
-The independent adversarial round reproduced three critical and two high gaps:
+The first independent adversarial round reproduced three critical and two high gaps:
 invalid EN lifecycle commands, a direct read-only write bypass, lost planning
 deferrals, narrative-only edge evidence and unverified code-necessity prose.
-The operational and evidence corrections are captured in commits `f98a62a`
-through `0f4b144`; the same adversarial thread must re-verify them.
+Those corrections are captured in commits `f98a62a` through `0f4b144`.
+
+A later substitute adversarial reviewer reproduced three additional critical
+gaps after the original thread became operationally unresponsive: self-assigned
+graph impact, PHASE-PLAN nodes not bound to delivered edges, and evidence that
+accepted negative review files while excluding executable Jinja templates.
+Commits `37c6b12`, `71cc8d1` and `0546f4b` close those probes; independent
+quality, simplification and adversarial rechecks are required before E6.
 
 ## Simplification and line necessity
 
-Across `e373cce..979c825`, code files contain 1,301 added lines. Every added code
-line is covered by 36 semantic portions in `code-necessity.json`; the largest
-portion is 103 lines. Each portion carries a repository path, bounded source
+Across `e373cce..0546f4b`, executable code and Jinja templates contain 1,720
+added lines. Every added line is covered by 66 semantic portions in
+`code-necessity.json`; the largest portion is 120 lines. Each portion carries a repository path, bounded source
 range, objective, inputs, outputs and a command that the validator resolves at
 the bound SHA and executes. Four distinct nontrivial proof commands passed.
 
@@ -108,6 +113,9 @@ Orion’s Belt commits, oldest to newest:
 - `5e4c429` — post-replay repository integrity;
 - `febf660` — granular necessity receipts;
 - `979c825` — real Council lifecycle in the parity test.
+- `37c6b12` — graph-bound blockers and phase plans;
+- `71cc8d1` — executable Jinja provenance;
+- `0546f4b` — structured impact evidence and terminal review semantics.
 
 Tengwar remains local-only for this task. The Orion’s Belt branch is the authorized publication target. No merge to remote `main` is authorized.
 
