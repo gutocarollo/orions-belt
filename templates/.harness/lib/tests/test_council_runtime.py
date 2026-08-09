@@ -13,8 +13,28 @@ from council_runtime import (  # noqa: E402
 )
 
 
+TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
+
+
+def phase(name="p1"):
+    return {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": name, "items": ["i1"], "objective": "deliver", "edge_id": "E1", "entry_node": "request", "exit_node": "done", "tests": TESTS}
+
+
+def item(phase_name="p1", item_name="i1", **extra):
+    return {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": phase_name, "item": item_name, "slice": item_name, "validation": ["test"], "objective": "deliver", "edge_id": "E1", "deliverable": "working result", "tests": TESTS, **extra}
+
+
 def validation(files, command="test"):
-    return {"status": "PASS", "commands": [{"command": command, "exit_code": 0}], "checked_files": files, "executor": "agent_swarm_ledger", "validated_at": "2026-01-01T00:00:00Z", "file_hashes": [{"path": name, "sha256": "0" * 64} for name in files]}
+    return {"status": "PASS", "commands": [{"command": command, "exit_code": 0}], "checked_files": files, "executor": "agent_swarm_ledger", "validated_at": "2026-01-01T00:00:00Z", "file_hashes": [{"path": name, "sha256": "0" * 64} for name in files], "test_results": [{"id": test_id, "class": test_class, "status": "PASS"} for test_class, ids in TESTS.items() for test_id in ids]}
+
+
+def impact(finding_id, disposition="HIGH_FIX_NOW"):
+    rating = 4 if disposition == "CRITICAL_BLOCK" else 3
+    return {"id": finding_id, "evidence_status": "REAL", "evidence": "test evidence", "objective_impact": rating, "journey_reachability": rating, "acceptance_impact": rating, "irreversibility": rating, "dependency_urgency": rating, "on_critical_path": disposition == "CRITICAL_BLOCK", "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["request", "done"], "score": rating * 25, "disposition": disposition}
+
+
+def finding(finding_id="R1", disposition="HIGH_FIX_NOW"):
+    return {"gap": "required", "evidence": "test", "required_change": "fix", "impact": impact(finding_id, disposition)}
 
 
 class CouncilRuntimeTest(unittest.TestCase):
@@ -22,8 +42,8 @@ class CouncilRuntimeTest(unittest.TestCase):
         state = None
         events = [
             ("ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"}),
-            ("PHASE-PLAN", {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "items": ["i1"]}),
-            ("ITEM-PLAN", {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "item": "i1", "slice": "s1", "validation": ["test"]}),
+            ("PHASE-PLAN", phase()),
+            ("ITEM-PLAN", item()),
             ("SLICE", {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}),
             ("VALIDATION", validation(["slice.txt"], "python -m unittest")),
             ("LOCAL-COMMIT", {"sha": "a" * 40, "files": ["slice.txt"]}),
@@ -37,7 +57,7 @@ class CouncilRuntimeTest(unittest.TestCase):
         for kind, payload in [
             ("QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "11111111-1111-4111-8111-111111111111"}),
             ("SIMPLIFICATION", {"status": "NAO_NECESSARIA"}),
-            ("ADVERSARIAL", {"status": "SATISFEITO", "reviewer_id": "22222222-2222-4222-8222-222222222222"}),
+            ("ADVERSARIAL", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "22222222-2222-4222-8222-222222222222"}),
             ("DELIVERY", {"status": "SATISFEITO", "manifest": "delivery.json"}),
         ]:
             state = apply_transition(state, kind, payload)
@@ -52,8 +72,8 @@ class CouncilRuntimeTest(unittest.TestCase):
         state = None
         for kind, payload in [
             ("ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"}),
-            ("PHASE-PLAN", {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "items": ["i1"]}),
-            ("ITEM-PLAN", {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "item": "i1", "slice": "s1", "validation": ["test"]}),
+            ("PHASE-PLAN", phase()),
+            ("ITEM-PLAN", item()),
             ("SLICE", {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}),
         ]:
             state = apply_transition(state, kind, payload)
@@ -64,8 +84,8 @@ class CouncilRuntimeTest(unittest.TestCase):
         state = None
         for kind, payload in [
             ("ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"}),
-            ("PHASE-PLAN", {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "items": ["i1"]}),
-            ("ITEM-PLAN", {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "item": "i1", "slice": "s1", "validation": ["test"]}),
+            ("PHASE-PLAN", phase()),
+            ("ITEM-PLAN", item()),
             ("SLICE", {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}),
             ("VALIDATION", validation(["slice.txt"])),
         ]:
@@ -79,7 +99,7 @@ class CouncilRuntimeTest(unittest.TestCase):
 
     def test_quality_corrigir_cannot_advance_to_simplification(self):
         state = self.walk_to_commit()
-        state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "findings": [{"gap": "required", "evidence": "test", "required_change": "fix"}]})
+        state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "findings": [finding()]})
         with self.assertRaisesRegex(TransitionError, "ITEM-PLAN"):
             apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA"})
 
@@ -87,7 +107,7 @@ class CouncilRuntimeTest(unittest.TestCase):
         state = self.walk_to_commit()
         state = apply_transition(state, "QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1})
         state = apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA"})
-        state = apply_transition(state, "ADVERSARIAL", {"status": "CORRIGIR", "reviewer_id": "44444444-4444-4444-8444-444444444444", "round": 1, "findings": [{"gap": "high", "evidence": "test", "required_change": "fix"}]})
+        state = apply_transition(state, "ADVERSARIAL", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "44444444-4444-4444-8444-444444444444", "round": 1, "findings": [finding()]})
         with self.assertRaisesRegex(TransitionError, "ITEM-PLAN"):
             apply_transition(state, "DELIVERY", {"status": "SATISFEITO", "manifest": "delivery.json"})
 
@@ -103,8 +123,8 @@ class CouncilRuntimeTest(unittest.TestCase):
 
     def test_review_round_cannot_repeat_after_fix(self):
         state = self.walk_to_commit()
-        state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "round": 1, "findings": [{"gap": "x", "evidence": "test", "required_change": "fix"}]})
-        state = apply_transition(state, "ITEM-PLAN", {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "fix", "item": "fix", "slice": "fix", "validation": ["test"], "fix_kind": "quality", "consumes_review_round": 1})
+        state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "round": 1, "findings": [finding()]})
+        state = apply_transition(state, "ITEM-PLAN", item("p1", "fix", fix_kind="quality", consumes_review_round=1))
         state = apply_transition(state, "SLICE", {"skill": "incremental-implementation", "slice": "fix", "changed_files": ["fix.txt"]})
         state = apply_transition(state, "VALIDATION", validation(["fix.txt"]))
         state = apply_transition(state, "LOCAL-COMMIT", {"sha": "b" * 40, "files": ["fix.txt"]})
@@ -121,7 +141,7 @@ class CouncilRuntimeTest(unittest.TestCase):
     def test_read_only_anchor_cannot_enter_execution(self):
         state = apply_transition(None, "ANCHOR", {"mutation_mode": "READ_ONLY", "anchor_source": "inline"})
         with self.assertRaisesRegex(TransitionError, "read-only"):
-            apply_transition(state, "PHASE-PLAN", {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "items": ["i1"]})
+            apply_transition(state, "PHASE-PLAN", phase())
 
     def test_read_only_can_deliver_without_workspace_mutation(self):
         state = apply_transition(None, "ANCHOR", {"mutation_mode": "READ_ONLY", "anchor_source": "inline"})
@@ -133,6 +153,26 @@ class CouncilRuntimeTest(unittest.TestCase):
         self.assertFalse(remote_action_allowed("merge-main", {"remote_authorized": False}))
         self.assertTrue(remote_action_allowed("push", {"remote_authorized": True, "authorized_by": "user", "authorization_evidence": "prompt-42"}))
         self.assertTrue(remote_action_allowed("local-commit", {}))
+
+    def test_reviews_are_bound_to_impact_and_nonblocking_work_continues(self):
+        state = self.walk_to_commit()
+        with self.assertRaisesRegex(TransitionError, "counts disagree"):
+            apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 1, "required": 0, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "findings": [finding()]})
+        deferred = finding("D1")
+        deferred["impact"] = {**impact("D1"), "evidence_status": "UNVERIFIED", "disposition": "DEFER_RUN"}
+        deferred.update({"reason": "outside the current path", "review_after": "phase two"})
+        state = apply_transition(state, "QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "deferred_findings": [deferred]})
+        self.assertEqual("D1", state["deferred_findings"][0]["impact"]["id"])
+
+    def test_validation_ids_must_equal_the_planned_graph_edge(self):
+        state = apply_transition(None, "ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"})
+        state = apply_transition(state, "PHASE-PLAN", phase())
+        state = apply_transition(state, "ITEM-PLAN", item())
+        state = apply_transition(state, "SLICE", {"skill": "incremental-implementation", "slice": "i1", "changed_files": ["slice.txt"]})
+        evidence = validation(["slice.txt"])
+        evidence["test_results"][0]["id"] = "wrong"
+        with self.assertRaisesRegex(TransitionError, "test IDs"):
+            apply_transition(state, "VALIDATION", evidence)
 
 
 if __name__ == "__main__":

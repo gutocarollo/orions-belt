@@ -80,6 +80,9 @@ def _validate_property(path: str, value: Any, subschema: dict, errors: list[str]
     if "minimum" in subschema and isinstance(value, (int, float)) and value < subschema["minimum"]:
         errors.append(f"{path}: {value} < minimum {subschema['minimum']}")
 
+    if "maximum" in subschema and isinstance(value, (int, float)) and value > subschema["maximum"]:
+        errors.append(f"{path}: {value} > maximum {subschema['maximum']}")
+
     if "minLength" in subschema and isinstance(value, str) and len(value) < subschema["minLength"]:
         errors.append(f"{path}: string shorter than minLength {subschema['minLength']}")
 
@@ -94,6 +97,9 @@ def _validate_property(path: str, value: Any, subschema: dict, errors: list[str]
                 _validate_object(f"{path}[{i}]", item, item_schema, errors)
             else:
                 _validate_property(f"{path}[{i}]", item, item_schema, errors)
+
+    if expected_type == "object" and isinstance(value, dict):
+        _validate_object(path, value, subschema, errors)
 
     if "minItems" in subschema and isinstance(value, list) and len(value) < subschema["minItems"]:
         errors.append(f"{path}: array shorter than minItems {subschema['minItems']}")

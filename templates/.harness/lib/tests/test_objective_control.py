@@ -1,0 +1,97 @@
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+LIB = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(LIB))
+
+from objective_control import ObjectiveControlError, assess_impact, record_deferred, validate_execution_graph, verify_code_necessity  # noqa: E402
+
+
+def impact(**overrides):
+    value = {"id": "F-1", "evidence_status": "REAL", "evidence": "test evidence", "objective_impact": 4, "journey_reachability": 4, "acceptance_impact": 4, "irreversibility": 3, "dependency_urgency": 4, "on_critical_path": True, "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["start", "goal"]}
+    value.update(overrides)
+    return value
+
+
+def graph():
+    tests1 = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
+    tests2 = {"functional": ["F2"], "quality": ["Q2"], "regression": ["R2"]}
+    return {"objective": "deliver the requested result", "start_node": "request", "goal_node": "delivery", "nodes": ["request", "implementation", "delivery"], "edges": [
+        {"edge_id": "E1", "from": "request", "to": "implementation", "critical": True, "phase": "p1", "item": "i1", "tests": tests1, "evidence": ["evidence/e1.json"]},
+        {"edge_id": "E2", "from": "implementation", "to": "delivery", "critical": True, "phase": "p2", "item": "i2", "tests": tests2, "evidence": ["evidence/e2.json"]},
+    ]}
+
+
+class ObjectiveImpactTest(unittest.TestCase):
+    def test_disposition_is_computed_from_evidence_path_and_weighted_score(self):
+        critical = assess_impact(impact())
+        high = assess_impact(impact(objective_impact=3, journey_reachability=3, acceptance_impact=3, irreversibility=3, dependency_urgency=3))
+        deferred = assess_impact(impact(evidence_status="UNVERIFIED"))
+        self.assertEqual((96.25, "CRITICAL_BLOCK"), (critical["score"], critical["disposition"]))
+        self.assertEqual((75.0, "HIGH_FIX_NOW"), (high["score"], high["disposition"]))
+        self.assertEqual("DEFER_RUN", deferred["disposition"])
+
+    def test_declared_score_or_disposition_cannot_override_calculation(self):
+        with self.assertRaisesRegex(ObjectiveControlError, "declared score"):
+            assess_impact(impact(score=10, disposition="DEFER_RUN"))
+
+    def test_noncritical_or_workaround_finding_is_deferred(self):
+        self.assertEqual("DEFER_RUN", assess_impact(impact(on_critical_path=False, affects_current_phase=False))["disposition"])
+        self.assertEqual("DEFER_RUN", assess_impact(impact(validated_workaround=True))["disposition"])
+
+
+class ExecutionGraphTest(unittest.TestCase):
+    def test_connected_graph_with_three_test_classes_passes(self):
+        self.assertEqual(["E1", "E2"], validate_execution_graph(graph())["critical_path"])
+
+    def test_disconnected_graph_or_missing_test_class_fails(self):
+        disconnected = graph()
+        disconnected["edges"] = disconnected["edges"][:1]
+        with self.assertRaisesRegex(ObjectiveControlError, "no path"):
+            validate_execution_graph(disconnected)
+        missing = graph()
+        missing["edges"][0]["tests"]["quality"] = []
+        with self.assertRaisesRegex(ObjectiveControlError, "quality"):
+            validate_execution_graph(missing)
+
+
+class DeferredRunTest(unittest.TestCase):
+    def test_deferred_finding_is_recorded_idempotently_in_existing_section(self):
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory) / "RUN.md"
+            run.write_text("# RUN\n\n## Pendências não bloqueantes\n- Nenhuma no início do run.\n\n## Journal\n", encoding="utf-8")
+            deferred = assess_impact(impact(evidence_status="UNVERIFIED")) | {"reason": "not proven", "review_after": "phase-2"}
+            record_deferred(run, deferred)
+            first = run.read_text(encoding="utf-8")
+            record_deferred(run, deferred)
+            self.assertEqual(first, run.read_text(encoding="utf-8"))
+            self.assertIn("F-1", first)
+
+
+class CodeNecessityTest(unittest.TestCase):
+    def test_every_added_code_line_must_belong_to_a_justified_portion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            source = root / "app.py"
+            source.write_text("value = 1\n", encoding="utf-8")
+            subprocess.run(["git", "add", "app.py"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "baseline"], cwd=root, check=True)
+            base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+            source.write_text("value = 1\nresult = value + 1\n", encoding="utf-8")
+            subprocess.run(["git", "add", "app.py"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "change"], cwd=root, check=True)
+            report = {"base_sha": base, "head_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(), "portions": []}
+            with self.assertRaisesRegex(ObjectiveControlError, "uncovered"):
+                verify_code_necessity(root, report)
+            report["portions"] = [{"path": "app.py", "start_line": 2, "end_line": 2, "purpose": "compute result", "inputs": ["value"], "outputs": ["result"], "evidence": ["unit test"], "simpler_alternative": "none", "necessity": "requested behavior"}]
+            self.assertEqual(1, verify_code_necessity(root, report)["covered_lines"])
+
+
+if __name__ == "__main__":
+    unittest.main()

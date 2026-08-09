@@ -8,6 +8,20 @@ import sys
 from pathlib import Path
 from typing import Any
 
+TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
+
+
+def _impact(finding_id: str) -> dict[str, Any]:
+    return {"id": finding_id, "evidence_status": "REAL", "evidence": "isolated scenario", "objective_impact": 3, "journey_reachability": 3, "acceptance_impact": 3, "irreversibility": 3, "dependency_urgency": 3, "on_critical_path": False, "affects_current_phase": True, "validated_workaround": False, "graph_nodes": ["request", "done"], "score": 75, "disposition": "HIGH_FIX_NOW"}
+
+
+def _finding(finding_id: str, gap: str) -> dict[str, Any]:
+    return {"gap": gap, "evidence": f"{gap} review", "required_change": f"apply {gap} fix", "impact": _impact(finding_id)}
+
+
+def _item_payload(phase: str, item: str, **extra: Any) -> dict[str, Any]:
+    return {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": phase, "item": item, "slice": item, "validation": ["git diff --check"], "objective": "scenario delivery", "edge_id": "E1", "deliverable": f"{item} delivered", "tests": TESTS, **extra}
+
 
 def _run(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True)
@@ -75,6 +89,7 @@ def _execute_flow(source: Path, target: Path, run_id: str, actions: list[dict[st
             result = _must(command, target)
             payload["commands"] = [{"command": " ".join(command), "exit_code": result.returncode}]
             payload["checked_files"] = changed_files
+            payload["test_results"] = [{"id": test_id, "class": test_class, "status": "PASS"} for test_class, ids in TESTS.items() for test_id in ids]
             validated_commands = [item["command"] for item in payload["commands"]]
         elif event == "LOCAL-COMMIT":
             sha = _commit_existing(target, changed_files)
@@ -88,8 +103,12 @@ def _execute_flow(source: Path, target: Path, run_id: str, actions: list[dict[st
             reviewers = [item["payload"]["reviewer_id"] for item in actions if item["event"] in {"QUALITY", "ADVERSARIAL"} and item["payload"].get("status") == "SATISFEITO"]
             reviewer_ids = list(dict.fromkeys(reviewers))[-2:]
             ledger_path = f".harness/runs/agent-swarm/{run_id}/council-events.jsonl"
-            acceptance = [{"criterion": "slice delivered", "phase": "scenario", "item": f"item-{index}", "slice": f"slice-{index}", "commit": sha, "files": files, "commands": commands, "evidence": [ledger_path], "reviewer_ids": reviewer_ids} for index, (sha, files, commands) in enumerate(zip(commits, commit_file_sets, commit_commands), 1)]
-            manifest.write_text(json.dumps({"acceptance": acceptance, "commits": commits}, indent=2) + "\n", encoding="utf-8")
+            acceptance = [{"criterion": "slice delivered", "phase": "scenario", "item": f"item-{index}", "slice": f"slice-{index}", "commit": sha, "files": files, "commands": commands, "evidence": [ledger_path], "reviewer_ids": reviewer_ids, "edge_id": "E1", "test_ids": [test_id for ids in TESTS.values() for test_id in ids]} for index, (sha, files, commands) in enumerate(zip(commits, commit_file_sets, commit_commands), 1)]
+            graph_path = target / "execution-graph.json"
+            graph_path.write_text(json.dumps({"objective": "scenario delivery", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "scenario", "item": "delivery", "tests": TESTS, "evidence": [ledger_path]}]}, indent=2) + "\n", encoding="utf-8")
+            report_path = target / "code-necessity.json"
+            report_path.write_text(json.dumps({"base_sha": commits[-1], "head_sha": commits[-1], "portions": []}, indent=2) + "\n", encoding="utf-8")
+            manifest.write_text(json.dumps({"acceptance": acceptance, "commits": commits, "execution_graph": graph_path.name, "code_necessity_report": report_path.name}, indent=2) + "\n", encoding="utf-8")
         _transition(source, target, run_id, event, payload, env)
         process_count += 1
         if index == len(actions) // 2:
@@ -100,8 +119,8 @@ def _execute_flow(source: Path, target: Path, run_id: str, actions: list[dict[st
 
 def _base_actions(prefix: str) -> list[dict[str, Any]]:
     return [
-        {"event": "PHASE-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": prefix, "items": [prefix]}},
-        {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": prefix, "item": prefix, "slice": prefix, "validation": ["git diff --check"]}},
+        {"event": "PHASE-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": prefix, "items": [prefix], "objective": "scenario delivery", "edge_id": "E1", "entry_node": "request", "exit_node": "done", "tests": TESTS}},
+        {"event": "ITEM-PLAN", "payload": _item_payload(prefix, prefix)},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": prefix, "changed_files": [f"{prefix}.txt"]}, "file": f"{prefix}.txt", "content": f"{prefix}\n"},
         {"event": "VALIDATION", "payload": {"status": "PASS"}},
         {"event": "LOCAL-COMMIT", "payload": {}},
@@ -129,7 +148,7 @@ def run_scenarios(root: Path, workspace: Path) -> dict[str, Any]:
     trivial_actions = _base_actions("trivial") + [
         {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "77777777-7777-4777-8777-777777777777", "round": 1}},
         {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "single clear slice", "validations": []}},
-        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "reviewer_id": "88888888-8888-4888-8888-888888888888", "round": 1}},
+        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "88888888-8888-4888-8888-888888888888", "round": 1}},
         {"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": "trivial-delivery.json"}},
     ]
     trivial_commits, trivial_processes = _execute_flow(root, trivial, "trivial-e2e", trivial_actions)
@@ -141,21 +160,21 @@ def run_scenarios(root: Path, workspace: Path) -> dict[str, Any]:
     complex_repo = workspace / "complex"
     _init_repo(complex_repo)
     complex_actions = _base_actions("phase-1") + _base_actions("phase-2") + [
-        {"event": "QUALITY", "payload": {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 1, "findings": [{"gap": "quality", "evidence": "quality review", "required_change": "apply quality fix"}]}},
-        {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "quality", "item": "quality-fix", "slice": "quality-fix", "validation": ["git diff --check"], "fix_kind": "quality", "consumes_review_round": 1}},
+        {"event": "QUALITY", "payload": {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 1, "findings": [_finding("QF1", "quality")]}},
+        {"event": "ITEM-PLAN", "payload": _item_payload("phase-2", "quality-fix", fix_kind="quality", consumes_review_round=1)},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": "quality-fix", "changed_files": ["quality-fix.txt"]}, "file": "quality-fix.txt", "content": "quality fix\n"},
         {"event": "VALIDATION", "payload": {"status": "PASS"}},
         {"event": "LOCAL-COMMIT", "payload": {}},
         {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 2}},
         {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "already minimal", "validations": []}},
-        {"event": "ADVERSARIAL", "payload": {"status": "CORRIGIR", "reviewer_id": "66666666-6666-4666-8666-666666666666", "round": 1, "findings": [{"gap": "adversarial", "evidence": "adversarial review", "required_change": "apply adversarial fix"}]}},
-        {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "adversarial", "item": "adversarial-fix", "slice": "adversarial-fix", "validation": ["git diff --check"], "fix_kind": "adversarial", "consumes_review_round": 1}},
+        {"event": "ADVERSARIAL", "payload": {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "66666666-6666-4666-8666-666666666666", "round": 1, "findings": [_finding("AF1", "adversarial")]}},
+        {"event": "ITEM-PLAN", "payload": _item_payload("phase-2", "adversarial-fix", fix_kind="adversarial", consumes_review_round=1)},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": "adversarial-fix", "changed_files": ["adversarial-fix.txt"]}, "file": "adversarial-fix.txt", "content": "adversarial fix\n"},
         {"event": "VALIDATION", "payload": {"status": "PASS"}},
         {"event": "LOCAL-COMMIT", "payload": {}},
         {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 3}},
         {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "already minimal", "validations": []}},
-        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "reviewer_id": "66666666-6666-4666-8666-666666666666", "round": 2}},
+        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "66666666-6666-4666-8666-666666666666", "round": 2}},
         {"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": "complex-delivery.json"}},
     ]
     complex_commits, complex_processes = _execute_flow(root, complex_repo, "complex-e2e", complex_actions)

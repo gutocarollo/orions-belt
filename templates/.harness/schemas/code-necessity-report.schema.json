@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Code necessity report","type":"object","additionalProperties":false,"required":["base_sha","head_sha","portions"],"properties":{"base_sha":{"type":"string","pattern":"^[0-9a-f]{40}$"},"head_sha":{"type":"string","pattern":"^[0-9a-f]{40}$"},"portions":{"type":"array","items":{"type":"object"}}}}

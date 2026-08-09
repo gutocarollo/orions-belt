@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 from typing import Any
 from mini_schema_validate import validate_instance
+from objective_control import ObjectiveControlError, TEST_CLASSES, assess_impact
 
 
 class TransitionError(ValueError):
@@ -55,6 +56,37 @@ def evaluate_quality(findings: dict[str, int]) -> str:
     return "CORRIGIR" if findings.get("Critical", 0) or findings.get("Required", 0) else "SATISFEITO"
 
 
+def _test_map(tests: dict[str, list[str]]) -> dict[str, str]:
+    mapped = {test_id: test_class for test_class in TEST_CLASSES for test_id in tests[test_class]}
+    _require(len(mapped) == sum(len(tests[name]) for name in TEST_CLASSES), "test IDs must be unique across classes")
+    return mapped
+
+
+def _review_decision(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    immediate: list[dict[str, Any]] = []
+    deferred: list[dict[str, Any]] = []
+    try:
+        for finding in payload.get("findings", []):
+            decision = assess_impact(finding["impact"])
+            _require(decision["disposition"] in {"CRITICAL_BLOCK", "HIGH_FIX_NOW"}, "blocking findings must be CRITICAL_BLOCK or HIGH_FIX_NOW")
+            immediate.append({**deepcopy(finding), "impact": decision})
+        for finding in payload.get("deferred_findings", []):
+            decision = assess_impact(finding["impact"])
+            _require(decision["disposition"] == "DEFER_RUN", "deferred findings must be DEFER_RUN")
+            deferred.append({**deepcopy(finding), "impact": decision})
+    except (KeyError, ObjectiveControlError) as exc:
+        raise TransitionError(str(exc)) from exc
+    critical = sum(item["impact"]["disposition"] == "CRITICAL_BLOCK" for item in immediate)
+    high = sum(item["impact"]["disposition"] == "HIGH_FIX_NOW" for item in immediate)
+    _require(payload.get("critical") == critical and payload.get("required") == high, "review counts disagree with assessed findings")
+    status = payload.get("status")
+    if status == "BLOQUEADO":
+        _require(critical > 0 and bool(payload.get("external_blocker")), "BLOQUEADO requires a critical finding and concrete external_blocker")
+    else:
+        _require(status == ("CORRIGIR" if immediate else "SATISFEITO"), "review status disagrees with assessed findings")
+    return immediate, deferred
+
+
 def remote_action_allowed(action: str, authority: dict[str, Any]) -> bool:
     """Local commits are intrinsic; remote push/main merge require evidence."""
     if action == "local-commit":
@@ -97,10 +129,21 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
     if event in {"PHASE-PLAN", "ITEM-PLAN"}:
         _require(payload.get("skill") == "planning-and-task-breakdown", f"{event} requires planning-and-task-breakdown")
         _require(payload.get("status") == "PRONTO", f"{event} requires PRONTO")
-        if event == "ITEM-PLAN" and result.get("pending_fix"):
-            pending = result["pending_fix"]
-            _require(payload.get("fix_kind") == pending["kind"] and payload.get("consumes_review_round") == pending["round"], "ITEM-PLAN must consume the pending review fix request")
-            result["pending_fix"] = None
+        if event == "PHASE-PLAN":
+            _require(payload["entry_node"] != payload["exit_node"], "PHASE-PLAN entry_node and exit_node must differ")
+            _require(not result.get("objective") or result["objective"] == payload["objective"], "PHASE-PLAN cannot change the macro objective")
+            result["objective"] = payload["objective"]
+            result["active_phase"] = {key: deepcopy(payload[key]) for key in ("phase", "edge_id", "entry_node", "exit_node", "tests")}
+        else:
+            phase = result.get("active_phase", {})
+            _require(payload["objective"] == result.get("objective"), "ITEM-PLAN objective must equal the macro objective")
+            _require(payload["phase"] == phase.get("phase") and payload["edge_id"] == phase.get("edge_id"), "ITEM-PLAN must reference the active phase and graph edge")
+            _require(payload["tests"] == phase.get("tests"), "ITEM-PLAN tests must equal the active phase tests")
+            result["planned_tests"] = _test_map(payload["tests"])
+            if result.get("pending_fix"):
+                pending = result["pending_fix"]
+                _require(payload.get("fix_kind") == pending["kind"] and payload.get("consumes_review_round") == pending["round"], "ITEM-PLAN must consume the pending review fix request")
+                result["pending_fix"] = None
     elif event == "SLICE":
         _require(payload.get("skill") == "incremental-implementation", "SLICE requires incremental-implementation")
         result["slice_files"] = list(payload["changed_files"])
@@ -108,7 +151,11 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         _require(payload.get("status") == "PASS" and payload.get("commands"), "VALIDATION requires PASS and commands")
         _require(set(payload["checked_files"]) == set(result.get("slice_files", [])), "VALIDATION checked_files must equal the current slice files")
         _require({item["path"] for item in payload["file_hashes"]} == set(payload["checked_files"]), "VALIDATION file hashes must equal checked_files")
+        actual_tests = {item["id"]: item["class"] for item in payload["test_results"]}
+        _require(len(actual_tests) == len(payload["test_results"]), "VALIDATION test IDs must be unique")
+        _require(actual_tests == result.get("planned_tests"), "VALIDATION test IDs and classes must equal the item plan")
         result["validated_files"] = list(payload["checked_files"])
+        result["validated_tests"] = actual_tests
         result["validation_evidence"] = deepcopy(payload)
     elif event == "LOCAL-COMMIT":
         sha = str(payload.get("sha", ""))
@@ -116,11 +163,10 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         _require(set(payload["files"]) == set(result.get("validated_files", [])), "LOCAL-COMMIT files must equal the validated slice files")
         result["commits"].append(sha)
         result.setdefault("commit_files", {})[sha] = list(payload["files"])
+        result.setdefault("commit_tests", {})[sha] = deepcopy(result.get("validated_tests", {}))
+        result.setdefault("commit_edges", {})[sha] = result["active_phase"]["edge_id"]
     elif event == "QUALITY":
-        critical = payload.get("critical", 0)
-        required = payload.get("required", 0)
-        _require(isinstance(critical, int) and isinstance(required, int) and critical >= 0 and required >= 0, "QUALITY counts must be non-negative integers")
-        blocking = critical + required
+        findings, deferred = _review_decision(payload)
         status = payload.get("status")
         reviewer = payload.get("reviewer_id")
         round_number = payload.get("round", 1)
@@ -130,18 +176,18 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         previous = result.get("quality_reviewer_id")
         _require(not previous or previous == reviewer, "QUALITY rounds must continue the same reviewer thread")
         _require(round_number == result.get("quality_round", 0) + 1, "QUALITY round must increment exactly by one")
-        expected = "CORRIGIR" if blocking else "SATISFEITO"
-        _require(status == "BLOQUEADO" or status == expected, "QUALITY status disagrees with blocking findings")
         result["quality_status"] = status
         result["quality_reviewer_id"] = reviewer
         result["quality_round"] = round_number
+        result.setdefault("deferred_findings", []).extend(deferred)
         if status == "CORRIGIR":
-            result["pending_fix"] = {"kind": "quality", "round": round_number, "findings": deepcopy(payload.get("findings", []))}
+            result["pending_fix"] = {"kind": "quality", "round": round_number, "findings": findings}
     elif event == "SIMPLIFICATION":
         _require(payload.get("status") in {"APLICADA", "NAO_NECESSARIA"}, "SIMPLIFICATION requires a terminal status")
         if payload.get("status") == "APLICADA":
             _require(payload.get("commit_sha") in result.get("commits", []), "SIMPLIFICATION: APLICADA must reference a validated local commit")
     elif event == "ADVERSARIAL":
+        findings, deferred = _review_decision(payload)
         reviewer = payload.get("reviewer_id")
         round_number = payload.get("round", 1)
         _require(bool(reviewer) and reviewer != result.get("implementer_id"), "ADVERSARIAL requires an independent reviewer_id")
@@ -150,12 +196,12 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         previous = result.get("adversarial_reviewer_id")
         _require(not previous or previous == reviewer, "ADVERSARIAL rounds must continue the same reviewer thread")
         _require(round_number == result.get("adversarial_round", 0) + 1, "ADVERSARIAL round must increment exactly by one")
-        _require(payload.get("status") in {"SATISFEITO", "CORRIGIR", "BLOQUEADO"}, "ADVERSARIAL requires SATISFEITO, CORRIGIR or BLOQUEADO")
         result["adversarial_status"] = payload["status"]
         result["adversarial_reviewer_id"] = reviewer
         result["adversarial_round"] = round_number
+        result.setdefault("deferred_findings", []).extend(deferred)
         if payload["status"] == "CORRIGIR":
-            result["pending_fix"] = {"kind": "adversarial", "round": round_number, "findings": deepcopy(payload.get("findings", []))}
+            result["pending_fix"] = {"kind": "adversarial", "round": round_number, "findings": findings}
     elif event == "DELIVERY":
         _require(payload.get("status") == "SATISFEITO" and payload.get("manifest"), "DELIVERY requires SATISFEITO and manifest")
         if result.get("mutation_mode") == "WORKSPACE_WRITE":

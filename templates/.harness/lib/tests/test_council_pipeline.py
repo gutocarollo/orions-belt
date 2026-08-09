@@ -11,24 +11,32 @@ sys.path.insert(0, str(ROOT))
 
 from engine.integration.council_pipeline import IntegrationError, integrate_events  # noqa: E402
 
+TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
+
 
 def complex_events(commit_sha="a" * 40, manifest="delivery.json"):
     return [
         {"event": "ANCHOR", "payload": {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "prompt"}},
-        {"event": "PHASE-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "items": ["i1"]}},
-        {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "item": "i1", "slice": "s1", "validation": ["test"]}},
+        {"event": "PHASE-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "items": ["i1"], "objective": "deliver", "edge_id": "E1", "entry_node": "request", "exit_node": "done", "tests": TESTS}},
+        {"event": "ITEM-PLAN", "payload": {"skill": "planning-and-task-breakdown", "status": "PRONTO", "phase": "p1", "item": "i1", "slice": "s1", "validation": ["test"], "objective": "deliver", "edge_id": "E1", "deliverable": "working result", "tests": TESTS}},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}},
-        {"event": "VALIDATION", "payload": {"status": "PASS", "commands": [{"command": "git diff --check", "exit_code": 0}], "checked_files": ["slice.txt"], "executor": "agent_swarm_ledger", "validated_at": "2026-01-01T00:00:00Z", "file_hashes": [{"path": "slice.txt", "sha256": "971c9401e58679c2670ab91b83db3846e47927d9e9c527ea952f29d11c7515f9"}]}},
+        {"event": "VALIDATION", "payload": {"status": "PASS", "commands": [{"command": "git diff --check", "exit_code": 0}], "checked_files": ["slice.txt"], "executor": "agent_swarm_ledger", "validated_at": "2026-01-01T00:00:00Z", "file_hashes": [{"path": "slice.txt", "sha256": "971c9401e58679c2670ab91b83db3846e47927d9e9c527ea952f29d11c7515f9"}], "test_results": [{"id": test_id, "class": test_class, "status": "PASS"} for test_class, ids in TESTS.items() for test_id in ids]}},
         {"event": "LOCAL-COMMIT", "payload": {"sha": commit_sha, "files": ["slice.txt"]}},
         {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "99999999-9999-4999-8999-999999999999"}},
         {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA"}},
-        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "reviewer_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}},
+        {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}},
         {"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": manifest}},
     ]
 
 
 def delivery_manifest(commit_sha, evidence="events.jsonl"):
-    return {"commits": [commit_sha], "acceptance": [{"criterion": "done", "phase": "p1", "item": "i1", "slice": "s1", "commit": commit_sha, "files": ["slice.txt"], "commands": ["git diff --check"], "evidence": [evidence], "reviewer_ids": ["99999999-9999-4999-8999-999999999999", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]}]}
+    return {"commits": [commit_sha], "execution_graph": "execution-graph.json", "code_necessity_report": "code-necessity.json", "acceptance": [{"criterion": "done", "phase": "p1", "item": "i1", "slice": "s1", "commit": commit_sha, "files": ["slice.txt"], "commands": ["git diff --check"], "evidence": [evidence], "reviewer_ids": ["99999999-9999-4999-8999-999999999999", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"], "edge_id": "E1", "test_ids": [test_id for ids in TESTS.values() for test_id in ids]}]}
+
+
+def write_delivery_support(folder, commit_sha, evidence="events.jsonl"):
+    graph = {"objective": "deliver", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "p1", "item": "i1", "tests": TESTS, "evidence": [evidence]}]}
+    (folder / "execution-graph.json").write_text(json.dumps(graph), encoding="utf-8")
+    (folder / "code-necessity.json").write_text(json.dumps({"base_sha": commit_sha, "head_sha": commit_sha, "portions": []}), encoding="utf-8")
 
 
 class CouncilPipelineTest(unittest.TestCase):
@@ -53,6 +61,7 @@ class CouncilPipelineTest(unittest.TestCase):
             subprocess.run(["git", "add", "slice.txt"], cwd=folder, check=True)
             subprocess.run(["git", "commit", "-q", "-m", "slice"], cwd=folder, check=True)
             commit_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=folder, text=True).strip()
+            write_delivery_support(folder, commit_sha)
             (folder / "delivery.json").write_text(json.dumps(delivery_manifest(commit_sha)))
             ledger = folder / "events.jsonl"
             ledger.write_text("".join(json.dumps(item) + "\n" for item in complex_events(commit_sha)), encoding="utf-8")
@@ -65,6 +74,12 @@ class CouncilPipelineTest(unittest.TestCase):
             delivered = json.loads((output / "run-state.json").read_text())
             self.assertEqual("DELIVERY", delivered["stage"])
             self.assertTrue(delivered["delivery_verified"])
+            invalid = delivery_manifest(commit_sha)
+            invalid["acceptance"][0]["test_ids"] = ["F1", "Q1", "wrong"]
+            (folder / "delivery.json").write_text(json.dumps(invalid))
+            rejected = subprocess.run([sys.executable, "engine/integration/council_pipeline.py", str(ledger), "--git-sha", commit_sha, "--repo-root", str(folder), "--output-dir", str(output)], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(2, rejected.returncode)
+            self.assertIn("test_ids differ", rejected.stderr)
 
     def test_contract_entrypoints_pass(self):
         for command in ([sys.executable, "engine/contract/scripts/validate_contract.py"], [sys.executable, "scripts/validate_contract.py"]):
@@ -122,6 +137,7 @@ class CouncilPipelineTest(unittest.TestCase):
             transition({"event": "LOCAL-COMMIT", "payload": {"sha": commit_sha, "files": ["slice.txt"]}})
             for item in events[6:9]:
                 transition(item)
+            write_delivery_support(root, commit_sha, ".harness/runs/agent-swarm/real-flow/council-events.jsonl")
             (root / "delivery.json").write_text(json.dumps(delivery_manifest(commit_sha, ".harness/runs/agent-swarm/real-flow/council-events.jsonl")))
             transition({"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": "delivery.json"}})
             ledger = root / ".harness/runs/agent-swarm/real-flow/council-events.jsonl"

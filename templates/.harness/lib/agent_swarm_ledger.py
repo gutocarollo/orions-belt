@@ -16,6 +16,7 @@ from typing import Any
 
 from _tooling_conf import get_config, project_root
 from council_runtime import TransitionError, apply_transition
+from objective_control import ObjectiveControlError, record_deferred
 
 
 ROOT = project_root()
@@ -31,6 +32,19 @@ EVENT_STATUSES = {
     ("execution", "fix-consumed"): {"CORRIGIR"},
 }
 COUNCIL_EVENTS = ("ANCHOR", "PHASE-PLAN", "ITEM-PLAN", "SLICE", "VALIDATION", "LOCAL-COMMIT", "QUALITY", "SIMPLIFICATION", "ADVERSARIAL", "DELIVERY")
+
+
+def persist_deferred(run_id: str, event_payload: dict[str, Any]) -> None:
+    findings = event_payload.get("deferred_findings", [])
+    if not findings:
+        return
+    runs = ROOT / ".harness" / "runs"
+    active = runs / "ACTIVE"
+    if not active.is_file() or active.read_text(encoding="utf-8").strip() != run_id:
+        raise ObjectiveControlError("DEFER_RUN requires this run to be the active Council run")
+    run_path = runs / run_id / "RUN.md"
+    for finding in findings:
+        record_deferred(run_path, {**finding["impact"], "reason": finding["reason"], "review_after": finding["review_after"]})
 
 
 def verify_repository_transition(event: str, state: dict[str, Any], root: Path) -> None:
@@ -203,6 +217,8 @@ def transition(args: argparse.Namespace) -> None:
                 event_payload["file_hashes"] = [{"path": name, "sha256": hashlib.sha256((ROOT / name).read_bytes()).hexdigest()} for name in checked]
             item = {"seq": len(events) + 1, "ts": utc_now(), "event": args.council_event, "payload": event_payload}
             state = apply_transition(state, item["event"], item["payload"])
+            if args.council_event in {"QUALITY", "ADVERSARIAL"}:
+                persist_deferred(args.run_id, event_payload)
         except (TransitionError, KeyError, TypeError, ValueError) as exc:
             raise SystemExit(f"invalid Council transition: {exc}") from exc
         verify_repository_transition(args.council_event, state, ROOT)

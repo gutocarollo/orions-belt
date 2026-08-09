@@ -14,10 +14,24 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / ".harness" / "lib"))
 from council_runtime import TransitionError, apply_transition  # noqa: E402
 from mini_schema_validate import validate_instance  # noqa: E402
+from objective_control import ObjectiveControlError, validate_execution_graph, verify_code_necessity  # noqa: E402
 
 
 class IntegrationError(ValueError):
     pass
+
+
+def _load_json(repo_root: Path, relative: str, label: str) -> dict[str, Any]:
+    path = (repo_root / relative).resolve()
+    if repo_root.resolve() not in path.parents:
+        raise IntegrationError(f"{label} escapes repository root")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise IntegrationError(f"{label} is unreadable: {path}") from exc
+    if not isinstance(value, dict):
+        raise IntegrationError(f"{label} must be a JSON object")
+    return value
 
 
 def integrate_events(events: list[dict[str, Any]], git_sha: str) -> dict[str, Any]:
@@ -82,6 +96,24 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
         errors = validate_instance(manifest, schema)
         if errors:
             raise IntegrationError("delivery manifest schema violation: " + "; ".join(errors))
+        graph = _load_json(repo_root, manifest["execution_graph"], "execution graph")
+        report = _load_json(repo_root, manifest["code_necessity_report"], "code necessity report")
+        for value, schema_name, label in ((graph, "execution-graph.schema.json", "execution graph"), (report, "code-necessity-report.schema.json", "code necessity report")):
+            value_schema = json.loads((ROOT / ".harness/schemas" / schema_name).read_text(encoding="utf-8"))
+            value_errors = validate_instance(value, value_schema)
+            if value_errors:
+                raise IntegrationError(f"{label} schema violation: " + "; ".join(value_errors))
+        try:
+            graph_result = validate_execution_graph(graph)
+            verify_code_necessity(repo_root, report)
+        except ObjectiveControlError as exc:
+            raise IntegrationError(str(exc)) from exc
+        if graph["objective"] != state.get("objective"):
+            raise IntegrationError("execution graph objective differs from the Council macro objective")
+        edges = {edge["edge_id"]: edge for edge in graph["edges"]}
+        planned_edges = {item["payload"]["edge_id"] for item in state["history"] if item["event"] == "PHASE-PLAN"}
+        if not planned_edges <= edges.keys():
+            raise IntegrationError("execution graph omits a planned phase edge")
         acceptance = manifest["acceptance"]
         if {item["commit"] for item in acceptance} != set(state.get("commits", [])) or manifest.get("commits") != state.get("commits"):
             raise IntegrationError("delivery manifest must map acceptance and every local commit")
@@ -94,6 +126,7 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
                 validations[history_item["payload"]["sha"]] = pending_validation or {}
                 pending_validation = None
         expected_reviewers = {state["quality_reviewer_id"], state["adversarial_reviewer_id"]}
+        covered_edges: set[str] = set()
         for item in acceptance:
             commit = item["commit"]
             validation = validations.get(commit, {})
@@ -103,10 +136,19 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
                 raise IntegrationError(f"acceptance commands differ from validation evidence: {commit}")
             if set(item["reviewer_ids"]) != expected_reviewers:
                 raise IntegrationError(f"acceptance reviewer_ids differ from final review threads: {commit}")
+            if item["edge_id"] != state["commit_edges"][commit] or item["edge_id"] not in edges:
+                raise IntegrationError(f"acceptance edge_id differs from the committed plan: {commit}")
+            expected_tests = set(state["commit_tests"][commit])
+            edge_tests = {test_id for ids in edges[item["edge_id"]]["tests"].values() for test_id in ids}
+            if set(item["test_ids"]) != expected_tests or expected_tests != edge_tests:
+                raise IntegrationError(f"acceptance test_ids differ from validation or graph edge: {commit}")
+            covered_edges.add(item["edge_id"])
             for evidence in item["evidence"]:
                 evidence_path = (repo_root / evidence).resolve()
                 if repo_root.resolve() not in evidence_path.parents or not evidence_path.is_file():
                     raise IntegrationError(f"acceptance evidence is missing or escapes repository: {evidence}")
+        if not set(graph_result["critical_path"]) <= covered_edges:
+            raise IntegrationError("delivery acceptance does not cover the graph critical path")
 
 
 def main() -> int:

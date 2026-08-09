@@ -25,6 +25,12 @@ def start_session(root: Path, run_id: str, anchor_source: str, mutation_mode: st
     pointer = root / ".harness/council-active"
     pointer.parent.mkdir(parents=True, exist_ok=True)
     pointer.write_text(str(state_path) + "\n", encoding="utf-8")
+    run_folder = root / ".harness" / "runs" / run_id
+    run_folder.mkdir(parents=True, exist_ok=True)
+    run_path = run_folder / "RUN.md"
+    if not run_path.exists():
+        run_path.write_text(f"# Council run: {run_id}\n\nAnchor: `{anchor_source}`\n\n## Pendências não bloqueantes\n\n- Nenhuma no início do run.\n", encoding="utf-8")
+    (root / ".harness" / "runs" / "ACTIVE").write_text(run_id + "\n", encoding="utf-8")
     hooks_dir = Path(subprocess.check_output(["git", "rev-parse", "--git-path", "hooks"], cwd=root, text=True).strip())
     if not hooks_dir.is_absolute():
         hooks_dir = root / hooks_dir
@@ -46,6 +52,9 @@ def finish_session(root: Path) -> None:
     if state.get("stage") != "DELIVERY":
         raise RuntimeError("Council session cannot finish before DELIVERY")
     pointer.unlink()
+    active = root / ".harness" / "runs" / "ACTIVE"
+    if active.is_file() and active.read_text(encoding="utf-8").strip() == state_path.parent.name:
+        active.unlink()
 
 
 def main() -> int:

@@ -116,8 +116,22 @@ class CouncilContractTest(unittest.TestCase):
             self.assertEqual(state_path, Path(pointer.read_text().strip()))
             self.assertTrue((root / ".git/hooks/pre-push").is_file())
             self.assertTrue((root / ".git/hooks/pre-push").stat().st_mode & 0o100)
+            self.assertEqual("lifecycle", (root / ".harness/runs/ACTIVE").read_text().strip())
+            self.assertIn("## Pendências não bloqueantes", (root / ".harness/runs/lifecycle/RUN.md").read_text())
             with self.assertRaisesRegex(RuntimeError, "DELIVERY"):
                 finish_session(root)
+
+    def test_finished_session_clears_active_run_but_preserves_run_record(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            state_path = start_session(root, "finished", "inline")
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state["stage"] = "DELIVERY"
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            finish_session(root)
+            self.assertFalse((root / ".harness/runs/ACTIVE").exists())
+            self.assertTrue((root / ".harness/runs/finished/RUN.md").is_file())
 
     def test_read_only_session_is_inline_and_writes_nothing(self):
         with tempfile.TemporaryDirectory() as directory:

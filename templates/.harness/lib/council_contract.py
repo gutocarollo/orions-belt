@@ -22,6 +22,9 @@ SCHEMA_NAMES = (
     "validation-event.schema.json",
     "local-commit-event.schema.json",
     "delivery-manifest.schema.json",
+    "objective-impact.schema.json",
+    "execution-graph.schema.json",
+    "code-necessity-report.schema.json",
 )
 MARKER_GROUPS = (
     ("MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE",),
