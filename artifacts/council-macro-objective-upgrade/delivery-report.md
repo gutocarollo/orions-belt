@@ -62,9 +62,9 @@ Quality reviewer thread: `019fe5ba-cf76-76b3-937e-43d8b0c0ba8d`.
 The first round reproduced four proof gaps. The second round reproduced reused slice SHAs, unrecorded code commits and declared-only commands. The third round found merge-resolution provenance. All blocking findings were corrected and rechecked in the same thread.
 
 The latest quality recheck reproduced one proof-provenance gap: the command
-receipts and commit ledger stopped at `0f4b144`. This artifact slice refreshes
-both through code commit `979c825`; the same thread must confirm the correction
-before publication.
+receipts and commit ledger stopped at `0f4b144`. After both were refreshed, the
+same thread matched the executable code history 16/16 and returned
+`QUALITY-REVIEW: SATISFEITO` with zero critical gaps.
 
 The independent adversarial round reproduced three critical and two high gaps:
 invalid EN lifecycle commands, a direct read-only write bypass, lost planning
@@ -82,7 +82,9 @@ the bound SHA and executes. Four distinct nontrivial proof commands passed.
 
 The previous simplification verdict identified five concrete gaps; four code or
 proof-integrity gaps are now corrected and the fifth is the authorized
-publication artifact still pending. The current mechanisms correspond one-to-one to reproduced bypasses:
+publication artifact still pending. The same reviewer returned
+`SIMPLIFICATION: NAO_NECESSARIA`, zero gaps. The current mechanisms correspond
+one-to-one to reproduced bypasses:
 read-only rejection, planning deferral persistence, executable evidence receipts
 and a reusable rendered-runtime harness.
 

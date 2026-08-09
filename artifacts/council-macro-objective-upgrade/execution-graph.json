@@ -60,7 +60,7 @@
       "phase": "review",
       "item": "close independent quality and adversarial findings",
       "tests": {"functional": ["F-QUALITY"], "quality": ["Q-ADVERSARIAL"], "regression": ["R-NONBLOCK"]},
-      "evidence": ["artifacts/council-macro-objective-upgrade/reviews/quality-final.md", "artifacts/council-macro-objective-upgrade/reviews/adversarial-round-1.md"]
+      "evidence": ["artifacts/council-macro-objective-upgrade/reviews/quality-final.md", "artifacts/council-macro-objective-upgrade/reviews/simplification-final.md", "artifacts/council-macro-objective-upgrade/reviews/adversarial-round-1.md"]
     },
     {
       "edge_id": "E6",
