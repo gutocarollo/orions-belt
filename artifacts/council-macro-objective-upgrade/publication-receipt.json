@@ -1,0 +1,28 @@
+{
+  "published_at": "2026-08-09T12:21:03Z",
+  "repository": "gutocarollo/orions-belt",
+  "branch": "feat/council-operational-runtime",
+  "code_sha": "cc356d78c147d5b3cc754d18535e9c218db260a8",
+  "published_e5_sha": "ef49de60f97f0bed90e760e2ee48ca7929b4ead2",
+  "remote_sha_after_authorized_push": "ef49de60f97f0bed90e760e2ee48ca7929b4ead2",
+  "authorization": {
+    "remote_authorized": true,
+    "authorized_by": "Augusto Carollo",
+    "authorization_evidence": "User explicitly requested push of the Orion's Belt branch and opening or updating the GitHub pull request in this conversation."
+  },
+  "pull_request": {
+    "number": 14,
+    "url": "https://github.com/gutocarollo/orions-belt/pull/14",
+    "state": "OPEN",
+    "base": "main",
+    "head": "feat/council-operational-runtime",
+    "head_sha_after_authorized_push": "ef49de60f97f0bed90e760e2ee48ca7929b4ead2",
+    "draft": false,
+    "merged_at": null
+  },
+  "checks": [
+    {"id": "F-AUTHORIZED-PUSH", "status": "PASS", "evidence": "local HEAD, ls-remote and PR head all matched ef49de60f97f0bed90e760e2ee48ca7929b4ead2"},
+    {"id": "Q-PR-EVIDENCE", "status": "PASS", "evidence": "GitHub PR #14 is OPEN from feat/council-operational-runtime to main"},
+    {"id": "R-NO-MERGE", "status": "PASS", "evidence": "GitHub returned mergedAt null; no merge command was executed"}
+  ]
+}

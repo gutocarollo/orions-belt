@@ -70,7 +70,7 @@
       "phase": "delivery",
       "item": "publish an authorized branch without merging main",
       "tests": {"functional": ["F-AUTHORIZED-PUSH"], "quality": ["Q-PR-EVIDENCE"], "regression": ["R-NO-MERGE"]},
-      "evidence": ["artifacts/council-macro-objective-upgrade/delivery-manifest.json"]
+      "evidence": ["artifacts/council-macro-objective-upgrade/delivery-manifest.json", "artifacts/council-macro-objective-upgrade/publication-receipt.json"]
     }
   ]
 }

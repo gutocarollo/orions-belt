@@ -130,7 +130,8 @@ Tengwar remains local-only for this task. The Orion’s Belt branch is the autho
 
 ## Publication state
 
-E1–E5 are closed. PR #14 already exists and is open against `main`; its remote
-branch still points to the original base until the authorized E6 push. E6 will
-record remote SHA, open-PR state and `mergedAt: null`. Merge remains explicitly
-out of scope.
+E1–E6 are closed. The authorized E6 push published `ef49de6`; local HEAD,
+`ls-remote` and PR #14 all matched that SHA. The PR remains open against `main`,
+is not a draft and reports `mergedAt: null`. `publication-receipt.json` records
+the authorization and three delivery checks. Merge remains explicitly out of
+scope.
