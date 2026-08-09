@@ -60,6 +60,7 @@ CODEX_ROOT = ROOT / "{% if use_codex %}.codex{% endif %}"
 # real vive em SKILL.{pt,en}.md.jinja. Este teste asserta a fonte PT (strings PT + sentinels);
 # os sentinels são idênticos nos 2 idiomas (contrato fixo), então o gate independe do idioma.
 COUNCIL = ROOT / ".harness/skills-shared/delivery-council/SKILL.pt.md.jinja"
+COUNCIL_EN = ROOT / ".harness/skills-shared/delivery-council/SKILL.en.md.jinja"
 ADVERSARIAL = ROOT / ".harness/skills-shared/adversarial-review/SKILL.pt.md.jinja"
 REVIEWER = CODEX_ROOT / "agents/{{ project_name }}-adversarial-reviewer.toml.jinja"
 
@@ -86,6 +87,15 @@ def assert_payload_block(
 
 
 class CouncilMergeRegressionTest(unittest.TestCase):
+    def test_english_lifecycle_commands_and_read_only_anchor_are_safe(self):
+        council = read(COUNCIL_EN)
+        self.assertIn("--anchor-source <source>", council)
+        self.assertIn("agent_swarm_ledger.py transition", council)
+        self.assertNotIn("--request-source", council)
+        self.assertNotIn("council_session.py transition", council)
+        self.assertIn("In `READ_ONLY`, never create, update, archive or delete files", council)
+        self.assertIn("In `READ_ONLY`, never clear, move or change the anchor", council)
+
     def test_incremental_execution_and_remote_authority_contract(self):
         council = read(COUNCIL)
         assert_contains_all(

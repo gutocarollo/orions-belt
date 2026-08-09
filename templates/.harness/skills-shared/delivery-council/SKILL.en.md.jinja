@@ -78,8 +78,8 @@ MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE
   must not edit workspace files, mutate a ledger, commit, push or merge.
 - Use `WORKSPACE_WRITE` only when the user requested implementation or change.
 - Start the enforceable lifecycle with
-  `python3 .harness/lib/council_session.py start --run-id <id> --request-source <source> --mutation-mode WORKSPACE_WRITE`.
-  Advance it with `council_session.py transition`; finish only after `DELIVERY`.
+  `python3 .harness/lib/council_session.py start --run-id <id> --anchor-source <source> --mutation-mode WORKSPACE_WRITE`.
+  Advance it with `python3 .harness/lib/agent_swarm_ledger.py transition`; finish only after `DELIVERY`.
 - Before starting EVERY phase and EVERY execution item, invoke
   `planning-and-task-breakdown` in read-only preflight. A phase preflight never
   replaces the item preflight, including for the first item.
@@ -183,7 +183,7 @@ Do not delegate raw ambiguity to the user. Explore code, docs and real data firs
 
 ## Mandatory Flow
 
-0. **Anchor the original request (estimand fidelity).** Before anything else, write/update `.harness/requests/CURRENT-TASK.md` with the user's ORIGINAL objective VERBATIM + any explicitly-agreed amendments, sourced from `.harness/requests/session-*.md` (the append-only ledger captured by `request-ledger.py`, immune to context compaction). Every plan-review and verification round MUST hand this file to the reviewer subagent, and the reviewer's §1.0 estimand-fidelity axis judges the work against it — not against the derived plan. This is the counter-measure to the most recurring drift: the objective gets paraphrased away by compaction and the review ends up validating an intermediate plan that silently substituted the request.
+0. **Anchor the original request (estimand fidelity).** In `WORKSPACE_WRITE`, write/update `.harness/requests/CURRENT-TASK.md` with the user's ORIGINAL objective VERBATIM + explicitly agreed amendments, preferring the append-only `.harness/requests/session-*.md` ledger. In `READ_ONLY`, never create, update, archive or delete files: use the existing ledger or an inline verbatim block as `ANCHOR_SOURCE`. Every review receives `ANCHOR_SOURCE` and judges against it, never only against the derived plan.
 1. Resolve the entry point (`START_AT`).
 2. Produce a Context Brief proportional to the entry point:
    - real request and true objective (quote the ANCHOR verbatim);
@@ -414,7 +414,7 @@ On `CORRIGIR` in the final round:
 - do not declare `ADVERSARIAL-VERIFICATION: SATISFEITO`;
 - deliver the final `FIX-REQUEST` as a concrete next action for the next call, or stop with the declared pending item.
 
-**Anchor closure (mandatory on a terminal status).** When the loop ends `SATISFEITO` (or the task is otherwise delivered/abandoned), CLEAR `.harness/requests/CURRENT-TASK.md` (delete it, or archive it under `.harness/requests/done/`). A finished objective left there would re-inject at the next SessionStart with blocking authority — the `request-reinject.py` staleness warning is only a backstop; the closure is the fix. The next task's Flow step 0 writes a fresh anchor.
+**Anchor closure.** In `WORKSPACE_WRITE`, archive the anchor according to harness policy when the loop ends. In `READ_ONLY`, never clear, move or change the anchor; report possible staleness only.
 
 In the final response, include:
 

@@ -64,6 +64,87 @@ def commit_files(folder, message, *files):
 
 
 class CouncilPipelineTest(unittest.TestCase):
+    def test_direct_read_only_transition_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            process = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / ".harness/lib/agent_swarm_ledger.py"),
+                    "transition",
+                    "--run-id",
+                    "read-only-bypass",
+                    "--event",
+                    "ANCHOR",
+                    "--payload-json",
+                    json.dumps({"mutation_mode": "READ_ONLY", "anchor_source": "inline"}),
+                ],
+                cwd=ROOT,
+                env={**os.environ, "HARNESS_PROJECT_ROOT": str(root)},
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(0, process.returncode)
+            self.assertIn("read-only Council runs are inline", process.stderr)
+            self.assertFalse((root / ".harness").exists())
+
+    def test_planning_review_persists_deferred_finding_in_active_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = root / ".harness/runs/planning-defer"
+            run.mkdir(parents=True)
+            (root / ".harness/runs/ACTIVE").write_text("planning-defer\n", encoding="utf-8")
+            run_md = run / "RUN.md"
+            run_md.write_text(
+                "# RUN\n\n## Pendências não bloqueantes\n- Nenhuma no início do run.\n\n## Journal\n",
+                encoding="utf-8",
+            )
+            impact = {
+                "id": "D-PLAN",
+                "evidence_status": "UNVERIFIED",
+                "evidence": "not on the current critical path",
+                "objective_impact": 1,
+                "journey_reachability": 1,
+                "acceptance_impact": 1,
+                "irreversibility": 0,
+                "dependency_urgency": 0,
+                "on_critical_path": False,
+                "affects_current_phase": False,
+                "validated_workaround": True,
+                "graph_nodes": ["later"],
+            }
+            review = {
+                "deferred_findings": [
+                    {"impact": impact, "reason": "safe to defer", "review_after": "next phase"}
+                ]
+            }
+            process = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / ".harness/lib/agent_swarm_ledger.py"),
+                    "append",
+                    "--run-id",
+                    "planning-defer",
+                    "--loop",
+                    "planning",
+                    "--round",
+                    "1",
+                    "--event",
+                    "review",
+                    "--status",
+                    "SATISFEITO",
+                    "--payload-json",
+                    json.dumps(review),
+                ],
+                cwd=ROOT,
+                env={**os.environ, "HARNESS_PROJECT_ROOT": str(root)},
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, process.returncode, process.stdout + process.stderr)
+            self.assertEqual(1, run_md.read_text(encoding="utf-8").count("`D-PLAN`"))
+
     def test_integrates_exact_sequence_with_sha_and_reviewers(self):
         result = integrate_events(complex_events(), "b" * 40)
         self.assertEqual("DELIVERY", result["state"]["stage"])

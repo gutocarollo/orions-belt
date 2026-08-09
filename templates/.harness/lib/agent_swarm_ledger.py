@@ -151,6 +151,7 @@ def payload(raw: str | None) -> dict[str, Any]:
 
 def append(args: argparse.Namespace) -> None:
     path = ledger_path(args.run_id)
+    event_payload = payload(args.payload_json)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+", encoding="utf-8") as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
@@ -159,12 +160,13 @@ def append(args: argparse.Namespace) -> None:
         parent_seq = pending_parent(entries, args.loop, args.event)
         entry = {"ts": utc_now(), "run_id": args.run_id, "seq": len(entries) + 1,
                  "loop": args.loop, "round": args.round, "event": args.event,
-                 "status": args.status, "payload": payload(args.payload_json)}
+                 "status": args.status, "payload": event_payload}
         if parent_seq is not None:
             entry["parent_seq"] = parent_seq
         validate_entry(entry, args.run_id, len(entries) + 1)
         if entries and args.round < entries[-1]["round"]:
             raise SystemExit("round cannot regress")
+        persist_deferred(args.run_id, event_payload)
         stream.seek(0, 2)
         stream.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
         stream.flush()
@@ -187,6 +189,9 @@ def summary(args: argparse.Namespace) -> None:
 
 def transition(args: argparse.Namespace) -> None:
     folder = ledger_path(args.run_id).parent
+    event_payload = payload(args.payload_json)
+    if args.council_event == "ANCHOR" and event_payload.get("mutation_mode") == "READ_ONLY":
+        raise SystemExit("read-only Council runs are inline and cannot mutate the ledger")
     folder.mkdir(parents=True, exist_ok=True)
     event_path = folder / "council-events.jsonl"
     state_path = folder / "council-state.json"
@@ -201,7 +206,8 @@ def transition(args: argparse.Namespace) -> None:
         try:
             for item in events:
                 state = apply_transition(state, item["event"], item["payload"])
-            event_payload = payload(args.payload_json)
+            if state and state.get("mutation_mode") == "READ_ONLY":
+                raise TransitionError("read-only Council runs are inline and cannot mutate the ledger")
             if args.council_event == "VALIDATION":
                 checked = event_payload.get("checked_files", [])
                 for name in checked:
