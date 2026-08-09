@@ -171,7 +171,8 @@ class CouncilPipelineTest(unittest.TestCase):
             write_delivery_support(folder, base_sha, unrecorded_sha, portions=[{
                 "path": "unrecorded.py", "start_line": 1, "end_line": 1,
                 "purpose": "demonstrate unrecorded code", "inputs": ["request"], "outputs": ["value"],
-                "evidence": ["negative regression"], "simpler_alternative": "omit it", "necessity": "test fixture",
+                "evidence": [{"path": "unrecorded.py", "line": 1, "contains": "value = 1", "command": "test -s unrecorded.py"}],
+                "simpler_alternative": "omit it", "necessity": "test fixture",
             }])
             (folder / "delivery.json").write_text(json.dumps(delivery_manifest(slice_sha)))
             ledger = folder / "events.jsonl"
