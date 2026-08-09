@@ -5,7 +5,9 @@ The ledger is the source; state and evidence are derived outputs.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,15 @@ from objective_control import ObjectiveControlError, validate_execution_graph, v
 
 class IntegrationError(ValueError):
     pass
+
+
+def _worktree_state(repo_root: Path) -> list[str]:
+    command = [
+        "git", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".",
+        ":(exclude).harness/runs/**", ":(exclude).harness/council-active",
+        ":(exclude).harness/council-active.required-next",
+    ]
+    return sorted(item for item in subprocess.check_output(command, cwd=repo_root, text=True).split("\0") if item)
 
 
 def _load_json(repo_root: Path, relative: str, label: str) -> dict[str, Any]:
@@ -69,18 +80,33 @@ def integrate_events(events: list[dict[str, Any]], git_sha: str) -> dict[str, An
 def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
     state = result["state"]
     declared_sha = result["evidence"]["git_sha"]
-    head = __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], cwd=repo_root, text=True).strip()
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_root, text=True).strip()
     if declared_sha != head:
         raise IntegrationError(f"declared git_sha {declared_sha} does not equal repository HEAD {head}")
+    validations: dict[str, dict[str, Any]] = {}
+    pending_validation = None
+    for history_item in state["history"]:
+        if history_item["event"] == "VALIDATION":
+            pending_validation = history_item["payload"]
+        elif history_item["event"] == "LOCAL-COMMIT":
+            validations[history_item["payload"]["sha"]] = pending_validation or {}
+            pending_validation = None
     for sha in state.get("commits", []):
-        process = __import__("subprocess").run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=repo_root, capture_output=True)
+        process = subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=repo_root, capture_output=True)
         if process.returncode:
             raise IntegrationError(f"local commit does not exist in repository: {sha}")
-        if __import__("subprocess").run(["git", "merge-base", "--is-ancestor", sha, declared_sha], cwd=repo_root).returncode:
+        if subprocess.run(["git", "merge-base", "--is-ancestor", sha, declared_sha], cwd=repo_root).returncode:
             raise IntegrationError(f"local commit is not an ancestor of declared git_sha: {sha}")
-        actual_files = set(__import__("subprocess").check_output(["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", sha], cwd=repo_root, text=True).splitlines())
+        actual_files = set(subprocess.check_output(["git", "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", sha], cwd=repo_root, text=True).splitlines())
         if actual_files != set(state.get("commit_files", {}).get(sha, [])):
             raise IntegrationError(f"local commit files differ from validated slice: {sha}")
+        validation = validations.get(sha, {})
+        expected_hashes = {item["path"]: item["sha256"] for item in validation.get("file_hashes", [])}
+        actual_hashes = {path: hashlib.sha256(subprocess.check_output(["git", "show", f"{sha}:{path}"], cwd=repo_root)).hexdigest() for path in actual_files}
+        if actual_hashes != expected_hashes:
+            raise IntegrationError(f"commit content differs from validated file hashes: {sha}")
+    if _worktree_state(repo_root) != sorted(state.get("worktree_baseline", [])):
+        raise IntegrationError("repository has uncommitted drift relative to the Council ANCHOR")
     delivery = next((item["payload"] for item in reversed(state["history"]) if item["event"] == "DELIVERY"), None)
     if state.get("mutation_mode") == "WORKSPACE_WRITE":
         if not delivery:
@@ -110,6 +136,11 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
             raise IntegrationError(str(exc)) from exc
         if graph["objective"] != state.get("objective"):
             raise IntegrationError("execution graph objective differs from the Council macro objective")
+        if report["base_sha"] != state.get("base_sha"):
+            raise IntegrationError("code necessity base_sha differs from the Council ANCHOR")
+        for sha in state.get("commits", []):
+            if subprocess.run(["git", "merge-base", "--is-ancestor", sha, report["head_sha"]], cwd=repo_root).returncode:
+                raise IntegrationError(f"code necessity report does not cover local commit: {sha}")
         edges = {edge["edge_id"]: edge for edge in graph["edges"]}
         planned_edges = {item["payload"]["edge_id"] for item in state["history"] if item["event"] == "PHASE-PLAN"}
         if not planned_edges <= edges.keys():
@@ -117,14 +148,6 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
         acceptance = manifest["acceptance"]
         if {item["commit"] for item in acceptance} != set(state.get("commits", [])) or manifest.get("commits") != state.get("commits"):
             raise IntegrationError("delivery manifest must map acceptance and every local commit")
-        validations: dict[str, dict[str, Any]] = {}
-        pending_validation = None
-        for history_item in state["history"]:
-            if history_item["event"] == "VALIDATION":
-                pending_validation = history_item["payload"]
-            elif history_item["event"] == "LOCAL-COMMIT":
-                validations[history_item["payload"]["sha"]] = pending_validation or {}
-                pending_validation = None
         expected_reviewers = {state["quality_reviewer_id"], state["adversarial_reviewer_id"]}
         covered_edges: set[str] = set()
         for item in acceptance:
@@ -147,8 +170,8 @@ def verify_repository_evidence(result: dict[str, Any], repo_root: Path) -> None:
                 evidence_path = (repo_root / evidence).resolve()
                 if repo_root.resolve() not in evidence_path.parents or not evidence_path.is_file():
                     raise IntegrationError(f"acceptance evidence is missing or escapes repository: {evidence}")
-        if not set(graph_result["critical_path"]) <= covered_edges:
-            raise IntegrationError("delivery acceptance does not cover the graph critical path")
+        if not set(graph_result["critical_edges"]) <= covered_edges:
+            raise IntegrationError("delivery acceptance does not cover every critical graph edge")
 
 
 def main() -> int:

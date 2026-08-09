@@ -14,6 +14,7 @@ from council_runtime import (  # noqa: E402
 
 
 TESTS = {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]}
+ANCHOR = {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline", "base_sha": "0" * 40, "worktree_baseline": []}
 
 
 def phase(name="p1"):
@@ -25,7 +26,7 @@ def item(phase_name="p1", item_name="i1", **extra):
 
 
 def validation(files, command="test"):
-    return {"status": "PASS", "commands": [{"command": command, "exit_code": 0}], "checked_files": files, "executor": "agent_swarm_ledger", "validated_at": "2026-01-01T00:00:00Z", "file_hashes": [{"path": name, "sha256": "0" * 64} for name in files], "test_results": [{"id": test_id, "class": test_class, "status": "PASS"} for test_class, ids in TESTS.items() for test_id in ids]}
+    return {"status": "PASS", "commands": [{"command": command, "exit_code": 0, "test_ids": ["F1", "Q1", "R1"]}], "checked_files": files, "executor": "agent_swarm_ledger", "validated_at": "2026-01-01T00:00:00Z", "file_hashes": [{"path": name, "sha256": "0" * 64} for name in files], "tests": TESTS}
 
 
 def impact(finding_id, disposition="HIGH_FIX_NOW"):
@@ -41,7 +42,7 @@ class CouncilRuntimeTest(unittest.TestCase):
     def walk_to_commit(self):
         state = None
         events = [
-            ("ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"}),
+            ("ANCHOR", ANCHOR),
             ("PHASE-PLAN", phase()),
             ("ITEM-PLAN", item()),
             ("SLICE", {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}),
@@ -56,7 +57,7 @@ class CouncilRuntimeTest(unittest.TestCase):
         state = self.walk_to_commit()
         for kind, payload in [
             ("QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "11111111-1111-4111-8111-111111111111"}),
-            ("SIMPLIFICATION", {"status": "NAO_NECESSARIA"}),
+            ("SIMPLIFICATION", {"status": "NAO_NECESSARIA", "reason": "already minimal"}),
             ("ADVERSARIAL", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "22222222-2222-4222-8222-222222222222"}),
             ("DELIVERY", {"status": "SATISFEITO", "manifest": "delivery.json"}),
         ]:
@@ -64,14 +65,14 @@ class CouncilRuntimeTest(unittest.TestCase):
         self.assertEqual("DELIVERY", state["stage"])
 
     def test_edit_without_ready_item_is_rejected(self):
-        state = apply_transition(None, "ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"})
+        state = apply_transition(None, "ANCHOR", ANCHOR)
         with self.assertRaisesRegex(TransitionError, "PHASE-PLAN"):
             apply_transition(state, "SLICE", {"skill": "incremental-implementation"})
 
     def test_next_slice_without_validation_is_rejected(self):
         state = None
         for kind, payload in [
-            ("ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"}),
+            ("ANCHOR", ANCHOR),
             ("PHASE-PLAN", phase()),
             ("ITEM-PLAN", item()),
             ("SLICE", {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}),
@@ -83,7 +84,7 @@ class CouncilRuntimeTest(unittest.TestCase):
     def test_quality_before_local_commit_is_rejected(self):
         state = None
         for kind, payload in [
-            ("ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"}),
+            ("ANCHOR", ANCHOR),
             ("PHASE-PLAN", phase()),
             ("ITEM-PLAN", item()),
             ("SLICE", {"skill": "incremental-implementation", "slice": "s1", "changed_files": ["slice.txt"]}),
@@ -101,12 +102,12 @@ class CouncilRuntimeTest(unittest.TestCase):
         state = self.walk_to_commit()
         state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1, "findings": [finding()]})
         with self.assertRaisesRegex(TransitionError, "ITEM-PLAN"):
-            apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA"})
+            apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA", "reason": "already minimal"})
 
     def test_adversarial_corrigir_cannot_advance_to_delivery(self):
         state = self.walk_to_commit()
         state = apply_transition(state, "QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "33333333-3333-4333-8333-333333333333", "round": 1})
-        state = apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA"})
+        state = apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA", "reason": "already minimal"})
         state = apply_transition(state, "ADVERSARIAL", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "44444444-4444-4444-8444-444444444444", "round": 1, "findings": [finding()]})
         with self.assertRaisesRegex(TransitionError, "ITEM-PLAN"):
             apply_transition(state, "DELIVERY", {"status": "SATISFEITO", "manifest": "delivery.json"})
@@ -121,6 +122,23 @@ class CouncilRuntimeTest(unittest.TestCase):
         with self.assertRaisesRegex(TransitionError, "minimum|non-negative"):
             apply_transition(state, "QUALITY", {"status": "SATISFEITO", "critical": -1, "required": 0, "reviewer_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "round": 1})
 
+    def test_simplification_changes_reenter_plan_validation_and_commit_loop(self):
+        state = self.walk_to_commit()
+        state = apply_transition(state, "QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "round": 1})
+        state = apply_transition(state, "SIMPLIFICATION", {"status": "APLICAR", "reason": "remove duplicate branch"})
+        with self.assertRaisesRegex(TransitionError, "ITEM-PLAN"):
+            apply_transition(state, "ADVERSARIAL", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "round": 1})
+        state = apply_transition(state, "ITEM-PLAN", item("p1", "simplify", fix_kind="simplification", consumes_review_round=1))
+        self.assertIsNone(state["pending_fix"])
+
+    def test_quality_and_adversarial_reviewers_must_be_distinct(self):
+        state = self.walk_to_commit()
+        reviewer = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        state = apply_transition(state, "QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": reviewer, "round": 1})
+        state = apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA", "reason": "already minimal"})
+        with self.assertRaisesRegex(TransitionError, "distinct"):
+            apply_transition(state, "ADVERSARIAL", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": reviewer, "round": 1})
+
     def test_review_round_cannot_repeat_after_fix(self):
         state = self.walk_to_commit()
         state = apply_transition(state, "QUALITY", {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "round": 1, "findings": [finding()]})
@@ -134,7 +152,7 @@ class CouncilRuntimeTest(unittest.TestCase):
     def test_delivery_before_adversarial_is_rejected(self):
         state = self.walk_to_commit()
         state = apply_transition(state, "QUALITY", {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"})
-        state = apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA"})
+        state = apply_transition(state, "SIMPLIFICATION", {"status": "NAO_NECESSARIA", "reason": "already minimal"})
         with self.assertRaisesRegex(TransitionError, "ADVERSARIAL"):
             apply_transition(state, "DELIVERY", {"status": "SATISFEITO"})
 
@@ -165,14 +183,18 @@ class CouncilRuntimeTest(unittest.TestCase):
         self.assertEqual("D1", state["deferred_findings"][0]["impact"]["id"])
 
     def test_validation_ids_must_equal_the_planned_graph_edge(self):
-        state = apply_transition(None, "ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"})
+        state = apply_transition(None, "ANCHOR", ANCHOR)
         state = apply_transition(state, "PHASE-PLAN", phase())
         state = apply_transition(state, "ITEM-PLAN", item())
         state = apply_transition(state, "SLICE", {"skill": "incremental-implementation", "slice": "i1", "changed_files": ["slice.txt"]})
         evidence = validation(["slice.txt"])
-        evidence["test_results"][0]["id"] = "wrong"
-        with self.assertRaisesRegex(TransitionError, "test IDs"):
+        evidence["commands"][0]["test_ids"][0] = "wrong"
+        with self.assertRaisesRegex(TransitionError, "test ID"):
             apply_transition(state, "VALIDATION", evidence)
+
+    def test_workspace_anchor_requires_initial_repository_evidence(self):
+        with self.assertRaisesRegex(TransitionError, "base_sha"):
+            apply_transition(None, "ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "inline"})
 
 
 if __name__ == "__main__":

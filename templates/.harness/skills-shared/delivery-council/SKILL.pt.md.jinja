@@ -127,14 +127,14 @@ Materialize o plano como grafo START→GOAL: jornadas, nós, arestas, dependênc
 
 | Estado | Evidencia de entrada | Proximo estado permitido |
 |---|---|---|
-| `ANCHOR` | `ANCHOR_SOURCE` verbatim | `PHASE-PLAN` ou entrega read-only |
+| `ANCHOR` | `ANCHOR_SOURCE` verbatim; SHA inicial e baseline do worktree | `PHASE-PLAN` ou entrega read-only |
 | `PHASE-PLAN` | `planning-and-task-breakdown`; fase `PRONTO` | `ITEM-PLAN` |
 | `ITEM-PLAN` | item `PRONTO`, dependencias e aceite | `SLICE` |
 | `SLICE` | menor incremento vertical | `VALIDATION` |
-| `VALIDATION` | comando/inspecao real com PASS | `LOCAL-COMMIT` |
+| `VALIDATION` | cada ID funcional/qualidade/regressao ligado a comando executado com PASS | `LOCAL-COMMIT` |
 | `LOCAL-COMMIT` | SHA local atomico do slice | proximo `ITEM-PLAN` ou `QUALITY` |
 | `QUALITY` | zero `Critical` e zero `Required` | `SIMPLIFICATION` ou novo `ITEM-PLAN` de fix |
-| `SIMPLIFICATION` | `APLICADA` validada ou `NAO_NECESSARIA` | `ADVERSARIAL` |
+| `SIMPLIFICATION` | `APLICAR` com motivo ou `NAO_NECESSARIA` com motivo | novo `ITEM-PLAN` para aplicar ou `ADVERSARIAL` |
 | `ADVERSARIAL` | review independente satisfeita ou dispensa proporcional valida | `DELIVERY` ou novo `ITEM-PLAN` de fix |
 | `DELIVERY` | aceite mapeado a evidencias e SHAs locais | terminal |
 
@@ -300,8 +300,8 @@ Cada rodada de qualidade deve ser registrada no ledger de execucao como `event=r
 
 1. Somente depois de `QUALITY-REVIEW: SATISFEITO`, carregue e aplique `code-simplification` no codigo da mudanca atual. A passada e condicional: nao refatore por contagem de linhas e nao toque codigo nao relacionado.
 2. Se nao houver simplificacao segura, registre `SIMPLIFICATION: NAO_NECESSARIA` com a razao concreta. Isso e um resultado valido; a skill nao autoriza churn.
-3. Se houver simplificacao, aplique uma mudanca por vez, preserve exatamente comportamento, efeitos, erros e ordenacao, e rode os testes apos cada mudanca. Se falhar, desfaça somente a simplificacao recem-aplicada e reavalie.
-4. Quando a passada alterar arquivos, rode novamente `code-review-and-quality` antes do adversarial final. A nova review precisa confirmar que a simplificacao reduziu complexidade sem criar regressao. Se nenhuma alteracao for feita, nao consuma uma rodada extra.
+3. Se houver simplificacao, registre `SIMPLIFICATION: APLICAR` e volte obrigatoriamente ao fluxo `planning-and-task-breakdown -> incremental-implementation -> VALIDATION -> LOCAL-COMMIT`. Nao marque uma alteracao como aplicada apontando para commit anterior. Preserve comportamento, efeitos, erros e ordenacao; se os testes falharem, desfaça somente a simplificacao recem-aplicada e reavalie.
+4. Depois do commit local da simplificacao, rode novamente `code-review-and-quality` e a propria passada de simplificacao antes do adversarial final. A nova review precisa confirmar reducao de complexidade sem regressao, e a passada final deve terminar em `NAO_NECESSARIA`. Se nenhuma alteracao for feita, nao consuma uma rodada extra.
 5. Gere o relatório de necessidade (`code-necessity`) cobrindo cada linha de código adicionada por porção semântica: path/range, motivo, objetivo, entradas, saídas, evidência, alternativa mais simples e necessidade.
 
 ### Fechamento do gate
@@ -312,7 +312,7 @@ O Council so pode iniciar o Adversarial Verification Loop quando houver:
 Para mudanca de codigo:
 QUALITY-GATE: SATISFEITO
 QUALITY-REVIEW: SATISFEITO
-SIMPLIFICATION: APLICADA | NAO_NECESSARIA
+SIMPLIFICATION: NAO_NECESSARIA
 
 Para tarefa exclusivamente documental:
 QUALITY-GATE: NAO_APLICAVEL
@@ -496,6 +496,8 @@ python3 engine/integration/council_pipeline.py .harness/runs/agent-swarm/<run-id
 
 Ausencia do kernel em um projeto instalado e uma capability explicitamente
 indisponivel, nao autorizacao para fabricar evidence/replay.
+
+O pipeline final deve provar, sem vacuidade: `base_sha != head_sha`; o `base_sha` e o mesmo capturado no ANCHOR; todos os commits de slice estao no intervalo justificado; toda aresta critica do grafo aparece no aceite; o worktree nao ganhou drift nao commitado desde a baseline; e cada ID de teste esta associado ao comando que o ledger realmente executou. SHAs iguais, uma unica rota BFS ou uma lista de IDs autodeclarada nao constituem prova.
 
 ## Fontes Obrigatorias
 

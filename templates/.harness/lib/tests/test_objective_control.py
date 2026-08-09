@@ -45,7 +45,18 @@ class ObjectiveImpactTest(unittest.TestCase):
 
 class ExecutionGraphTest(unittest.TestCase):
     def test_connected_graph_with_three_test_classes_passes(self):
-        self.assertEqual(["E1", "E2"], validate_execution_graph(graph())["critical_path"])
+        result = validate_execution_graph(graph())
+        self.assertEqual(["E1", "E2"], result["critical_path"])
+        self.assertEqual(["E1", "E2"], result["critical_edges"])
+
+    def test_all_critical_branches_are_returned_not_only_first_path(self):
+        branching = graph()
+        branching["nodes"].append("alternate")
+        branching["edges"].extend([
+            {**branching["edges"][0], "edge_id": "E3", "to": "alternate"},
+            {**branching["edges"][1], "edge_id": "E4", "from": "alternate"},
+        ])
+        self.assertEqual(["E1", "E2", "E3", "E4"], validate_execution_graph(branching)["critical_edges"])
 
     def test_disconnected_graph_or_missing_test_class_fails(self):
         disconnected = graph()
@@ -87,6 +98,8 @@ class CodeNecessityTest(unittest.TestCase):
             subprocess.run(["git", "add", "app.py"], cwd=root, check=True)
             subprocess.run(["git", "commit", "-q", "-m", "change"], cwd=root, check=True)
             report = {"base_sha": base, "head_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip(), "portions": []}
+            with self.assertRaisesRegex(ObjectiveControlError, "distinct"):
+                verify_code_necessity(root, {"base_sha": report["head_sha"], "head_sha": report["head_sha"], "portions": []})
             with self.assertRaisesRegex(ObjectiveControlError, "uncovered"):
                 verify_code_necessity(root, report)
             report["portions"] = [{"path": "app.py", "start_line": 2, "end_line": 2, "purpose": "compute result", "inputs": ["value"], "outputs": ["result"], "evidence": ["unit test"], "simpler_alternative": "none", "necessity": "requested behavior"}]

@@ -28,7 +28,7 @@ description: >
 
 {%- include "templates/.harness/skills-shared/objective-control/CONTROL.en.md.jinja" %}
 
-Exercise the input, edge, and observable output; confirm the planned `functional`, `quality`, and `regression` IDs. A green test unrelated to the journey does not prove completion.
+Exercise the input, edge, and observable output; confirm the planned `functional`, `quality`, and `regression` IDs. A green test unrelated to the journey does not prove completion. Confirm that every ID belongs to an executed command, every critical edge is covered, and no uncommitted drift was introduced after the run baseline.
 
 Complements `prova-de-conclusao`: a single change doesn't need the table nor the
 `PROVA-DE-CONCLUSAO: x/y PASS, gaps: [...]` sentinel — it needs EVIDENCE

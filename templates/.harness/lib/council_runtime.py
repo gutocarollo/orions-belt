@@ -28,7 +28,7 @@ NEXT = {
     "VALIDATION": {"LOCAL-COMMIT"},
     "LOCAL-COMMIT": {"PHASE-PLAN", "ITEM-PLAN", "QUALITY"},
     "QUALITY": {"ITEM-PLAN", "SIMPLIFICATION"},
-    "SIMPLIFICATION": {"ADVERSARIAL"},
+    "SIMPLIFICATION": {"ITEM-PLAN", "ADVERSARIAL"},
     "ADVERSARIAL": {"ITEM-PLAN", "DELIVERY"},
     "DELIVERY": set(),
 }
@@ -107,6 +107,9 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         _require(event == "ITEM-PLAN", "QUALITY: CORRIGIR requires ITEM-PLAN for the fix")
     if state and current == "ADVERSARIAL" and state.get("adversarial_status") == "CORRIGIR":
         _require(event == "ITEM-PLAN", "ADVERSARIAL: CORRIGIR requires ITEM-PLAN for the fix")
+    if state and current == "SIMPLIFICATION":
+        expected = "ITEM-PLAN" if state.get("simplification_status") == "APLICAR" else "ADVERSARIAL"
+        _require(event == expected, f"SIMPLIFICATION: {state.get('simplification_status')} requires {expected}")
     if state and ((current == "QUALITY" and state.get("quality_status") == "BLOQUEADO") or (current == "ADVERSARIAL" and state.get("adversarial_status") == "BLOQUEADO")):
         raise TransitionError(f"{current}: BLOQUEADO is terminal until external resolution")
     _require(event in NEXT.get(current, set()), f"{event} cannot follow {current}; expected {sorted(NEXT.get(current, set()))}")
@@ -122,6 +125,12 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         _require(bool(payload.get("anchor_source")), "ANCHOR requires anchor_source")
         result["mutation_mode"] = mode
         result["implementer_id"] = payload.get("implementer_id", "council-implementer")
+        if mode == "WORKSPACE_WRITE":
+            base_sha = str(payload.get("base_sha", ""))
+            _require(len(base_sha) == 40 and all(char in "0123456789abcdef" for char in base_sha.lower()), "workspace ANCHOR requires a full base_sha")
+            _require(isinstance(payload.get("worktree_baseline"), list), "workspace ANCHOR requires worktree_baseline")
+            result["base_sha"] = base_sha
+            result["worktree_baseline"] = sorted(str(item) for item in payload["worktree_baseline"])
     else:
         read_only_delivery = result.get("mutation_mode") == "READ_ONLY" and event == "DELIVERY"
         _require(result.get("mutation_mode") != "READ_ONLY" or read_only_delivery, "read-only Council runs cannot enter execution")
@@ -151,8 +160,10 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         _require(payload.get("status") == "PASS" and payload.get("commands"), "VALIDATION requires PASS and commands")
         _require(set(payload["checked_files"]) == set(result.get("slice_files", [])), "VALIDATION checked_files must equal the current slice files")
         _require({item["path"] for item in payload["file_hashes"]} == set(payload["checked_files"]), "VALIDATION file hashes must equal checked_files")
-        actual_tests = {item["id"]: item["class"] for item in payload["test_results"]}
-        _require(len(actual_tests) == len(payload["test_results"]), "VALIDATION test IDs must be unique")
+        command_test_ids = [test_id for command in payload["commands"] for test_id in command["test_ids"]]
+        _require(len(command_test_ids) == len(set(command_test_ids)), "VALIDATION command test IDs must be unique")
+        actual_tests = {test_id: test_class for test_class, ids in payload["tests"].items() for test_id in ids}
+        _require(set(command_test_ids) == set(actual_tests), "VALIDATION commands must execute every planned test ID")
         _require(actual_tests == result.get("planned_tests"), "VALIDATION test IDs and classes must equal the item plan")
         result["validated_files"] = list(payload["checked_files"])
         result["validated_tests"] = actual_tests
@@ -183,14 +194,17 @@ def apply_transition(state: dict[str, Any] | None, event: str, payload: dict[str
         if status == "CORRIGIR":
             result["pending_fix"] = {"kind": "quality", "round": round_number, "findings": findings}
     elif event == "SIMPLIFICATION":
-        _require(payload.get("status") in {"APLICADA", "NAO_NECESSARIA"}, "SIMPLIFICATION requires a terminal status")
-        if payload.get("status") == "APLICADA":
-            _require(payload.get("commit_sha") in result.get("commits", []), "SIMPLIFICATION: APLICADA must reference a validated local commit")
+        status = payload.get("status")
+        _require(status in {"APLICAR", "NAO_NECESSARIA"}, "SIMPLIFICATION requires APLICAR or NAO_NECESSARIA")
+        result["simplification_status"] = status
+        if status == "APLICAR":
+            result["pending_fix"] = {"kind": "simplification", "round": result.get("quality_round", 1), "findings": []}
     elif event == "ADVERSARIAL":
         findings, deferred = _review_decision(payload)
         reviewer = payload.get("reviewer_id")
         round_number = payload.get("round", 1)
         _require(bool(reviewer) and reviewer != result.get("implementer_id"), "ADVERSARIAL requires an independent reviewer_id")
+        _require(reviewer != result.get("quality_reviewer_id"), "ADVERSARIAL requires a reviewer distinct from QUALITY")
         _require(bool(REVIEWER_ID_RE.fullmatch(str(reviewer))), "ADVERSARIAL reviewer_id must be a thread UUID")
         _require(isinstance(round_number, int) and 1 <= round_number <= 3, "ADVERSARIAL round must be between 1 and 3")
         previous = result.get("adversarial_reviewer_id")

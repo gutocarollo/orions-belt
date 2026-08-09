@@ -9,4 +9,4 @@ description: Removes unnecessary complexity and produces complete semantic neces
 
 Preserve behavior and the start-to-goal flow while reducing unnecessary code. Large line count is a diagnostic, not a verdict. Do not refactor unrelated code and do not trade clarity for clever compression.
 
-The final necessity report covers every added code line by semantic portion: path/range, why it exists, objective, inputs, outputs, real evidence, simpler alternative considered, and why the retained portion is necessary. Remove or simplify portions without proven behavior. Vague whole-file justification is invalid.
+The final necessity report covers every added code line by semantic portion: path/range, why it exists, objective, inputs, outputs, real evidence, simpler alternative considered, and why the retained portion is necessary. Remove or simplify portions without proven behavior. Vague whole-file justification is invalid. If simplification changes files, return through planning, incremental execution, validation and a fresh local commit before quality and adversarial review; an older commit cannot prove the simplification.

@@ -15,6 +15,13 @@ from council_hooks import git_guard, post_tool_guard, pre_tool_guard, stop_guard
 from council_session import finish_session, start_session  # noqa: E402
 from sync_council import council_paths, sync_council  # noqa: E402
 
+
+def init_committed_repo(root):
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-q", "--allow-empty", "-m", "initial"], cwd=root, check=True)
+
 SKILL_CONTRACTS = {
     "adversarial-review": ("CRITICAL_BLOCK", "HIGH_FIX_NOW", "DEFER_RUN"),
     "clarification-plan": ("CRITICAL_BLOCK", "HIGH_FIX_NOW", "DEFER_RUN"),
@@ -136,7 +143,7 @@ class CouncilContractTest(unittest.TestCase):
     def test_session_lifecycle_activates_state_and_installs_real_push_hook(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            init_committed_repo(root)
             state_path = start_session(root, "lifecycle", "inline")
             pointer = root / ".harness/council-active"
             self.assertEqual(state_path, Path(pointer.read_text().strip()))
@@ -150,7 +157,7 @@ class CouncilContractTest(unittest.TestCase):
     def test_finished_session_clears_active_run_but_preserves_run_record(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            init_committed_repo(root)
             state_path = start_session(root, "finished", "inline")
             state = json.loads(state_path.read_text(encoding="utf-8"))
             state["stage"] = "DELIVERY"
@@ -162,7 +169,7 @@ class CouncilContractTest(unittest.TestCase):
     def test_read_only_session_is_inline_and_writes_nothing(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            init_committed_repo(root)
             before = sorted(str(path.relative_to(root)) for path in root.rglob("*") if ".git" not in path.parts)
             state_path = start_session(root, "read-only", "inline", "READ_ONLY")
             after = sorted(str(path.relative_to(root)) for path in root.rglob("*") if ".git" not in path.parts)
@@ -188,7 +195,7 @@ class CouncilContractTest(unittest.TestCase):
     def test_active_state_that_differs_from_ledger_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            init_committed_repo(root)
             state_path = start_session(root, "tampered", "inline")
             state = json.loads(state_path.read_text(encoding="utf-8"))
             state["stage"] = "DELIVERY"

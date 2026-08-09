@@ -108,14 +108,14 @@ Materialize the plan as a START→GOAL graph: journeys, nodes, edges, dependenci
 
 | Current state | Required evidence | Next state |
 |---|---|---|
-| `ANCHOR` | original request and mutation mode | `PHASE-PLAN` |
+| `ANCHOR` | original request, mutation mode, initial SHA and worktree baseline | `PHASE-PLAN` |
 | `PHASE-PLAN` | `planning-and-task-breakdown`; phase `PRONTO` | `ITEM-PLAN` |
 | `ITEM-PLAN` | `planning-and-task-breakdown`; item `PRONTO` | `SLICE` |
 | `SLICE` | changed files and acceptance target | `VALIDATION` |
-| `VALIDATION` | successful commands over exactly the slice files | `LOCAL-COMMIT` |
+| `VALIDATION` | every functional/quality/regression ID bound to a successful executed command | `LOCAL-COMMIT` |
 | `LOCAL-COMMIT` | existing local SHA containing exactly those files | `ITEM-PLAN` or `QUALITY` |
 | `QUALITY` | zero `Critical` and zero `Required` | `SIMPLIFICATION` or fix `ITEM-PLAN` |
-| `SIMPLIFICATION` | applied and revalidated, or evidence-based N/A | `ADVERSARIAL` |
+| `SIMPLIFICATION` | `APPLY` with reason or evidence-based N/A | new `ITEM-PLAN` to apply, or `ADVERSARIAL` |
 | `ADVERSARIAL` | zero Blocking/High and satisfied sentinel | `DELIVERY` or fix `ITEM-PLAN` |
 | `DELIVERY` | SHA-bound manifest and replayable evidence | terminal |
 | `BLOCKED` | named missing decision/access/evidence | terminal |
@@ -151,11 +151,12 @@ FIX-CONSUMED:
 - validation-run: ...
 ```
 
-Then apply `code-simplification`; if it changes code, revalidate, commit locally
-and rerun quality review. Finally dispatch a `{{ project_name }}-adversarial-reviewer`
+Then apply `code-simplification`; if it proposes a code change, record `APPLY` and return through
+`planning-and-task-breakdown`, `incremental-implementation`, validation, a fresh local commit,
+quality review and simplification again. An older commit cannot prove the simplification. Finally dispatch a `{{ project_name }}-adversarial-reviewer`
 subagent in isolated context. Never self-review inline.
 
-The final code-necessity report covers every added code line by semantic portion: path/range, purpose, objective, inputs, outputs, real evidence, simpler alternative, and necessity.
+The final code-necessity report covers every added code line by semantic portion: path/range, purpose, objective, inputs, outputs, real evidence, simpler alternative, and necessity. The final pipeline proves `base_sha != head_sha`, binds the base to ANCHOR, covers every critical edge and every slice commit, rejects new uncommitted drift, and accepts test IDs only through commands the ledger actually executed.
 
 Limit: maximum 2 rounds for plan review.
 Limit: maximum 3 rounds for execution adversarial review.

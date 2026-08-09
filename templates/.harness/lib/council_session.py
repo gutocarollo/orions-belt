@@ -12,12 +12,22 @@ from council_runtime import apply_transition
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
 
 
+def worktree_state(root: Path) -> list[str]:
+    command = [
+        "git", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--", ".",
+        ":(exclude).harness/runs/**", ":(exclude).harness/council-active",
+        ":(exclude).harness/council-active.required-next",
+    ]
+    return sorted(item for item in subprocess.check_output(command, cwd=root, text=True).split("\0") if item)
+
+
 def start_session(root: Path, run_id: str, anchor_source: str, mutation_mode: str = "WORKSPACE_WRITE") -> Path | None:
     if mutation_mode == "READ_ONLY":
         return None
     folder = root / ".harness/runs/agent-swarm" / run_id
     folder.mkdir(parents=True, exist_ok=True)
-    event = {"seq": 1, "event": "ANCHOR", "payload": {"mutation_mode": mutation_mode, "anchor_source": anchor_source}}
+    base_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    event = {"seq": 1, "event": "ANCHOR", "payload": {"mutation_mode": mutation_mode, "anchor_source": anchor_source, "base_sha": base_sha, "worktree_baseline": worktree_state(root)}}
     state = apply_transition(None, event["event"], event["payload"])
     (folder / "council-events.jsonl").write_text(json.dumps(event, sort_keys=True) + "\n", encoding="utf-8")
     state_path = (folder / "council-state.json").resolve()

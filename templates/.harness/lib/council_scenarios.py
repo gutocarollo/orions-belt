@@ -3,6 +3,7 @@
 from __future__ import annotations
 import json
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -85,11 +86,17 @@ def _execute_flow(source: Path, target: Path, run_id: str, actions: list[dict[st
             changed_files = list(payload["changed_files"])
             (target / action["file"]).write_text(action["content"], encoding="utf-8")
         elif event == "VALIDATION":
-            command = action.get("command", ["git", "diff", "--check"])
-            result = _must(command, target)
-            payload["commands"] = [{"command": " ".join(command), "exit_code": result.returncode}]
+            commands = [
+                ([sys.executable, "-c", f"from pathlib import Path; assert all(Path(name).is_file() and Path(name).stat().st_size for name in {changed_files!r})"], ["F1"]),
+                (["git", "diff", "--check"], ["Q1"]),
+                ([sys.executable, "-c", f"from pathlib import Path; assert all(Path(name).read_text().endswith('\\n') for name in {changed_files!r})"], ["R1"]),
+            ]
+            payload["commands"] = []
+            for command, test_ids in commands:
+                result = _must(command, target)
+                payload["commands"].append({"command": shlex.join(command), "exit_code": result.returncode, "test_ids": test_ids})
             payload["checked_files"] = changed_files
-            payload["test_results"] = [{"id": test_id, "class": test_class, "status": "PASS"} for test_class, ids in TESTS.items() for test_id in ids]
+            payload["tests"] = TESTS
             validated_commands = [item["command"] for item in payload["commands"]]
         elif event == "LOCAL-COMMIT":
             sha = _commit_existing(target, changed_files)
@@ -107,8 +114,11 @@ def _execute_flow(source: Path, target: Path, run_id: str, actions: list[dict[st
             graph_path = target / "execution-graph.json"
             graph_path.write_text(json.dumps({"objective": "scenario delivery", "start_node": "request", "goal_node": "done", "nodes": ["request", "done"], "edges": [{"edge_id": "E1", "from": "request", "to": "done", "critical": True, "phase": "scenario", "item": "delivery", "tests": TESTS, "evidence": [ledger_path]}]}, indent=2) + "\n", encoding="utf-8")
             report_path = target / "code-necessity.json"
-            report_path.write_text(json.dumps({"base_sha": commits[-1], "head_sha": commits[-1], "portions": []}, indent=2) + "\n", encoding="utf-8")
+            base_sha = _must(["git", "rev-parse", f"{commits[0]}^"], target).stdout.strip()
+            report_path.write_text(json.dumps({"base_sha": base_sha, "head_sha": commits[-1], "portions": []}, indent=2) + "\n", encoding="utf-8")
             manifest.write_text(json.dumps({"acceptance": acceptance, "commits": commits, "execution_graph": graph_path.name, "code_necessity_report": report_path.name}, indent=2) + "\n", encoding="utf-8")
+            _must(["git", "add", manifest.name, graph_path.name, report_path.name], target)
+            _must(["git", "commit", "-q", "-m", "Council delivery proof"], target)
         _transition(source, target, run_id, event, payload, env)
         process_count += 1
         if index == len(actions) // 2:
@@ -143,11 +153,12 @@ def run_scenarios(root: Path, workspace: Path) -> dict[str, Any]:
     trivial = workspace / "trivial"
     remote = workspace / "remote.git"
     _init_repo(trivial)
+    _commit(trivial, "baseline.txt", "baseline\n")
     _must(["git", "init", "--bare", "-q", str(remote)], workspace)
     _must(["git", "remote", "add", "origin", str(remote)], trivial)
     trivial_actions = _base_actions("trivial") + [
         {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "77777777-7777-4777-8777-777777777777", "round": 1}},
-        {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "single clear slice", "validations": []}},
+        {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "single clear slice"}},
         {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "88888888-8888-4888-8888-888888888888", "round": 1}},
         {"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": "trivial-delivery.json"}},
     ]
@@ -159,6 +170,7 @@ def run_scenarios(root: Path, workspace: Path) -> dict[str, Any]:
 
     complex_repo = workspace / "complex"
     _init_repo(complex_repo)
+    _commit(complex_repo, "baseline.txt", "baseline\n")
     complex_actions = _base_actions("phase-1") + _base_actions("phase-2") + [
         {"event": "QUALITY", "payload": {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 1, "findings": [_finding("QF1", "quality")]}},
         {"event": "ITEM-PLAN", "payload": _item_payload("phase-2", "quality-fix", fix_kind="quality", consumes_review_round=1)},
@@ -166,14 +178,14 @@ def run_scenarios(root: Path, workspace: Path) -> dict[str, Any]:
         {"event": "VALIDATION", "payload": {"status": "PASS"}},
         {"event": "LOCAL-COMMIT", "payload": {}},
         {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 2}},
-        {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "already minimal", "validations": []}},
+        {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "already minimal"}},
         {"event": "ADVERSARIAL", "payload": {"status": "CORRIGIR", "critical": 0, "required": 1, "reviewer_id": "66666666-6666-4666-8666-666666666666", "round": 1, "findings": [_finding("AF1", "adversarial")]}},
         {"event": "ITEM-PLAN", "payload": _item_payload("phase-2", "adversarial-fix", fix_kind="adversarial", consumes_review_round=1)},
         {"event": "SLICE", "payload": {"skill": "incremental-implementation", "slice": "adversarial-fix", "changed_files": ["adversarial-fix.txt"]}, "file": "adversarial-fix.txt", "content": "adversarial fix\n"},
         {"event": "VALIDATION", "payload": {"status": "PASS"}},
         {"event": "LOCAL-COMMIT", "payload": {}},
         {"event": "QUALITY", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "55555555-5555-4555-8555-555555555555", "round": 3}},
-        {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "already minimal", "validations": []}},
+        {"event": "SIMPLIFICATION", "payload": {"status": "NAO_NECESSARIA", "reason": "already minimal"}},
         {"event": "ADVERSARIAL", "payload": {"status": "SATISFEITO", "critical": 0, "required": 0, "reviewer_id": "66666666-6666-4666-8666-666666666666", "round": 2}},
         {"event": "DELIVERY", "payload": {"status": "SATISFEITO", "manifest": "complex-delivery.json"}},
     ]

@@ -100,7 +100,7 @@ def validate_execution_graph(graph: dict[str, Any]) -> dict[str, Any]:
     for edge in critical_edges:
         if edge["from"] not in from_start or edge["to"] not in to_goal:
             raise ObjectiveControlError(f"critical edge {edge['edge_id']} is outside every start-to-goal path")
-    return {"status": "PASS", "critical_path": path, "nodes": len(nodes), "edges": len(edge_ids)}
+    return {"status": "PASS", "critical_path": path, "critical_edges": [edge["edge_id"] for edge in critical_edges], "nodes": len(nodes), "edges": len(edge_ids)}
 
 
 def _edge_path(adjacency: dict[str, list[tuple[str, str]]], start: str, goal: str) -> list[str] | None:
@@ -164,6 +164,8 @@ def verify_code_necessity(root: Path, report: dict[str, Any]) -> dict[str, Any]:
     actual_head = _git(root, "rev-parse", "HEAD").strip()
     if len(base) != 40 or len(head) != 40:
         raise ObjectiveControlError("code necessity report must bind full base_sha and head_sha values")
+    if base == head:
+        raise ObjectiveControlError("code necessity base_sha and head_sha must be distinct")
     if subprocess.run(["git", "merge-base", "--is-ancestor", base, head], cwd=root).returncode:
         raise ObjectiveControlError("code necessity base_sha is not an ancestor of head_sha")
     if subprocess.run(["git", "merge-base", "--is-ancestor", head, actual_head], cwd=root).returncode:
