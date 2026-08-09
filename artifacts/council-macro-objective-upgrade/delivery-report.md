@@ -39,8 +39,7 @@ Both `.claude` and `.agents` renders include the same operating contract for:
 
 ## Deterministic evidence
 
-The latest full rendered installation passed at code commit `fa9cf4b`; fresh
-hashed receipts are regenerated after this simplification evidence slice.
+Fresh hashed receipts at `916141b` cover code through `fa9cf4b`.
 
 - objective control: 11/11 PASS;
 - runtime: 20/20 PASS;
