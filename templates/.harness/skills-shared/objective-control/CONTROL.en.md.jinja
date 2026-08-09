@@ -4,6 +4,6 @@ Before asking, suggesting a change, creating a finding, or imposing a gate, stat
 
 - `CRITICAL_BLOCK`: `REAL` evidence, critical path, no validated workaround, score >=85; a hard-safety override requires irreversibility 4 and a concrete boundary.
 - `HIGH_FIX_NOW`: `REAL` evidence, current phase, no workaround, score >=70.
-- `DEFER_RUN`: every other case; persist it in `RUN.md` under `## Non-blocking pending items` and continue.
+- `DEFER_RUN`: every other case; persist it in `RUN.md` under the canonical heading `## Pendências não bloqueantes` and continue.
 
-`BLOCKED` requires a `CRITICAL_BLOCK` plus a named external dependency (authority, access, or fact). Agent-fixable issues return `FIX`. To disable or defer an excessive restriction, present data, impact, and a recommendation, then wait for explicit human approval.
+`BLOQUEADO` requires a `CRITICAL_BLOCK` plus a named external dependency (authority, access, or fact). Agent-fixable issues return `CORRIGIR`. To disable or defer an excessive restriction, present data, impact, and a recommendation, then wait for explicit human approval.

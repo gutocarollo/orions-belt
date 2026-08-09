@@ -92,6 +92,19 @@ class CodeNecessityTest(unittest.TestCase):
             report["portions"] = [{"path": "app.py", "start_line": 2, "end_line": 2, "purpose": "compute result", "inputs": ["value"], "outputs": ["result"], "evidence": ["unit test"], "simpler_alternative": "none", "necessity": "requested behavior"}]
             self.assertEqual(1, verify_code_necessity(root, report)["covered_lines"])
 
+            receipt_head = report["head_sha"]
+            (root / "receipt.json").write_text("{}\n", encoding="utf-8")
+            subprocess.run(["git", "add", "receipt.json"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "version receipt"], cwd=root, check=True)
+            self.assertEqual(1, verify_code_necessity(root, report)["covered_lines"])
+
+            source.write_text("value = 1\nresult = value + 1\nfinal = result\n", encoding="utf-8")
+            subprocess.run(["git", "add", "app.py"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "later code"], cwd=root, check=True)
+            self.assertEqual(receipt_head, report["head_sha"])
+            with self.assertRaisesRegex(ObjectiveControlError, "stale"):
+                verify_code_necessity(root, report)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -162,10 +162,15 @@ def verify_code_necessity(root: Path, report: dict[str, Any]) -> dict[str, Any]:
     base = str(report.get("base_sha", ""))
     head = str(report.get("head_sha", ""))
     actual_head = _git(root, "rev-parse", "HEAD").strip()
-    if len(base) != 40 or head != actual_head:
-        raise ObjectiveControlError("code necessity report must bind a full base_sha and current head_sha")
+    if len(base) != 40 or len(head) != 40:
+        raise ObjectiveControlError("code necessity report must bind full base_sha and head_sha values")
     if subprocess.run(["git", "merge-base", "--is-ancestor", base, head], cwd=root).returncode:
         raise ObjectiveControlError("code necessity base_sha is not an ancestor of head_sha")
+    if subprocess.run(["git", "merge-base", "--is-ancestor", head, actual_head], cwd=root).returncode:
+        raise ObjectiveControlError("code necessity head_sha is not an ancestor of current HEAD")
+    later_code = _added_code_lines(_git(root, "diff", "--unified=0", "--no-color", f"{head}..{actual_head}", "--"))
+    if later_code:
+        raise ObjectiveControlError("code necessity report is stale because code was added after head_sha")
     added = _added_code_lines(_git(root, "diff", "--unified=0", "--no-color", f"{base}..{head}", "--"))
     covered: set[tuple[str, int]] = set()
     required_fields = ("path", "start_line", "end_line", "purpose", "inputs", "outputs", "evidence", "simpler_alternative", "necessity")
