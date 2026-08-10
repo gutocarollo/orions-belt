@@ -17,39 +17,32 @@ class CouncilProfilePolicyTest(unittest.TestCase):
         result = choose_profile()
         self.assertEqual("DIRECT", result["effective_profile"])
         self.assertEqual([], result["hard_full_signals"])
+        self.assertEqual(0, result["budgets"]["max_subagents"])
 
     def test_ai_can_choose_light_without_new_deterministic_bureaucracy(self):
         result = choose_profile(requested_profile="AUTO", ai_choice="LIGHT")
         self.assertEqual("LIGHT", result["effective_profile"])
+        self.assertEqual(2, result["budgets"]["max_subagents"])
+        self.assertEqual(8, result["budgets"]["context_turn_budget"])
 
     def test_material_high_assurance_signal_sets_only_narrow_full_floor(self):
-        result = choose_profile(
-            requested_profile="AUTO",
-            ai_choice="DIRECT",
-            signals={"production_or_deploy": True},
-        )
+        result = choose_profile(requested_profile="AUTO", ai_choice="DIRECT", signals={"production_or_deploy": True})
         self.assertEqual("FULL", result["effective_profile"])
         self.assertEqual(["production_or_deploy"], result["hard_full_signals"])
+        self.assertEqual(4, result["budgets"]["max_subagents"])
+        self.assertEqual(16, result["budgets"]["context_turn_budget"])
 
     def test_medium_low_and_unreachable_findings_go_to_backlog(self):
-        result = choose_profile(
-            requested_profile="AUTO",
-            ai_choice="DIRECT",
-            findings=[
-                {"id": "M1", "severity": "MEDIUM", "reachable_in_current_task": True},
-                {"id": "H1", "severity": "HIGH", "reachable_in_current_task": False},
-            ],
-        )
+        result = choose_profile(requested_profile="AUTO", ai_choice="DIRECT", findings=[
+            {"id": "M1", "severity": "MEDIUM", "reachable_in_current_task": True},
+            {"id": "H1", "severity": "HIGH", "reachable_in_current_task": False},
+        ])
         self.assertEqual("DIRECT", result["effective_profile"])
         self.assertEqual([], result["fix_now"])
         self.assertEqual(["M1", "H1"], [item["id"] for item in result["backlog"]])
 
     def test_reachable_high_is_fix_now_but_does_not_force_full(self):
-        result = choose_profile(
-            requested_profile="AUTO",
-            ai_choice="LIGHT",
-            findings=[{"id": "H1", "severity": "HIGH", "reachable_in_current_task": True}],
-        )
+        result = choose_profile(requested_profile="AUTO", ai_choice="LIGHT", findings=[{"id": "H1", "severity": "HIGH", "reachable_in_current_task": True}])
         self.assertEqual("LIGHT", result["effective_profile"])
         self.assertEqual(["H1"], [item["id"] for item in result["fix_now"]])
         self.assertTrue(result["requires_profile_reassessment"])
@@ -57,10 +50,8 @@ class CouncilProfilePolicyTest(unittest.TestCase):
     def test_policy_is_injected_after_the_legacy_council_body(self):
         selector = (ROOT / "templates/.harness/skills-shared/delivery-council/SKILL.md.jinja").read_text()
         self.assertIn("council-execution-profiles.", selector)
-        self.assertGreater(
-            selector.index("council-execution-profiles."),
-            selector.index("delivery-council/SKILL."),
-        )
+        self.assertIn("council-performance-budget.", selector)
+        self.assertGreater(selector.index("council-execution-profiles."), selector.index("delivery-council/SKILL."))
 
     def test_prompt_renderer_exposes_auto_direct_light_full(self):
         source = (ROOT / "engine/contract/scripts/render_prompt.py").read_text()

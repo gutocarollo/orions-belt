@@ -14,6 +14,11 @@ from typing import Any
 
 PROFILES = ("AUTO", "DIRECT", "LIGHT", "FULL")
 RANK = {"DIRECT": 0, "LIGHT": 1, "FULL": 2}
+PROFILE_BUDGETS = {
+    "DIRECT": {"max_subagents": 0, "max_parallel_subagents": 0, "max_reviewers": 0, "context_turn_budget": 0, "context_strategy": "targeted-inline"},
+    "LIGHT": {"max_subagents": 2, "max_parallel_subagents": 2, "max_reviewers": 1, "context_turn_budget": 8, "context_strategy": "inline-or-one-cheap-scout"},
+    "FULL": {"max_subagents": 4, "max_parallel_subagents": 4, "max_reviewers": 3, "context_turn_budget": 16, "context_strategy": "context-delivery"},
+}
 HARD_FULL_SIGNALS = (
     "production_or_deploy",
     "destructive_or_irreversible",
@@ -37,46 +42,27 @@ def _profile(value: str, *, allow_auto: bool) -> str:
     return normalized
 
 
-def choose_profile(
-    *,
-    requested_profile: str = "AUTO",
-    ai_choice: str | None = None,
-    signals: dict[str, Any] | None = None,
-    findings: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
-    """Resolve the effective profile while preserving AI discretion.
-
-    AUTO begins at DIRECT. The model may raise it to LIGHT/FULL after targeted
-    exploration. Only a deliberately small set of material-risk signals impose
-    a deterministic FULL floor. Finding severity controls FIX_NOW vs BACKLOG;
-    it does not automatically turn every review finding into orchestration.
-    """
+def choose_profile(*, requested_profile: str = "AUTO", ai_choice: str | None = None, signals: dict[str, Any] | None = None, findings: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     requested = _profile(requested_profile, allow_auto=True)
     proposed = _profile(ai_choice or "DIRECT", allow_auto=False) if requested == "AUTO" else requested
     signal_map = {key: bool(value) for key, value in (signals or {}).items()}
     hard_signals = [key for key in HARD_FULL_SIGNALS if signal_map.get(key)]
     minimum = "FULL" if hard_signals else "DIRECT"
     effective = proposed if RANK[proposed] >= RANK[minimum] else minimum
-
-    fix_now: list[dict[str, Any]] = []
-    backlog: list[dict[str, Any]] = []
+    fix_now, backlog = [], []
     for raw in findings or []:
         item = dict(raw)
         severity = str(item.get("severity") or "LOW").upper()
         reachable = bool(item.get("reachable_in_current_task", True))
-        item["severity"] = severity
-        item["reachable_in_current_task"] = reachable
-        if severity in BLOCKING_SEVERITIES and reachable:
-            fix_now.append(item)
-        else:
-            backlog.append(item)
-
+        item["severity"], item["reachable_in_current_task"] = severity, reachable
+        (fix_now if severity in BLOCKING_SEVERITIES and reachable else backlog).append(item)
     return {
         "requested_profile": requested,
         "ai_choice": proposed,
         "minimum_profile": minimum,
         "effective_profile": effective,
         "hard_full_signals": hard_signals,
+        "budgets": dict(PROFILE_BUDGETS[effective]),
         "fix_now": fix_now,
         "backlog": backlog,
         "requires_profile_reassessment": bool(fix_now),

@@ -1,0 +1,15 @@
+## Performance budgets — ceilings, not gates
+
+Resource budgets guide the orchestrator; they never block delivery by themselves.
+
+| Profile | Subagents | Parallel subagents | Reviewers | Context turns |
+|---|---:|---:|---:|---:|
+| DIRECT | 0 | 0 | 0 | 0 |
+| LIGHT | up to 2 | up to 2 | 1 by default | 8 |
+| FULL | up to 4 | up to 4 | up to 3 | 16 |
+
+Use fewer resources whenever the objective is already reachable. A worker that hits its turn budget returns partial findings + unknowns; the parent decides whether the unknowns matter instead of automatically spawning another loop.
+
+Lexical shards stay tiny and do not preload the full Context Delivery skill. The FULL scout may use the configured provider, but its output remains compact.
+
+After a run, `python3 .harness/lib/council_cost_report.py --run-id <id> --profile <profile>` summarizes observed subagent models, tool calls, tokens and duration when the runtime reported them. Missing metrics are `UNAVAILABLE`; the report is observational and must never become a completion gate.
