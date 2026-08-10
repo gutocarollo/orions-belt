@@ -22,6 +22,7 @@ from _tooling_conf import get_config  # noqa: E402
 
 START_AT = ("AUTO", "EXECUTION", "PLANNING", "PLAN_REVIEW")
 REVIEW_MODE = ("SINGLE", "FULL")
+EXECUTION_PROFILE = ("AUTO", "DIRECT", "LIGHT", "FULL")
 
 
 def bool_text(value: bool) -> str:
@@ -37,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--plan-review-max", type=int, default=1)
     parser.add_argument("--execution-review-max", type=int, default=1)
     parser.add_argument("--review-mode", choices=REVIEW_MODE, default="SINGLE")
+    parser.add_argument("--execution-profile", choices=EXECUTION_PROFILE, default="AUTO")
     parser.add_argument("--auto-execute-after-plan", action=argparse.BooleanOptionalAction, default=None)
     return parser
 
@@ -60,6 +62,7 @@ def main() -> int:
         "",
         "ARGS:",
         f"START_AT={args.start_at}",
+        f"EXECUTION_PROFILE={args.execution_profile}",
         f"AUTO_DECIDE={bool_text(args.auto_decide)}",
         f"PLAN_REVIEW_MAX={args.plan_review_max}",
         f"EXECUTION_REVIEW_MAX={args.execution_review_max}",

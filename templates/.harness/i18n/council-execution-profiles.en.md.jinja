@@ -1,0 +1,88 @@
+## Execution Profiles — proportional orchestration
+
+This section overrides any older wording that makes the Full Council workflow
+the default after this skill is loaded.
+
+`EXECUTION_PROFILE=AUTO | DIRECT | LIGHT | FULL` controls orchestration.
+`AUTO` always starts from `DIRECT`; after targeted context, the orchestrating
+model may raise the profile. File count, task length, a theoretical edge case,
+or a Medium/Low finding are never sufficient reasons by themselves.
+
+Use the optional helper to keep the narrow deterministic safety floor visible
+without transferring normal engineering judgment out of the model:
+
+```bash
+python3 .harness/lib/council_profile.py --input-json '<json>'
+```
+
+### DIRECT — default for clear, local, reversible work
+
+Do **not** start `council_session.py`. Do not create Context Delivery receipts,
+execution graphs, subagents, review loops, or per-item commits merely because
+the Council skill was mentioned.
+
+Keep only:
+
+```text
+OBJECTIVE: observable result
+DONE-WHEN: concrete validation
+NON-GOALS: scope that must not expand
+```
+
+Then inspect only the necessary context, execute, validate with real commands,
+and deliver. Escalate only when new evidence materially changes risk or scope.
+
+### LIGHT — compact Council for non-trivial but reversible work
+
+Do **not** start the enforceable Full Council state machine and do not require
+formal Context Delivery. Preserve the objective and use one compact plan rather
+than phase-plan + item-plan for every micro-step:
+
+```text
+OBJECTIVE
+DONE-WHEN
+CONTEXT-SUMMARY
+PLAN: 3-7 ordered steps
+EXECUTE
+VALIDATE
+CONSOLIDATED-REVIEW
+DELIVER + BACKLOG
+```
+
+Use at most two subagents and only for genuinely independent work. One
+consolidated review is enough by default; at most one targeted recheck follows
+a real blocking fix. Do not require one local commit per micro-slice.
+
+`CRITICAL`/`HIGH` findings reachable in the current task are `FIX_NOW`.
+Medium/Low or unreachable findings go to execution backlog and do not block
+delivery.
+
+### FULL — high-assurance exception
+
+Only `FULL` activates the existing enforceable Council lifecycle, Context
+Delivery (when enabled), graph/test binding, persisted transitions and strict
+review evidence. Use it when the user asks for Full/high-assurance execution or
+when evidence shows a material floor such as:
+
+- production/deploy;
+- destructive or irreversible action;
+- data migration/backfill with material risk;
+- security/privacy/credential boundary;
+- irreversible business decision.
+
+The model may also choose FULL for a genuinely high-risk case and must state
+the concrete evidence that justified escalation.
+
+### Escalation policy
+
+```text
+AUTO -> DIRECT
+DIRECT -> LIGHT   when targeted context proves broader coordination is useful
+LIGHT  -> FULL    only when material high-assurance risk is evidenced
+```
+
+Before the first mutation, the model may also downgrade if exploration proves
+the task is narrower than initially assumed.
+
+Never optimize for zero findings. Optimize for the requested outcome with zero
+reachable Critical/High blockers; record the rest in backlog.
