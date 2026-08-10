@@ -84,6 +84,18 @@ class CouncilRuntimeTest(unittest.TestCase):
             state = apply_transition(state, kind, payload)
         self.assertEqual("DELIVERY", state["stage"])
 
+    def test_default_single_review_path_skips_quality_and_simplification(self):
+        state = self.walk_to_commit()
+        state = apply_transition(state, "ADVERSARIAL", {
+            "status": "SATISFEITO", "critical": 0, "required": 0,
+            "reviewer_id": "22222222-2222-4222-8222-222222222222", "round": 1,
+        })
+        state = apply_transition(
+            state, "DELIVERY", {"status": "SATISFEITO", "manifest": "delivery.json"}
+        )
+        self.assertEqual("DELIVERY", state["stage"])
+        self.assertNotIn("quality_status", state)
+
     def test_edit_without_ready_item_is_rejected(self):
         state = apply_transition(None, "ANCHOR", ANCHOR)
         with self.assertRaisesRegex(TransitionError, "PHASE-PLAN"):

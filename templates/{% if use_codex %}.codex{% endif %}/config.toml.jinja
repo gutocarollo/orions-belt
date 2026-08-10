@@ -1,5 +1,9 @@
 project_doc_max_bytes = {{ harness_codex_project_doc_max_bytes }}
 
 [agents]
-max_threads = {{ harness_codex_max_threads }}
-max_depth = {{ harness_codex_max_depth }}
+max_concurrent_threads_per_session = {{ harness_codex_max_threads }}
+{% if use_context_delivery and harness_context_provider == 'codegraph' %}
+[mcp_servers.codegraph]
+command = "codegraph"
+args = ["serve", "--mcp"]
+{% endif %}

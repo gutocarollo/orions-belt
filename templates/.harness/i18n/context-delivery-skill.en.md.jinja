@@ -1,0 +1,24 @@
+---
+name: context-delivery
+description: Mandatory evidence-bound context routing before non-trivial writable Council planning or implementation.
+---
+
+# Context Delivery
+
+When enabled, a writable Council run uses:
+
+```text
+ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN
+```
+
+1. Classify only the task shape. Generate the plan with `python3 .harness/lib/context_delivery.py route --repository --input-json '<json with base_ref/head_ref>'`; Git computes P1-P3, runtime receipts resolve P4/P5, and task shape determines P6.
+2. Persist `CONTEXT-PLAN` before tools. The transition injects the authoritative `run_id`, `base_sha`, and `ANCHOR` repository fingerprint binding; never edit those fields or lower derived risk.
+3. `parallel_shards` currently fails closed: per-shard lifecycle/tool/coverage receipts are not yet enforced. Do not dispatch a context shard.
+4. Every method must execute through a real runtime tool recorded by `context-tool-ledger.py`. Lifecycle, tools, and transcript must belong to the same `run_id`, session, and repository fingerprint. On Codex, after `wait_agent`, run the exact session-bound `codex_context_receipts.py` command injected by the coordinator status hook; this fail-closed adapter is required when the installed Codex does not propagate child hooks. A hash-only or prose-only artifact is invalid.
+5. Materialize one JSON artifact per method. Its payload must contain the same `method` and exact `{tool_use_id,input_sha256,output_sha256}` receipts declared in `CONTEXT-DELIVERY`.
+6. Before delegating, the coordinator runs `codegraph status --json`. The same-session receipt is accepted only for `codegraph-status`; search/impact/explore must have its own successful context-agent MCP receipt after the preflight. P4 status is derived from `path:line` definition identities extracted from the full output before excerpt truncation. Conditional LSP runs only when P4 requires it.
+7. Persist `CONTEXT-DELIVERY` with the runtime `session_id`; the transition injects `run_id`, `base_sha`, and repository fingerprint and rejects conflicts or drift. The state machine verifies lifecycle/model, tool pairs, actual order, provider freshness, coverage, claims and unresolved items.
+
+`rg` discovers text. CodeGraph resolves semantic/transitive reachability. LSP arbitrates identity/alias/re-export/conflicts. They are not interchangeable and are not always parallel.
+
+Unit tests prove the deterministic contract. `templates/tests/test_context_delivery_runtime_smoke.sh` proves the installed Claude/Codex behavior. A missing binary/authentication is SKIP/BLOCKED, never PASS.

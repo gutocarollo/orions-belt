@@ -1,3 +1,10 @@
+{#
+  Project-local Claude Code hook registry. Existing Orion hooks are preserved
+  verbatim in topology; Context Delivery adds only conditional lifecycle,
+  tool-provenance and Serena-health entries. Keeping this expanded form is
+  intentional: wholesale minification previously hid accidental deletions and
+  made review against the pre-existing hook inventory impractical.
+#}
 {
   "hooks": {
     "SessionStart": [
@@ -99,8 +106,7 @@
             "timeout": 10
           }
         ]
-      }
-      {%- endif %}{% if harness_understand_apps_root %},
+      }{% endif %}{% if harness_understand_apps_root %},
       {
         "hooks": [
           {
@@ -110,8 +116,7 @@
             "statusMessage": "understand: injecting relative-diff rule for {{ harness_understand_apps_root }}"
           }
         ]
-      }
-      {%- endif %}
+      }{% endif %}
     ],
     "PreToolUse": [
       {
@@ -124,8 +129,7 @@
             "statusMessage": "council: checking item-plan readiness"
           }
         ]
-      },
-      {%- if harness_understand_apps_root %}
+      }{% if harness_understand_apps_root %},
       {
         "matcher": "Bash",
         "hooks": [
@@ -136,8 +140,7 @@
             "statusMessage": "understand: checking relative diff for {{ harness_understand_apps_root }}"
           }
         ]
-      },
-      {%- endif %}
+      }{% endif %},
       {
         "matcher": "Task|Agent",
         "hooks": [
@@ -148,7 +151,29 @@
             "statusMessage": "throttle: checking subagent slots (cap {{ harness_subagent_max_concurrent }})"
           }
         ]
-      }{% if use_clarification_gate %},
+      }{% if use_context_delivery %},
+      {
+        "matcher": "Read|read_file|Grep|grep_files|Glob|list_files|Bash|exec_command|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/context-tool-ledger.py\" --runtime claude",
+            "timeout": 10,
+            "statusMessage": "context-delivery: recording tool start"
+          }
+        ]
+      }{% if harness_lsp_provider == 'serena' %},
+      {
+        "matcher": "mcp__serena__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/serena-health-gate.py\"",
+            "timeout": 10,
+            "statusMessage": "serena: checking process and RSS limits"
+          }
+        ]
+      }{% endif %}{% endif %}{% if use_clarification_gate %},
       {
         "matcher": "AskUserQuestion",
         "hooks": [
@@ -159,8 +184,7 @@
             "statusMessage": "clarification: checking the decision contract is loaded"
           }
         ]
-      }
-      {%- endif %}
+      }{% endif %}
     ],
     "PostToolUse": [
       {
@@ -173,8 +197,7 @@
             "statusMessage": "council: requiring validation after edit"
           }
         ]
-      },
-      {%- if use_ds_gate %}
+      }{% if use_ds_gate %},
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
@@ -185,11 +208,25 @@
             "statusMessage": "ds-gate: checking design-system tokenization"
           }
         ]
-      },
-      {%- endif %}
+      }{% endif %}{% if use_context_delivery %},
+      {
+        "matcher": "Read|read_file|Grep|grep_files|Glob|list_files|Bash|exec_command|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/context-tool-ledger.py\" --runtime claude",
+            "timeout": 10
+          }
+        ]
+      }{% endif %},
       {
         "matcher": "Task|Agent",
         "hooks": [
+          {% if use_context_delivery %}{
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-lifecycle-ledger.py\" --runtime claude --observe-agent-tool",
+            "timeout": 10
+          },{% endif %}
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-release.sh\"",
@@ -210,6 +247,16 @@
       }
     ],
     "PostToolUseFailure": [
+      {% if use_context_delivery %}{
+        "matcher": "Read|read_file|Grep|grep_files|Glob|list_files|Bash|exec_command|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/context-tool-ledger.py\" --runtime claude",
+            "timeout": 10
+          }
+        ]
+      },{% endif %}
       {
         "matcher": "Task|Agent",
         "hooks": [
@@ -220,7 +267,31 @@
           }
         ]
       }
+    ]{% if use_context_delivery %},
+    "SubagentStart": [
+      {
+        "matcher": ".*-context-(scout|shard)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-lifecycle-ledger.py\" --runtime claude",
+            "timeout": 10
+          }
+        ]
+      }
     ],
+    "SubagentStop": [
+      {
+        "matcher": ".*-context-(scout|shard)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-lifecycle-ledger.py\" --runtime claude",
+            "timeout": 10
+          }
+        ]
+      }
+    ]{% endif %},
     "PreCompact": [
       {
         "hooks": [
@@ -246,23 +317,19 @@
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate.py\"",
             "timeout": 15,
             "statusMessage": "completion-gate: checking completion claim vs evidence"
-          },
-          {%- if use_clarification_gate %}
+          }{% if use_clarification_gate %},
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/clarification-stop-gate.py\"",
             "timeout": 10,
-            "statusMessage": "clarification-stop-gate: choice/handoff sem bloco D[n]"
-          },
-          {%- endif %}
-          {%- if use_ui_evidence %}
+            "statusMessage": "clarification-stop-gate: checking decision blocks"
+          }{% endif %}{% if use_ui_evidence %},
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/ui-evidence-gate.sh\"",
             "timeout": 15,
             "statusMessage": "ui-evidence-gate: checking UI change vs visual evidence"
-          },
-          {%- endif %}
+          }{% endif %},
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-stop-gate.sh\"",

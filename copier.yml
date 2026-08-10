@@ -106,7 +106,13 @@ _exclude:
   - "/tests/test_install_consent.sh"
   - "/tests/test_gitignore_runtime_state.sh"
   - "/tests/test_exploration_protocol.sh"
+  - "/tests/test_context_delivery_regression.sh"
+  - "/tests/test_council_rendered_runtime.sh"
+  - "/tests/test_context_delivery_runtime_smoke.sh"
+  - "/tests/test_context_delivery_config_smoke.sh"
   - "/tests/test_git_doctor_hookspath.sh"
+  - "/tests/test_context_delivery_provider_smoke.sh"
+  - "/tests/context_delivery_mcp_probe.py"
   - "/verification/council-witness.json"
   # H3/A1 (fonte única de skills dual-runtime — grill-me,
   # prova-de-conclusao, marathon, repo-wiki-curator, ui-evidence, verify):
@@ -132,6 +138,7 @@ _exclude:
   # .agents/skills). Mesmo mecanismo skills-shared das 6 skills acima,
   # mesma regra de exclusão nominal.
   - "/.harness/skills-shared/delivery-council/SKILL.md"
+  - "/.harness/skills-shared/context-delivery/SKILL.md"
   - "/.harness/skills-shared/adversarial-review/SKILL.md"
   # Rodada 2026-07-31 (sincronização do projeto-doador): mesmo mecanismo
   # skills-shared, mesma regra de exclusão nominal do selector renderizado.
@@ -627,12 +634,12 @@ harness_marathon_stale_days:
 harness_plan_review_max:
     type: int
     help: Máximo de rodadas do Planning Adversarial Loop.
-    default: 2
+    default: 1
 
 harness_execution_review_max:
     type: int
     help: Máximo de rodadas do Adversarial Verification Loop de execução.
-    default: 3
+    default: 1
 
 harness_adversarial_reviewer_model:
     type: str
@@ -641,15 +648,15 @@ harness_adversarial_reviewer_model:
 
 harness_codex_max_threads:
     type: int
-    help: "[Codex] Máximo de threads de subagent (`[agents] max_threads`)."
+    help: "[Codex] Máximo de threads de subagent (`[agents] max_concurrent_threads_per_session`; `max_threads` é alias legado)."
     default: 4
     when: "{{ use_codex }}"
 
 harness_codex_max_depth:
     type: int
-    help: "[Codex] Profundidade máxima de fan-out de subagents (`[agents] max_depth`)."
+    help: "[Codex, legado] Resposta preservada apenas para compatibilidade com answers.yml antigos; a configuração atual não emite `max_depth` porque a chave não aparece na referência oficial vigente."
     default: 1
-    when: "{{ use_codex }}"
+    when: false
 
 harness_codex_project_doc_max_bytes:
     type: int
@@ -664,45 +671,6 @@ harness_docs_dir:
     type: str
     help: Diretório raiz da wiki Karpathy de documentação do projeto.
     default: docs
-
-harness_docs_topology:
-    type: str
-    help: >-
-        Topologia inicial de categorias sob docs/ (D3-D6, grill-me 2026-07-22).
-        Só define o ESQUELETO greenfield e o valor inicial de
-        HARNESS_DOCS_CATEGORIES; brownfield usa o fluxo de proposta do
-        harness-init (inventário real vs. base vs. híbrido, escolha do
-        usuário) em vez deste preset. minimal = planning,architecture,decisions;
-        standard = + audits,qa-evidence,meetings. Infra da wiki (log.md,
-        SCHEMA.md, index.md, _arquivo/) nunca conta como categoria.
-    choices:
-        Mínima (planning, architecture, decisions): minimal
-        Padrão (+ audits, qa-evidence, meetings): standard
-    default: minimal
-
-harness_docs_topology_enforce:
-    type: str
-    help: >-
-        Ratchet do gate de topologia (D4): warn reporta docs/<dir>/ nao
-        declarado sem bloquear commit; fail promove a mesma lista a falha
-        bloqueante. Suba para fail só quando o projeto tiver a topologia
-        estabilizada — mesmo padrao do ds-gate.
-    choices:
-        Aviso (nao bloqueia): warn
-        Bloqueante: fail
-    default: warn
-
-harness_docs_categories_override:
-    type: str
-    help: >-
-        CSV explícito de categorias que SUBSTITUI o preset de
-        harness_docs_topology quando não-vazio. Fonte real: o passo de
-        proposta do harness-init (inventário do scan_project.py, D3) — o
-        agente inventaria docs/ existentes, propõe base × inferida ×
-        híbrida, e passa a escolha do usuário aqui via --data. Vazio
-        (default) = usa o preset minimal/standard sem alteração; nunca
-        inferido silenciosamente pelo installer determinístico.
-    default: ""
 
 harness_lessons_file:
     type: str
@@ -897,9 +865,10 @@ use_exploration_protocol:
     help: >-
         Instalar o protocolo de exploração de início de tarefa (skill
         `exploration-protocol` + hook UserPromptSubmit `exploration-kickoff` +
-        bloco ⭐ nas instruções)? Roteia F0 âncora -> F1 docs canônicos ->
-        F2 grafo∥grep -> F3 banco -> F4 LSP -> F5 docs de lib, e proíbe
-        clarificação antes da exploração.
+        bloco ⭐ nas instruções)? Preserva F0/F1/F3/F5 e, quando
+        Context Delivery está ativo, escolhe F2/F4 pela forma da tarefa:
+        enumeração lexical primeiro, blast radius híbrido para símbolo conhecido
+        de alto raio e análise local antes do grafo em fluxo dinâmico.
     default: false
 
 harness_entry_docs:
@@ -921,6 +890,96 @@ harness_reference_index:
         subsistema ANTES de mexer no código dele. Vazio = fase não emitida.
     default: ""
     when: "{{ use_exploration_protocol }}"
+
+# Context Delivery is explicit. The previous implementation emitted a hidden
+# marker in every installation, forcing the new state-machine prefix even when
+# the project had disabled exploration. This flag makes adoption auditable.
+use_context_delivery:
+    type: bool
+    help: >-
+        Exigir ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN em
+        novos Council runs mutáveis? Ative para tarefas não triviais quando
+        deseja roteamento híbrido e prova de execução. Desativado preserva o
+        comportamento histórico e evita um gate inerte em projetos sem as
+        ferramentas configuradas.
+    default: false
+    validator: >-
+        {% if use_context_delivery and not (use_claude or use_codex) %}
+        Context Delivery exige ao menos um runtime com custom agents: Claude Code ou Codex.
+        {% endif %}
+
+harness_context_provider:
+    type: str
+    help: >-
+        Provider operacional de grafo para Context Delivery. O harness declara
+        a configuração e valida disponibilidade/version em runtime, mas não
+        instala o binário fora do repositório-alvo.
+    choices:
+        Nenhum: none
+        CodeGraph: codegraph
+    default: "{{ 'codegraph' if use_context_graph else 'none' }}"
+    when: "{{ use_context_delivery }}"
+    validator: >-
+        {% if harness_context_provider == 'codegraph' and not use_context_graph %}
+        harness_context_provider=codegraph exige use_context_graph=true para materializar a política e os paths de núcleo.
+        {% endif %}
+
+harness_lsp_provider:
+    type: str
+    help: Provider LSP opcional usado somente como escalada semântica.
+    choices:
+        Nenhum: none
+        Serena: serena
+    default: none
+    when: "{{ use_context_delivery }}"
+
+harness_claude_context_scout_model:
+    type: str
+    help: Modelo Claude do context scout (exploração ampla e síntese).
+    default: sonnet
+    when: "{{ use_context_delivery and use_claude }}"
+
+harness_claude_context_scout_effort:
+    type: str
+    choices: [low, medium, high, xhigh, max]
+    default: medium
+    when: "{{ use_context_delivery and use_claude }}"
+
+harness_claude_context_shard_model:
+    type: str
+    help: Modelo Claude do shard lexical estreito.
+    default: haiku
+    when: "{{ use_context_delivery and use_claude }}"
+
+harness_claude_context_shard_effort:
+    type: str
+    choices: [low, medium, high, xhigh, max]
+    default: low
+    when: "{{ use_context_delivery and use_claude }}"
+
+harness_codex_context_scout_model:
+    type: str
+    help: Modelo Codex do context scout.
+    default: gpt-5.6-terra
+    when: "{{ use_context_delivery and use_codex }}"
+
+harness_codex_context_scout_effort:
+    type: str
+    choices: [low, medium, high, xhigh]
+    default: medium
+    when: "{{ use_context_delivery and use_codex }}"
+
+harness_codex_context_shard_model:
+    type: str
+    help: Modelo Codex do shard lexical estreito.
+    default: gpt-5.6-luna
+    when: "{{ use_context_delivery and use_codex }}"
+
+harness_codex_context_shard_effort:
+    type: str
+    choices: [low, medium, high, xhigh]
+    default: low
+    when: "{{ use_context_delivery and use_codex }}"
 
 use_ui_evidence:
     type: bool

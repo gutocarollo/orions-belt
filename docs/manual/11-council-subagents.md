@@ -151,6 +151,12 @@ flowchart TD
 
 Gerada como `<projeto>-delivery-council` em `HARNESS_SKILLS_DIR` (dual-runtime — a mesma `SKILL.md` serve Claude e Codex; fonte: [SKILL.md.jinja](<../../templates/.agents/skills/{{ project_name }}-delivery-council/SKILL.md.jinja>)). A entrada é um bloco `ARGS:` textual (runtimes não passam argumentos formais a skills):
 
+O Council é **opt-in**: não é acionado automaticamente por risco, tamanho ou
+número de arquivos. Ele entra somente por pedido expresso do usuário; quando
+`.harness/council-active` já existe, os hooks apenas retomam e impõem o run que
+foi iniciado explicitamente. Sem um desses sinais, a tarefa usa diretamente as
+skills táticas proporcionais.
+
 ```text
 Use $<projeto>-delivery-council.
 
@@ -158,8 +164,9 @@ ARGS:
 START_AT=EXECUTION | PLANNING | PLAN_REVIEW | AUTO
 PLAN_SOURCE=<path | inline | issue | diff>
 AUTO_DECIDE=true | false
-PLAN_REVIEW_MAX=2
-EXECUTION_REVIEW_MAX=3
+PLAN_REVIEW_MAX=1
+EXECUTION_REVIEW_MAX=1
+REVIEW_MODE=SINGLE | FULL
 AUTO_EXECUTE_AFTER_PLAN=false | true
 
 TASK:
@@ -168,7 +175,8 @@ TASK:
 
 - `START_AT` decide o ponto de entrada: executar direto (leitura mínima de contexto antes), planejar do zero, revisar um plano existente (`PLAN_SOURCE` obrigatório) ou inferir pelo verbo do pedido (`AUTO`).
 - `AUTO_DECIDE=true`: trade-offs comparados e escolhidos automaticamente, EXCETO ação destrutiva, credencial, produção ou decisão de negócio irreversível — essas, quando o **Gate Condicional de Grill** as classifica como subjetividade material `ALTA`/`BLOQUEANTE`, viram bloco D[n] sabatinado pela skill `grill-me` (decisão humana com exemplos aplicados, ver seção abaixo). O gate NÃO engessa o loop automático: `AUTO_DECIDE=true` continua o default e a sabatina é exceção, não etapa obrigatória.
-- Os tetos de rodada vêm da config central: `HARNESS_PLAN_REVIEW_MAX` (default 2) e `HARNESS_EXECUTION_REVIEW_MAX` (default 3) — os ARGS não podem excedê-los.
+- Os tetos de rodada vêm da config central: `HARNESS_PLAN_REVIEW_MAX` (default 1) e `HARNESS_EXECUTION_REVIEW_MAX` (default 1). Valores maiores, até os hard caps 2/3, exigem reconfiguração explícita.
+- `REVIEW_MODE=SINGLE` é o default e executa uma única review adversarial consolidada. `FULL` adiciona as etapas separadas Quality → Simplification → Adversarial e só é usado quando pedido expressamente.
 
 ## Decisões D[n]: como o council pergunta (grill-me + Gate Condicional de Grill)
 
@@ -201,7 +209,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["tarefa de risco medio/alto"] --> B["context brief (scout ou leitura minima)"]
+    A["Council pedido expressamente"] --> B["context brief (scout ou leitura minima)"]
     B --> C{"START_AT"}
     C -- "PLANNING" --> D["plano com opcoes e trade-offs"]
     D --> E["subagent adversarial-reviewer revisa o PLANO"]

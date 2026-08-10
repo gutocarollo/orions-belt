@@ -25,6 +25,7 @@ Convenções: capítulos são classe **sequenced** (`NN-slug.md`, ordem de leitu
 | 15 | [Apêndice: limitações conhecidas](15-limitacoes-conhecidas.md) | O que o framework NÃO cobre hoje; contratos que o projeto preenche |
 | 16 | [Grafo de decisão de ferramentas de contexto (blast radius)](16-grafo-contexto.md) | Roteamento determinístico entre grafo de código, grep e LSP antes de mudar símbolo compartilhado; guardas hookify de núcleo e de contrato de dados |
 | 17 | [Protocolo de exploração (task-start), gate de clarificação e gate de push](17-protocolo-exploracao.md) | Por onde a leitura COMEÇA (antes do capítulo 16); exigir o contrato de decisão carregado antes de perguntar ao humano; rodar a suite antes do push |
+| 18 | [Context Delivery e busca híbrida adaptativa](18-context-delivery.md) | Provar delegação, ferramenta real, freshness, modelos e cobertura antes do planejamento |
 
 ## Roteamento para LLMs
 

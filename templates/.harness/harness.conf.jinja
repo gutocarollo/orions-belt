@@ -99,9 +99,26 @@ HARNESS_MARATHON_STALE_DAYS={{ harness_marathon_stale_days }}
 HARNESS_PLAN_REVIEW_MAX={{ harness_plan_review_max }}
 HARNESS_EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}
 HARNESS_ADVERSARIAL_REVIEWER_MODEL={{ harness_adversarial_reviewer_model }}
+# ORIONS_CONTEXT_DELIVERY_V2 — explicit capability and runtime-native worker roles.
+HARNESS_CONTEXT_DELIVERY_ENABLED={{ 'true' if use_context_delivery else 'false' }}
+{%- if use_context_delivery %}
+HARNESS_CONTEXT_PROVIDER={{ harness_context_provider }}
+HARNESS_LSP_PROVIDER={{ harness_lsp_provider }}
+{%- if use_claude %}
+HARNESS_CLAUDE_CONTEXT_SCOUT_MODEL={{ harness_claude_context_scout_model }}
+HARNESS_CLAUDE_CONTEXT_SCOUT_EFFORT={{ harness_claude_context_scout_effort }}
+HARNESS_CLAUDE_CONTEXT_SHARD_MODEL={{ harness_claude_context_shard_model }}
+HARNESS_CLAUDE_CONTEXT_SHARD_EFFORT={{ harness_claude_context_shard_effort }}
+{%- endif %}
+{%- if use_codex %}
+HARNESS_CODEX_CONTEXT_SCOUT_MODEL={{ harness_codex_context_scout_model }}
+HARNESS_CODEX_CONTEXT_SCOUT_EFFORT={{ harness_codex_context_scout_effort }}
+HARNESS_CODEX_CONTEXT_SHARD_MODEL={{ harness_codex_context_shard_model }}
+HARNESS_CODEX_CONTEXT_SHARD_EFFORT={{ harness_codex_context_shard_effort }}
+{%- endif %}
+{%- endif %}
 {%- if use_codex %}
 HARNESS_CODEX_MAX_THREADS={{ harness_codex_max_threads }}
-HARNESS_CODEX_MAX_DEPTH={{ harness_codex_max_depth }}
 HARNESS_CODEX_PROJECT_DOC_MAX_BYTES={{ harness_codex_project_doc_max_bytes }}
 {%- endif %}
 

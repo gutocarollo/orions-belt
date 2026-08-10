@@ -1,0 +1,22 @@
+{
+  "manifest_schema_version": 2,
+  "provider": "serena",
+  "provider_version_policy": "detect-at-runtime",
+  "role": "optional-lsp-escalation",
+  "default_route": false,
+  "use_only_when": [
+    "P4 resolves true",
+    "aliases or re-exports require language-server identity",
+    "graph and text evidence conflict on a decisive edge",
+    "dynamic local state/control flow requires semantic navigation"
+  ],
+  "health_gate": ".harness/hooks/serena-health-gate.py",
+  "limits": {
+    "max_processes_env": "SERENA_MAX_PROCESSES",
+    "max_rss_mb_env": "SERENA_MAX_RSS_MB",
+    "default_max_processes": 2,
+    "default_max_rss_mb": 4096
+  },
+  "failure_policy": "fallback; never kill processes automatically",
+  "version_probe_policy": "runtime MCP/CLI version receipt; no daemon is started by the harness"
+}

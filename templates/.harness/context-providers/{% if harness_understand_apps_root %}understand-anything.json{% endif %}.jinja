@@ -1,0 +1,24 @@
+{
+  "provider": "understand-anything",
+  "manifest_schema_version": 2,
+  "provider_version_policy": "runtime-detected-when-used",
+  "contract_version": 1,
+  "project_root": "{{ harness_understand_apps_root }}",
+  "role": "architecture-docs-domain-context",
+  "capabilities": {
+    "code_architecture_graph": "SUPPORTED",
+    "documentation_knowledge": "SUPPORTED",
+    "domain_tours": "SUPPORTED",
+    "reverse_transitive_impact": "PROVIDER_VERSION_DEPENDENT",
+    "exact_symbol_identity": "PROVIDER_VERSION_DEPENDENT",
+    "incremental_sync": "SUPPORTED"
+  },
+  "changed_files_command": "git diff --relative={{ harness_understand_apps_root }} <last>..HEAD --name-only -- {{ harness_understand_apps_root }}",
+  "fallbacks": [
+    "codegraph",
+    "lsp",
+    "rg",
+    "targeted-read"
+  ],
+  "version_probe_policy": "runtime package/metadata version plus graph meta gitCommitHash"
+}

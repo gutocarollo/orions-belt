@@ -3,8 +3,9 @@
 # added in the 2026-07-31 donor sync. What this locks:
 #
 #   1. Per-PARAMETER gating, not per-capability: a phase whose parameter is empty must not be
-#      emitted, and a push gate with no command must not exist at all. A route pointing at nothing
-#      trains the agent to skim the block — the same defect `use_hookify` fixed for inert rules.
+#      emitted. The pre-push Council authority guard is unconditional, while its project-test
+#      stage exists only when configured. A route pointing at nothing trains the agent to skim
+#      the block — the same defect `use_hookify` fixed for inert rules.
 #   2. The exploration block is a COMPLEMENT to the blast-radius block, never a duplicate: one is
 #      task-start ("where do I read first"), the other is diff-time ("what breaks if I change
 #      this"). Both must be able to exist at once, and each must survive the other being off.
@@ -50,8 +51,10 @@ assert "exploration is opt-in: no config keys by default" \
   '! grep -q "HARNESS_ENTRY_DOCS" "$OFF/.harness/harness.conf"'
 assert "exploration is opt-in: the scout is not rewritten by default" \
   '! grep -q "F1-bis" "$OFF/.claude/agents/explore-test-context-scout.md"'
-assert "push gate is opt-in: no pre-push githook without a test command" \
-  '[ ! -f "$OFF/.githooks/pre-push" ]'
+assert "Council authority pre-push guard is always installed" \
+  '[ -f "$OFF/.githooks/pre-push" ] && grep -q "council_remote_guard" "$OFF/.githooks/pre-push"'
+assert "project-test stage remains opt-in when no command is configured" \
+  '! grep -q "pre-push: rodando a suite" "$OFF/.githooks/pre-push"'
 # The clarification gate is the exception, and deliberately so: it needs no project-specific
 # input, so leaving it off by default would be leaving a free guard on the table.
 assert "clarification gate ships on by default (no project input needed)" \

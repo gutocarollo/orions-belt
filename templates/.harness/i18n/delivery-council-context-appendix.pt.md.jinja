@@ -1,0 +1,4 @@
+
+## Precondição Context Delivery
+
+Quando Context Delivery está habilitado, um run `WORKSPACE_WRITE` criado por `council_session.py` define `context_required=true`. Antes de `PHASE-PLAN`, execute `context-delivery`, persista `CONTEXT-PLAN`, rode o preflight de freshness no coordenador e o scout isolado, materialize receipts com hash e persista `CONTEXT-DELIVERY`. No Codex, execute após `wait_agent` o comando de `codex_context_receipts.py` vinculado à sessão e injetado pelo hook de status; ele vincula lifecycle, modelo resolvido e tools do filho ao transcript real concluído. `parallel_shards` falha fechado até existir enforcement de receipts por shard. Context Brief informal não autoriza planejamento.

@@ -95,8 +95,8 @@ project — requirement: 100% generic product, zero donor content in the render)
 - **F0 anchor** — the ORIGINAL request, not the paraphrase that survived compaction (`.harness/requests/`, re-injected every session). Plans and reports are DERIVED; silent objective substitution is a BLOCKING defect.
 {% if harness_entry_docs %}- **F1 canonical docs, IN THIS ORDER:** {% for doc in harness_entry_docs.split(',') if doc.strip() %}`{{ doc.strip() }}`{% if not loop.last %} → {% endif %}{% endfor %}. The first one is the router; reading out of order is the same as not reading.
 {% endif %}{% if harness_reference_index %}- **F1-bis LIVING reference:** index at `{{ harness_reference_index }}` — read the subsystem page BEFORE touching its code. A page banner-marked historical is genealogy, never source.
-{% endif %}- **F2 code, MANDATORY PARALLEL fork:** {% if use_context_graph %}code graph **∥** `rg` for the same symbol. The graph loses by-REFERENCE passage (a callback/fixture is not a call edge) and resolves callees by NAME; grep never separates homonyms nor names the enclosing function. Serialising is pure latency.{% else %}`rg` for the symbol plus targeted reads — knowing grep never separates homonyms, never names the enclosing function and never follows an indirect chain.{% endif %}
-- **NO graph indexes Markdown** — never conclude "there is no doc about X" because the graph query returned nothing. Docs are found by the route, not by the graph.
+{% endif %}- **Adaptive F2/F4:** {% if use_context_delivery %}classify the task and persist `CONTEXT-PLAN`: lexical enumeration runs `rg`/classification before reachability; a known high-radius symbol uses CodeGraph **∥** `rg`; dynamic flow proves event → state/data → behavior before the graph; LSP only arbitrates decisive identity/alias/conflict.{% elif use_context_graph %}use the graph for semantic/transitive questions and `rg` for lexical questions; do not launch both ceremonially.{% else %}use `rg` + targeted reads and escalate to LSP when identity/references are material.{% endif %}
+- **Capabilities belong to a provider/version:** a failure observed in one graph is not a universal truth. Find Markdown/documentation through docs routing/text search, never infer absence from a graph miss.
 {% if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}- **F3 live state:** database MCP before inferring behaviour. A permission error is NOT absence of data (it is the wrong endpoint/role); declared config is NOT produced behaviour (measure the effect, not the flag).
 {% endif %}- **F4 LSP AFTER the join** — only there do you know which edge decides the verdict; mandatory when the graph reports homonyms. **F5** official docs for any external library.
 - **Clarification ONLY after the phases above**, and with the `clarification-plan` skill contract loaded — citing is not following.
@@ -165,24 +165,27 @@ flowchart TD
     stays, with the council path rendered per runtime so each project reads its own. -#}
 ## ⭐ CANONICAL REFERENCE — {{ project_name }} Delivery Council
 
-{% if use_codex %}**For complex tasks in {{ project_name }}, the canonical operational flow in Codex is repo-native: `AGENTS.md` + `.agents/skills` + `.codex/agents` + explicit prompts. Do not use the Agents SDK, Codex MCP server, a Python runner, programmatic traces/evals, or `OPENAI_API_KEY` as the base of the MVP inside the Codex extension in VS Code.**
+**Opt-in activation:** do not invoke the Council automatically because of task size, risk, file count, or task type. It runs only when (a) the user explicitly requests “Council”/`${{ project_name }}-delivery-council`, or (b) `.harness/council-active` already exists, in which case hooks only continue/enforce the explicitly started run. Without either signal, use the proportional tactical skills directly.
+
+{% if use_codex %}**When explicitly requested, the {{ project_name }} Council runs repo-native in Codex: `AGENTS.md` + `.agents/skills` + `.codex/agents` + explicit prompts. Do not use the Agents SDK, Codex MCP server, a Python runner, programmatic traces/evals, or `OPENAI_API_KEY` as the base of the MVP inside the Codex extension in VS Code.**
 
 {% endif %}
 - **Orchestrating skill:** `${{ project_name }}-delivery-council` in {% if use_claude %}`.claude/skills/{{ project_name }}-delivery-council/SKILL.md`{% endif %}{% if use_claude and use_codex %} and {% endif %}{% if use_codex %}`.agents/skills/{{ project_name }}-delivery-council/SKILL.md`{% if use_claude %} (Codex){% endif %}{% endif %}.
 - **Supporting skills:** `$grill-me` to interrogate D[n] decisions with concrete trade-offs; `$adversarial-review` to verify plan × execution × docs × code × tests.
-{% if use_codex %}- **Custom subagent agents:** `.codex/agents/{{ project_name }}-context-scout.toml`, `{{ project_name }}-implementer.toml`, `{{ project_name }}-adversarial-reviewer.toml`, `{{ project_name }}-test-auditor.toml`.
-- **Project config:** `.codex/config.toml` keeps `project_doc_max_bytes = {{ harness_codex_project_doc_max_bytes }}` to avoid truncating the `~/.codex/AGENTS.md` + `AGENTS.md` chain (increase it if the chain grows beyond that — truncation is silent), and `[agents] max_threads = {{ harness_codex_max_threads }}` / `max_depth = {{ harness_codex_max_depth }}` to control fan-out. Do not increase depth without justification, because subagents consume more tokens/latency and can create recursive fan-out.
+{% if use_claude %}- **Claude Code custom agents:** `.claude/agents/{{ project_name }}-context-scout.md` and `{{ project_name }}-context-shard.md`{% if not use_context_delivery %} are generated only when `use_context_delivery=true`{% endif %}. Claude does not register Codex TOML agents. Context shards are generated but fail closed until per-shard receipts are enforced.
+{% endif %}{% if use_codex %}- **Codex custom agents:** `.codex/agents/{{ project_name }}-context-scout.toml`, `{{ project_name }}-context-shard.toml`, `{{ project_name }}-implementer.toml`, `{{ project_name }}-adversarial-reviewer.toml`, `{{ project_name }}-test-auditor.toml`. Context shards are generated but fail closed until per-shard receipts are enforced.
+- **Current Codex config:** `.codex/config.toml` uses `project_doc_max_bytes = {{ harness_codex_project_doc_max_bytes }}` and `[agents] max_concurrent_threads_per_session = {{ harness_codex_max_threads }}`. `max_threads` is a legacy alias; the harness does not emit `max_depth` without proven official support.
 {% endif %}
-Minimum flow for a medium/high-risk task:
+Flow applied only after the Council is explicitly activated:
 
-1. Produce a **Context Brief** before implementing.
+1. {% if use_context_delivery %}Run `$context-delivery` and obtain verified `CONTEXT-DELIVERY` before `PHASE-PLAN`; an informal summary does not authorize planning.{% else %}Produce a **Context Brief** before implementing.{% endif %}
 2. Search for local reuse with `rg` before creating a new abstraction.
 3. If there is more than one reasonable solution, compare trade-offs and choose automatically when `AUTO_DECIDE=true`; use `$grill-me` only when the Conditional Grill Gate proves that a material human D[n] decision needs clarification.
 4. Implement in small, sequential steps, preserving unrelated local changes.
 5. Validate with real commands; a visual claim requires rendered evidence and a data claim requires a real query/proof.
-6. Run the **Adversarial Verification Loop** at the end.
+6. Run one adversarial review stage by default; the expanded Quality → Simplification → Adversarial flow requires explicit `REVIEW_MODE=FULL`.
 
-**Adversarial Verification Loop (mandatory for medium/high risk):**
+**Adversarial Verification Loop (only inside an activated Council):**
 
 - Dispatch a SUBAGENT `{{ project_name }}-adversarial-reviewer` (Claude: Agent tool; Codex: custom agent thread) against the plan, diff, docs, real code, and evidence. Adversarial review NEVER runs inline in the main context — a self-review by whoever produced the diff is not adversarial and the reads blow up the context; `$adversarial-review` is the CONTRACT of the subagent's prompt. Round N+1 can continue the SAME subagent (SendMessage) with the fixes applied; the report attributes each round to the executor (line `REVISORES:`).
 - The reviewer must end with `ADVERSARIAL-VERIFICATION: SATISFEITO`, `CORRIGIR`, or `BLOQUEADO`, listing gaps by severity.
@@ -205,6 +208,7 @@ PLAN_SOURCE=<path | inline | issue | diff>
 AUTO_DECIDE=true | false
 PLAN_REVIEW_MAX={{ harness_plan_review_max }}
 EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}
+REVIEW_MODE=SINGLE | FULL
 AUTO_EXECUTE_AFTER_PLAN=false | true
 
 TASK:
@@ -216,6 +220,7 @@ TASK:
 - `START_AT=PLAN_REVIEW`: the plan already exists. Read `PLAN_SOURCE` or the `PLAN:` block, review the plan with the **Planning Adversarial Loop** up to {{ harness_plan_review_max }} rounds, execute if the review comes back `SATISFEITO`, and then run the execution's **Adversarial Verification Loop**. Do not redo broad initial planning.
 - `START_AT=AUTO`: infer from the user's verb; "implement/fix/finish" = execution, "plan/design/audit strategy" = planning, "plan already exists/review execute" = plan review.
 - `AUTO_DECIDE=true`: compare trade-offs and choose the best option without asking, except when it involves a destructive action, credential, prod/deploy, an irreversible business decision, or a truly blocking D[n] ambiguity.
+- `REVIEW_MODE=SINGLE` is the default and runs only the consolidated adversarial review; `FULL` adds Quality and Simplification and is used only when the user explicitly requests it.
 - `PLAN_SOURCE` is mandatory for `START_AT=PLAN_REVIEW` when the plan is not pasted into the prompt; it can be a path, diff, issue, or an indication of a `PLAN:` block.
 - `AUTO_EXECUTE_AFTER_PLAN=false` is the default in `START_AT=PLANNING`; in `START_AT=PLAN_REVIEW` the effective default is `true`, because that mode means "review the existing plan, execute, and review the execution". Use `AUTO_EXECUTE_AFTER_PLAN=false` only for review-only.
 - `PLAN_REVIEW_MAX` cannot exceed {{ harness_plan_review_max }}; `EXECUTION_REVIEW_MAX` cannot exceed {{ harness_execution_review_max }}.
@@ -604,7 +609,7 @@ A canonical pattern discovered/decided during execution is incorporated into the
 
 Source: Boris Cherny's CLAUDE.md (gist.github.com/hqman/e29cb6386c539d795767e8c3fd2c959b) + howborisusesclaudecode.com. Each principle below is MAPPED onto this repo's machinery — use the local tool, do not reinvent:
 
-1. **Plan-first** — a non-trivial task (3+ steps or an architectural decision) starts with a plan (§6, council `START_AT=PLANNING`, skill `grill-me` when the Conditional Grill Gate requires it). **If something goes wrong mid-execution: STOP and replan immediately — do not keep pushing.** Plan mode also serves VERIFICATION, not just building.
+1. **Plan-first** — a non-trivial task (3+ steps or an architectural decision) starts with a proportional plan (§6 and `planning-and-task-breakdown`; use Council `START_AT=PLANNING` only after explicit Council activation). **If something goes wrong mid-execution: STOP and replan immediately — do not keep pushing.** Plan mode also serves VERIFICATION, not just building.
 2. **Liberal subagents** — keep the main context clean: research, exploration, and parallel analysis go to subagents (1 investigation per subagent; cap {{ harness_subagent_max_concurrent }} via hook `subagent-throttle`). A hard problem = throw more compute via subagents (council/adversarial loops), do not insist inline.
 3. **Self-Improvement Loop** — §16 (executable, with hooks).
 4. **Verification before done** — already ENFORCED by §10 (`prova-de-conclusao` + Stop hook `completion-gate`{% if use_ui_evidence %} + `ui-evidence-gate`{% endif %}). Boris's adopted guiding question: **"would a staff engineer approve this?"** — ask yourself BEFORE presenting.
@@ -630,3 +635,5 @@ Current environment = `{{ project_root }}`. When citing repository files, use ma
 
 If a line number matters, write it separately:
 `Line 42`
+
+{# ORIONS_CONTEXT_DELIVERY_V2_AGENTS_en #}

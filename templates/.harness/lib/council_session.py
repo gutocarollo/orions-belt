@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from context_evidence import repository_fingerprint
 from council_runtime import apply_transition
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -21,7 +22,14 @@ def worktree_state(root: Path) -> list[str]:
     return sorted(item for item in subprocess.check_output(command, cwd=root, text=True).split("\0") if item)
 
 
-def start_session(root: Path, run_id: str, anchor_source: str, mutation_mode: str = "WORKSPACE_WRITE", execution_graph: Path | None = None) -> Path | None:
+def start_session(
+    root: Path,
+    run_id: str,
+    anchor_source: str,
+    mutation_mode: str = "WORKSPACE_WRITE",
+    execution_graph: Path | None = None,
+    context_required: bool | None = None,
+) -> Path | None:
     if mutation_mode == "READ_ONLY":
         return None
     if execution_graph is not None and not execution_graph.is_absolute():
@@ -35,20 +43,40 @@ def start_session(root: Path, run_id: str, anchor_source: str, mutation_mode: st
     folder = root / ".harness/runs/agent-swarm" / run_id
     folder.mkdir(parents=True, exist_ok=True)
     base_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-    event = {"seq": 1, "event": "ANCHOR", "payload": {"mutation_mode": mutation_mode, "anchor_source": anchor_source, "base_sha": base_sha, "worktree_baseline": worktree_state(root), "execution_graph": graph}}
-    state = apply_transition(None, event["event"], event["payload"])
+    if context_required is None:
+        context_required = (root / ".harness/context-delivery.enabled").is_file()
+    event = {
+        "seq": 1,
+        "event": "ANCHOR",
+        "payload": {
+            "mutation_mode": mutation_mode,
+            "anchor_source": anchor_source,
+            "run_id": run_id,
+            "context_required": bool(context_required),
+            "base_sha": base_sha,
+            "repository_fingerprint": repository_fingerprint(root),
+            "worktree_baseline": worktree_state(root),
+            "execution_graph": graph,
+        },
+    }
+    state = apply_transition(
+        None, event["event"], event["payload"], repository_root=root, run_id=run_id
+    )
     (folder / "council-events.jsonl").write_text(json.dumps(event, sort_keys=True) + "\n", encoding="utf-8")
     state_path = (folder / "council-state.json").resolve()
     state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     pointer = root / ".harness/council-active"
     pointer.parent.mkdir(parents=True, exist_ok=True)
     pointer.write_text(str(state_path) + "\n", encoding="utf-8")
-    run_folder = root / ".harness" / "runs" / run_id
+    run_folder = root / ".harness/runs" / run_id
     run_folder.mkdir(parents=True, exist_ok=True)
     run_path = run_folder / "RUN.md"
     if not run_path.exists():
-        run_path.write_text(f"# Council run: {run_id}\n\nAnchor: `{anchor_source}`\n\n## Pendências não bloqueantes\n\n- Nenhuma no início do run.\n", encoding="utf-8")
-    (root / ".harness" / "runs" / "ACTIVE").write_text(run_id + "\n", encoding="utf-8")
+        run_path.write_text(
+            f"# Council run: {run_id}\n\nAnchor: `{anchor_source}`\n\n## Pendências não bloqueantes\n\n- Nenhuma no início do run.\n",
+            encoding="utf-8",
+        )
+    (root / ".harness/runs/ACTIVE").write_text(run_id + "\n", encoding="utf-8")
     hooks_dir = Path(subprocess.check_output(["git", "rev-parse", "--git-path", "hooks"], cwd=root, text=True).strip())
     if not hooks_dir.is_absolute():
         hooks_dir = root / hooks_dir
@@ -70,7 +98,7 @@ def finish_session(root: Path) -> None:
     if state.get("stage") != "DELIVERY":
         raise RuntimeError("Council session cannot finish before DELIVERY")
     pointer.unlink()
-    active = root / ".harness" / "runs" / "ACTIVE"
+    active = root / ".harness/runs/ACTIVE"
     if active.is_file() and active.read_text(encoding="utf-8").strip() == state_path.parent.name:
         active.unlink()
 
@@ -84,11 +112,21 @@ def main() -> int:
     start.add_argument("--anchor-source", required=True)
     start.add_argument("--mutation-mode", choices=("READ_ONLY", "WORKSPACE_WRITE"), default="WORKSPACE_WRITE")
     start.add_argument("--execution-graph", type=Path)
+    start.add_argument(
+        "--context-required",
+        choices=("auto", "required", "off"),
+        default="auto",
+        help="auto follows the rendered capability marker; required/off are explicit overrides",
+    )
     finish = commands.add_parser("finish")
     finish.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
     if args.command == "start":
-        state = start_session(args.root.resolve(), args.run_id, args.anchor_source, args.mutation_mode, args.execution_graph)
+        context_required = None if args.context_required == "auto" else args.context_required == "required"
+        state = start_session(
+            args.root.resolve(), args.run_id, args.anchor_source,
+            args.mutation_mode, args.execution_graph, context_required,
+        )
         print(state if state else "INLINE_READ_ONLY")
     else:
         finish_session(args.root.resolve())

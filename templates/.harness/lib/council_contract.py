@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Semantic contract validator for the installed Delivery Council."""
-
 from __future__ import annotations
 
 import json
@@ -9,8 +8,9 @@ from typing import Any
 
 from sync_council import council_paths
 
-
 SCHEMA_NAMES = (
+    "context-plan-result.schema.json",
+    "context-delivery-result.schema.json",
     "phase-plan-result.schema.json",
     "item-plan-result.schema.json",
     "execution-item-result.schema.json",
@@ -39,12 +39,18 @@ MARKER_GROUPS = (
     ("Maquina de estados obrigatoria", "Mandatory state machine"),
     ("QUALITY-FIX-REQUEST",),
     ("FIX-CONSUMED",),
-    ("Limite: maximo de 2 rodadas", "Limit: maximum 2 rounds"),
-    ("Limite: maximo de 3 rodadas", "Limit: maximum 3 rounds"),
+    (".harness/council-active",),
+    ("REVIEW_MODE=SINGLE",),
+    ("REVIEW_MODE=FULL",),
     ("subagent isolado `code-reviewer`", "isolated `code-reviewer` subagent"),
     ("Grafo e testes obrigatórios", "Mandatory graph and test binding"),
     ("## Pendências não bloqueantes", "## Non-blocking pending items"),
     ("relatório de necessidade", "code-necessity report"),
+)
+CONTEXT_MARKER_GROUPS = (
+    ("CONTEXT-PLAN",),
+    ("CONTEXT-DELIVERY",),
+    ("context-delivery",),
 )
 
 
@@ -62,11 +68,16 @@ def validate_contract(root: Path) -> dict[str, Any]:
         raise ContractError("Council skill surfaces drifted")
     text = source_bytes.decode("utf-8")
     project = surfaces[0].parent.name.removesuffix("-delivery-council")
-    marker_groups = MARKER_GROUPS + ((f"subagent `{project}-adversarial-reviewer`", f"`{project}-adversarial-reviewer` subagent"),)
+    marker_groups = MARKER_GROUPS
+    if (root / ".harness/context-delivery.enabled").is_file():
+        marker_groups += CONTEXT_MARKER_GROUPS
+    marker_groups += (
+        (f"subagent `{project}-adversarial-reviewer`", f"`{project}-adversarial-reviewer` subagent"),
+    )
     missing = [" | ".join(group) for group in marker_groups if not any(marker in text for marker in group)]
     if missing:
         raise ContractError("missing Council semantic markers: " + ", ".join(missing))
-    schema_dir = root / ".harness" / "schemas"
+    schema_dir = root / ".harness/schemas"
     for name in SCHEMA_NAMES:
         path = schema_dir / name
         if not path.is_file():

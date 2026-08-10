@@ -59,30 +59,19 @@ Two traps measured in the donor project, both expensive:
 - **A doc nobody can find is a doc that does not exist.** The pages were created and never routed;
   the practical effect was zero until they entered this phase.
 {% endif %}
-## F2 — code: the fork is MANDATORY and PARALLEL, never sequential
+## F2/F4 — code routed by task shape
 
-{% if use_context_graph %}Fire the **code graph** and **`grep`/`rg` for the same symbol** at the same time. Serialising is
-pure latency, and picking only one loses defects:
+{% if use_context_delivery %}Create `CONTEXT-PLAN` with P1–P6 before calling tools. `LEXICAL_ENUMERATION` is `rg`/classification → reachability; high-radius `KNOWN_SYMBOL_IMPACT` is CodeGraph ∥ `rg` → join → LSP when P4 requires it; `DYNAMIC_STATE_FLOW` proves the local path before the graph. Only independent scopes run in parallel. Every call and freshness decision must appear in runtime receipts.
+{% elif use_context_graph %}Choose the graph for identity/reachability and `rg` for lexical patterns. Run both in parallel only when the symbol is already known and inputs are independent.
+{% else %}Use `rg` + targeted reads; escalate to LSP when identity or transitive references decide the verdict. This fallback cannot separate homonymous definitions, name the enclosing function, or follow an indirect chain by itself.
+{% endif %}
 
-| layer | gets right | LOSES |
-|---|---|---|
-| code graph | callers WITH the enclosing function; separates homonymous definitions; follows indirect chains | by-REFERENCE passage (callback, test fixture — not a call edge); resolves callees by NAME, so it may point at a test stub instead of the real API |
-| `grep`/`rg` | any literal occurrence, including the by-reference passages | never separates homonyms, never names the enclosing function, never follows an indirect chain |
-
-The two fail in **different, complementary ways**. The value is in the routing between them, never
-in either one alone.
-{% else %}With no code graph configured (`use_context_graph=false`), the sweep is `grep`/`rg` on the symbol
-plus targeted reads. Know what you are giving up: `grep` never separates homonymous definitions,
-never names the enclosing function and never follows an indirect chain — if the task hinges on
-"what breaks if I change this", promote the verdict to the LSP (F4) instead of trusting the sweep.
-{% endif %}{% if harness_understand_apps_root %}
+{% if harness_understand_apps_root %}
 Architecture and module relationships: the Understand Anything graph at
 `{{ harness_understand_apps_root }}/.understand-anything/` — **scope `{{ harness_understand_apps_root }}/` only**,
 declare that before extrapolating. Freshness: `bash .harness/lib/understand-apps-changed-files.sh`.
 {% endif %}
-**NO code graph indexes Markdown.** Measured on both of the donor project's graphs: zero `.md` in
-either index. So **never conclude "there is no doc about X" because the graph query returned
-nothing** — documentation is found by the route{% if harness_entry_docs %} in F1/F1-bis{% endif %}, never by querying a graph.
+**Capability rule:** find documentation through docs/text routing. Do not turn a measured limitation of one provider/version into a universal claim about every graph.
 {% if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}
 ## F3 — live state
 
@@ -97,13 +86,6 @@ Two rules that only cost you once they are learned the hard way:
 - **Declared config ≠ produced behaviour.** Measure the EFFECT in the database, not the flag in the
   profile.
 {% endif %}
-## F4 — LSP, AFTER the join
-
-`find_referencing_symbols` (or your language server's equivalent) enters only **after** the F2 fork
-has closed: only there do you know WHICH edge decides the verdict. Running it earlier means running
-it blind on every symbol. It is **mandatory** when the graph reported more than one definition of
-the same name.
-
 ## F5 — external library
 
 Current official documentation for the library/SDK/CLI, never training knowledge for API, version
@@ -129,3 +111,5 @@ predicates P1-P4, fork/join, and the adversarial loop in a subagent.{% else %}Fr
   indexed documentation and the database whenever the conclusion involves runtime or state.
 - A stale graph index **lies with the face of authority**. Sync before trusting it.
 - No phase authorises reading a directory marked legacy/archive/foreign as a live source.
+
+{# ORIONS_CONTEXT_DELIVERY_V2_EXPLORATION_en #}

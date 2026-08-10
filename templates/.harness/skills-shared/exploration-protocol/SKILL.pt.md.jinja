@@ -58,30 +58,19 @@ Duas armadilhas medidas no projeto-doador, ambas caras:
 - **Doc que ninguém acha é doc que não existe.** As páginas foram criadas e não roteadas; o efeito
   prático foi zero até entrarem nesta fase.
 {% endif %}
-## F2 — código: o fork é OBRIGATÓRIO e PARALELO, nunca em série
+## F2/F4 — código, roteado pela forma da tarefa
 
-{% if use_context_graph %}Dispare **grafo de código** e **`grep`/`rg` do mesmo símbolo** ao mesmo tempo. Serializar é
-latência pura, e escolher só um perde defeito:
+{% if use_context_delivery %}Crie `CONTEXT-PLAN` com P1–P6 antes de chamar ferramentas. `LEXICAL_ENUMERATION` é `rg`/classificação → reachability; `KNOWN_SYMBOL_IMPACT` de alto raio é CodeGraph ∥ `rg` → join → LSP se P4 exigir; `DYNAMIC_STATE_FLOW` prova o caminho local antes do grafo. Só escopos independentes rodam em paralelo. Toda chamada e freshness devem aparecer nos receipts de runtime.
+{% elif use_context_graph %}Escolha grafo para identidade/reachability e `rg` para padrões lexicais. Use os dois em paralelo somente quando o símbolo já é conhecido e os inputs são independentes.
+{% else %}Use `rg` + leitura dirigida; escale ao LSP quando identidade ou referências transitivas decidirem o veredito.
+{% endif %}
 
-| camada | acerta | PERDE |
-|---|---|---|
-| grafo de código | chamadores COM a função envolvente; separa definições homônimas; segue cadeia indireta | passagem por REFERÊNCIA (callback, fixture de teste — não é aresta de chamada); resolve callee por NOME, podendo apontar um stub de teste em vez da API real |
-| `grep`/`rg` | qualquer ocorrência literal, inclusive as passagens por referência | não separa homônimo, não diz qual função contém a chamada, não segue cadeia indireta |
-
-As duas erram de formas **diferentes e complementares**. O valor está no roteamento entre elas,
-nunca numa isolada.
-{% else %}Sem grafo de código configurado (`use_context_graph=false`), a varredura é `grep`/`rg` do símbolo
-mais leitura dirigida. Saiba o que você está perdendo ao decidir: `grep` não separa definições
-homônimas, não diz qual função contém a chamada e não segue cadeia indireta — se a tarefa depende
-de "o que quebra se eu mudar isto", promova o veredito ao LSP (F4) em vez de confiar na varredura.
-{% endif %}{% if harness_understand_apps_root %}
+{% if harness_understand_apps_root %}
 Arquitetura e relação entre módulos: grafo do Understand Anything em
 `{{ harness_understand_apps_root }}/.understand-anything/` — **escopo `{{ harness_understand_apps_root }}/` apenas**,
 declare isso antes de extrapolar. Frescor: `bash .harness/lib/understand-apps-changed-files.sh`.
 {% endif %}
-**NENHUM grafo de código indexa Markdown.** Medido nos dois grafos do projeto-doador: zero `.md`
-em ambos os índices. Portanto **nunca conclua "não existe doc sobre X" porque a consulta ao grafo
-não trouxe** — documentação se acha pela rota{% if harness_entry_docs %} das fases F1/F1-bis{% endif %}, jamais por consulta a grafo.
+**Regra de capability:** documentação é buscada pela rota de docs/texto. Não transforme a limitação medida de um provider/version em afirmação universal sobre todos os grafos.
 {% if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}
 ## F3 — estado vivo
 
@@ -95,13 +84,6 @@ Duas regras que só custam quando são aprendidas do jeito difícil:
   verificável", repita a MESMA query no papel que enxerga o objeto.
 - **Config declarada ≠ comportamento produzido.** Meça o EFEITO no banco, não a flag no perfil.
 {% endif %}
-## F4 — LSP, DEPOIS do join
-
-`find_referencing_symbols` (ou equivalente do seu servidor de linguagem) só entra **depois** que o
-fork de F2 fechou: só ali se sabe QUAL aresta decide o veredito. Rodar antes significa rodá-lo às
-cegas em todo símbolo. É **obrigatório** quando o grafo reportou mais de uma definição do mesmo
-nome.
-
 ## F5 — biblioteca externa
 
 Documentação oficial atualizada da lib/SDK/CLI, nunca conhecimento de treinamento para API, versão
@@ -127,3 +109,5 @@ projeto: predicados P1-P4, fork/join e o loop adversarial em subagent.{% else %}
   documentação indexada e no banco quando a conclusão envolver runtime ou estado.
 - Índice de grafo desatualizado **mente com cara de autoridade**. Sincronize antes de confiar.
 - Nenhuma fase autoriza ler diretório marcado como legado/arquivo/estrangeiro como fonte viva.
+
+{# ORIONS_CONTEXT_DELIVERY_V2_EXPLORATION_pt #}
