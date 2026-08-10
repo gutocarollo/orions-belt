@@ -55,6 +55,7 @@ assert pres[status["tool_use_id"]]["seq"] < status["seq"] < min(pres[item["tool_
 assert any(item.get("event")=="SubagentStart" for item in lifecycle)
 assert any(item.get("event")=="SubagentStop" for item in lifecycle)
 assert all(item.get("runtime")==runtime for item in lifecycle+tools)
+assert all(item.get("run_id")=="runtime-smoke" for item in lifecycle+tools)
 PY
 }
 
@@ -82,6 +83,8 @@ printf '%s\n' 'runtime-marker' > marker.txt
 git add -A
 git commit -qm baseline
 codegraph init -i >"$WORK/codegraph-init.log" 2>&1
+mkdir -p .harness/runs
+printf '%s\n' runtime-smoke > .harness/runs/ACTIVE
 
 SOURCE_CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
 CODEX_SMOKE_HOME="$WORK/codex-home"

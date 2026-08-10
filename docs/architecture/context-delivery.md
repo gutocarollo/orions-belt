@@ -54,16 +54,18 @@ Claude não registra o TOML do Codex. Os quatro modelos e efforts são respostas
 
 ## Proveniência de execução
 
-Hash sozinho prova imutabilidade, não execução. Claude usa os hooks nativos; no Codex, o status do coordenador injeta um comando pós-`wait_agent` para `codex_context_receipts.py`. O adaptador existe porque builds que já executam custom agents podem ainda não propagar hooks de lifecycle/tools à thread filha. Ele lê somente o transcript concluído, rejeita calls não read-only, vincula o modelo resolvido e faz o verificador recalcular o hash do transcript. `CONTEXT-DELIVERY` exige:
+Hash sozinho prova imutabilidade, não execução. Claude usa os hooks nativos; no Codex, o status do coordenador injeta um comando pós-`wait_agent` para `codex_context_receipts.py`. O adaptador existe porque builds que já executam custom agents podem ainda não propagar hooks de lifecycle/tools à thread filha. Ele lê somente o transcript concluído, rejeita calls não read-only, vincula o modelo resolvido e faz o verificador recalcular o hash do transcript. O `ANCHOR`, o `CONTEXT-PLAN`, a entrega, o lifecycle e as tool calls carregam o mesmo `run_id`, `base_sha`, `session_id` quando aplicável e fingerprint integral do checkout; replay entre runs ou drift antes da entrega falha fechado. `CONTEXT-DELIVERY` exige:
 
 - lifecycle real `SubagentStart`/`SubagentStop` ou eventos equivalentes derivados do transcript Codex concluído, modelo efetivo e definição do agente;
 - pares reais `PreToolUse`/`PostToolUse` ou pares determinísticos derivados dos calls observados no transcript Codex, com `tool_use_id`, runtime, agente, modelo, hashes e sequência;
 - artefatos JSON que incorporam exatamente os receipts das chamadas que os produziram;
-- P4 vinculado ao conjunto completo de IDs `path:line` presente na saída observada;
+- P4 vinculado ao conjunto completo de IDs `path:line` extraído da saída integral antes do corte de 16 KiB; o excerpt serve somente para observabilidade;
 - P5 e `provider_state` vinculados à mesma chamada real `codegraph status --json` do coordenador, na mesma sessão;
 - contagens de cobertura derivadas de identidades existentes e receipts de discovery/leitura;
 - métricas observadas vinculadas ao lifecycle, ou zeros explícitos com `source=UNAVAILABLE`;
 - claims apontando para artefato existente ou `path:line` válido.
+
+Os ledgers abrem cada componente abaixo de `.harness/runs/` por descritor de diretório com `O_NOFOLLOW`, exigem destino regular e mantêm o lock no descritor aberto. Symlink de diretório ou do arquivo final não redireciona receipts para fora do repositório.
 
 Um arquivo arbitrário chamado `codegraph.json` não autoriza a transição.
 

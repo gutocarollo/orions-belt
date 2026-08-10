@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import fcntl
 import hashlib
 import json
 import os
@@ -20,6 +19,10 @@ import shlex
 import sys
 from pathlib import Path
 from typing import Any
+
+from context_receipt_fields import definition_ids
+from context_evidence import repository_fingerprint
+from secure_runtime_io import open_locked_text
 
 SOURCE = "codex-transcript-v1"
 CONTEXT_SUFFIXES = ("-context-scout", "-context-shard")
@@ -164,27 +167,55 @@ def _json_argument(script: str, tool: str) -> dict[str, Any] | None:
 
 def _read_only_shell(command: str) -> bool:
     """Accept only conservative inspection commands from a context child."""
-    if not command.strip() or any(token in command for token in ("`", "$(", ">", "\n")):
+    if not command.strip() or any(token in command for token in ("`", "$(", ">", "<", "\n", ";", "&", "|")):
         return False
-    segments = re.split(r"\s*(?:\|\||&&|\|)\s*", command)
     allowed = {"cat", "head", "tail", "sed", "rg", "grep", "find", "ls", "pwd", "wc", "stat"}
     git_allowed = {"status", "diff", "show", "log", "rev-parse", "ls-files", "grep"}
-    for segment in segments:
-        try:
-            parts = shlex.split(segment)
-        except ValueError:
+    try:
+        parts = shlex.split(command)
+    except ValueError:
+        return False
+    if not parts:
+        return False
+    executable = Path(parts[0]).name
+    arguments = parts[1:]
+    if any(value.startswith("/") or value == ".." or value.startswith("../") or "/../" in value for value in arguments):
+        return False
+    if executable not in allowed | {"git", "codegraph"}:
+        return False
+    if executable == "git":
+        if not arguments or arguments[0] not in git_allowed:
             return False
-        if not parts:
+        if any(value in {"--output", "--ext-diff", "--textconv"} or value.startswith("--output=") for value in arguments[1:]):
             return False
-        executable = Path(parts[0]).name
-        if executable in allowed:
-            continue
-        if executable == "git" and len(parts) > 1 and parts[1] in git_allowed:
-            continue
-        if executable == "codegraph" and len(parts) > 1 and parts[1] == "status":
-            continue
+    elif executable == "codegraph":
+        if arguments != ["status"]:
+            return False
+    elif executable == "sed" and any(value == "-i" or value.startswith("--in-place") for value in arguments):
+        return False
+    elif executable == "find" and any(
+        value in {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprintf", "-fprint", "-fls"}
+        for value in arguments
+    ):
+        return False
+    elif executable == "rg" and any(value == "--pre" or value.startswith("--pre=") for value in arguments):
         return False
     return True
+
+
+def _active_run(root: Path) -> str:
+    active = root / ".harness/runs/ACTIVE"
+    return active.read_text(encoding="utf-8").strip() if active.is_file() else ""
+
+
+def _repository_binding(root: Path, run_id: str) -> str:
+    state_path = root / ".harness/runs/agent-swarm" / run_id / "council-state.json"
+    if state_path.is_file():
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        value = str(state.get("repository_fingerprint") or "")
+        if value:
+            return value
+    return repository_fingerprint(root)
 
 
 def _assert_read_only(events: list[dict[str, Any]]) -> None:
@@ -221,7 +252,7 @@ def _timestamp_ns(value: Any, offset: int = 0) -> int:
 
 
 def _tool_pair(
-    *, session_id: str, agent_id: str, agent_type: str, transcript: Path,
+    *, run_id: str, repository_binding: str, session_id: str, agent_id: str, agent_type: str, transcript: Path,
     transcript_sha: str, model: str, call_id: str, tool_name: str,
     tool_input: Any, response: Any, timestamp: Any,
 ) -> list[dict[str, Any]]:
@@ -231,6 +262,8 @@ def _tool_pair(
     common = {
         "source": SOURCE,
         "runtime": "codex",
+        "run_id": run_id,
+        "repository_fingerprint": repository_binding,
         "session_id": session_id,
         "agent_id": agent_id,
         "agent_type": agent_type,
@@ -246,18 +279,20 @@ def _tool_pair(
     pre = {
         **common, "event": "PreToolUse", "success": False,
         "output_sha256": None, "response_excerpt": "", "error_excerpt": "",
+        "definition_ids": [],
         "time_ns": _timestamp_ns(timestamp), "ts": timestamp,
     }
     post = {
         **common, "event": "PostToolUse", "success": True,
         "output_sha256": hashlib.sha256(_canonical_json(response)).hexdigest(),
         "response_excerpt": _excerpt(response), "error_excerpt": "",
+        "definition_ids": definition_ids(response),
         "time_ns": _timestamp_ns(timestamp, 1), "ts": timestamp,
     }
     return [pre, post]
 
 
-def _extract_tools(path: Path, events: list[dict[str, Any]], session_id: str, agent_id: str, agent_type: str, model: str) -> list[dict[str, Any]]:
+def _extract_tools(path: Path, events: list[dict[str, Any]], run_id: str, repository_binding: str, session_id: str, agent_id: str, agent_type: str, model: str) -> list[dict[str, Any]]:
     transcript_sha = _sha256(path)
     custom: dict[str, tuple[Any, dict[str, Any]]] = {}
     records: list[dict[str, Any]] = []
@@ -277,7 +312,7 @@ def _extract_tools(path: Path, events: list[dict[str, Any]], session_id: str, ag
                 continue
             tool_input = {"command": args.get("cmd") or args.get("command") or ""}
             records.extend(_tool_pair(
-                session_id=session_id, agent_id=agent_id, agent_type=agent_type,
+                run_id=run_id, repository_binding=repository_binding, session_id=session_id, agent_id=agent_id, agent_type=agent_type,
                 transcript=path, transcript_sha=transcript_sha, model=model,
                 call_id=call_id, tool_name="Bash", tool_input=tool_input,
                 response=payload.get("output"), timestamp=timestamp,
@@ -289,7 +324,7 @@ def _extract_tools(path: Path, events: list[dict[str, Any]], session_id: str, ag
             if not server or not tool:
                 continue
             records.extend(_tool_pair(
-                session_id=session_id, agent_id=agent_id, agent_type=agent_type,
+                run_id=run_id, repository_binding=repository_binding, session_id=session_id, agent_id=agent_id, agent_type=agent_type,
                 transcript=path, transcript_sha=transcript_sha, model=model,
                 call_id=str(payload.get("call_id") or ""),
                 tool_name=f"mcp__{server}__{tool}", tool_input=invocation.get("arguments"),
@@ -299,17 +334,16 @@ def _extract_tools(path: Path, events: list[dict[str, Any]], session_id: str, ag
 
 
 def _append_tools(root: Path, session_id: str, records: list[dict[str, Any]]) -> Path:
-    path = root / ".harness/runs/context-tools" / session_id / "tools.jsonl"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+", encoding="utf-8") as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
+    with open_locked_text(
+        root, (".harness", "runs", "context-tools", session_id), "tools.jsonl"
+    ) as (path, stream):
         stream.seek(0)
         existing = [json.loads(line) for line in stream if line.strip()]
-        identities = {(item.get("runtime"), item.get("session_id"), item.get("tool_use_id"), item.get("event")) for item in existing}
+        identities = {(item.get("runtime"), item.get("run_id"), item.get("session_id"), item.get("tool_use_id"), item.get("event")) for item in existing}
         seq = len(existing)
         stream.seek(0, 2)
         for record in records:
-            identity = (record["runtime"], record["session_id"], record["tool_use_id"], record["event"])
+            identity = (record["runtime"], record["run_id"], record["session_id"], record["tool_use_id"], record["event"])
             if identity in identities:
                 continue
             seq += 1
@@ -344,8 +378,13 @@ def _lifecycle(root: Path, path: Path, events: list[dict[str, Any]], session_id:
     usage = {"input_tokens": int(usage.get("input_tokens") or 0), "output_tokens": int(usage.get("output_tokens") or 0)}
     definition_path, definition_sha, configured_model = _definition(root, agent_type)
     transcript_sha = _sha256(path)
+    run_id = _active_run(root)
+    if not run_id:
+        raise TranscriptReceiptError("Codex context receipt capture requires an active Council run")
+    repository_binding = _repository_binding(root, run_id)
     common = {
-        "source": SOURCE, "runtime": "codex", "session_id": session_id,
+        "source": SOURCE, "runtime": "codex", "run_id": run_id, "session_id": session_id,
+        "repository_fingerprint": repository_binding,
         "agent_id": agent_id, "agent_type": agent_type, "model": model,
         "configured_model": configured_model, "agent_definition_path": definition_path,
         "agent_definition_sha256": definition_sha, "agent_transcript_path": str(path),
@@ -362,10 +401,14 @@ def _lifecycle(root: Path, path: Path, events: list[dict[str, Any]], session_id:
         },
         {**common, "event": "SubagentStop", "ts": complete_event.get("timestamp"), "usage": None, "duration_ms": None},
     ]
-    receipt = root / ".harness/runs/subagents" / session_id / f"{agent_id}.jsonl"
-    receipt.parent.mkdir(parents=True, exist_ok=True)
-    receipt.write_text("".join(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n" for record in records), encoding="utf-8")
-    tools = _extract_tools(path, events, session_id, agent_id, agent_type, model)
+    with open_locked_text(
+        root, (".harness", "runs", "subagents", session_id), f"{agent_id}.jsonl"
+    ) as (receipt, stream):
+        stream.seek(0)
+        stream.truncate()
+        stream.write("".join(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n" for record in records))
+        stream.flush()
+    tools = _extract_tools(path, events, run_id, repository_binding, session_id, agent_id, agent_type, model)
     if not tools:
         raise TranscriptReceiptError(f"Codex context child has no attributable tool calls: {path}")
     tool_path = _append_tools(root, session_id, tools)

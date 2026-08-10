@@ -81,6 +81,7 @@ class CouncilPipelineE2ETest(unittest.TestCase):
                 "agent_swarm_ledger.py",
                 "_tooling_conf.py",
                 "context_evidence.py",
+                "context_receipt_fields.py",
                 "context_predicates.py",
                 "context_provider_probe.py",
                 "context_routing.py",

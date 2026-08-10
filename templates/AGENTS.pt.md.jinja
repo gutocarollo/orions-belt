@@ -166,7 +166,9 @@ flowchart TD
     stays, with the council path rendered per runtime so each project reads its own. -#}
 ## ⭐ REFERÊNCIA CANÔNICA — {{ project_name }} Delivery Council
 
-{% if use_codex %}**Para tarefas complexas no {{ project_name }}, o fluxo operacional canônico no Codex é repo-native: `AGENTS.md` + `.agents/skills` + `.codex/agents` + prompts explícitos. Não usar Agents SDK, Codex MCP server, runner Python, traces/evals programáticos ou `OPENAI_API_KEY` como base do MVP dentro da extensão Codex no VS Code.**
+**Ativação opt-in:** não invoque o Council automaticamente por tamanho, risco, número de arquivos ou tipo da tarefa. Ele só entra quando (a) o usuário pedir expressamente “Council”/`${{ project_name }}-delivery-council`, ou (b) `.harness/council-active` já existir, caso em que os hooks apenas continuam/enforçam o run explicitamente iniciado. Sem esses sinais, use diretamente as skills táticas proporcionais à tarefa.
+
+{% if use_codex %}**Quando pedido expressamente, o Council do {{ project_name }} roda repo-native no Codex: `AGENTS.md` + `.agents/skills` + `.codex/agents` + prompts explícitos. Não usar Agents SDK, Codex MCP server, runner Python, traces/evals programáticos ou `OPENAI_API_KEY` como base do MVP dentro da extensão Codex no VS Code.**
 
 {% endif %}
 - **Skill orquestradora:** `${{ project_name }}-delivery-council` em {% if use_claude %}`.claude/skills/{{ project_name }}-delivery-council/SKILL.md`{% endif %}{% if use_claude and use_codex %} (Claude) e {% endif %}{% if use_codex %}`.agents/skills/{{ project_name }}-delivery-council/SKILL.md`{% if use_claude %} (Codex){% endif %}{% endif %}.
@@ -176,16 +178,16 @@ flowchart TD
 - **Config Codex atual:** `.codex/config.toml` usa `project_doc_max_bytes = {{ harness_codex_project_doc_max_bytes }}` e `[agents] max_concurrent_threads_per_session = {{ harness_codex_max_threads }}`. `max_threads` é alias legado; o harness não emite `max_depth` sem suporte oficial comprovado.
 {% endif %}
 
-Fluxo mínimo para tarefa de risco médio/alto:
+Fluxo aplicado somente quando o Council foi ativado expressamente:
 
 1. {% if use_context_delivery %}Executar `$context-delivery` e obter `CONTEXT-DELIVERY` verificado antes de `PHASE-PLAN`; resumo informal não autoriza planejamento.{% else %}Produzir **Context Brief** antes de implementar.{% endif %}
 2. Buscar reuso local com `rg` antes de criar abstração nova.
 3. Se houver mais de uma solução razoável, comparar trade-offs e escolher automaticamente quando `AUTO_DECIDE=true`; usar `$grill-me` apenas quando o Gate Condicional de Grill provar que uma decisão humana D[n] material precisa de clarificação.
 4. Implementar em passos pequenos e sequenciais, preservando mudanças locais não relacionadas.
 5. Validar com comandos reais; claim visual exige evidência renderizada e claim de dado exige query/prova real.
-6. Rodar o **Adversarial Verification Loop** ao final.
+6. Rodar uma única etapa de review adversarial ao final por default; o fluxo expandido Quality → Simplification → Adversarial exige `REVIEW_MODE=FULL` explícito.
 
-**Adversarial Verification Loop (obrigatório para risco médio/alto):**
+**Adversarial Verification Loop (somente dentro de um Council ativado):**
 
 - Disparar um SUBAGENT `{{ project_name }}-adversarial-reviewer` (Claude: Agent tool; Codex: custom agent thread) contra plano, diff, docs, código real e evidências. Review adversarial NUNCA roda inline no contexto principal — self-review de quem produziu o diff não é adversarial e as leituras estouram o contexto; `$adversarial-review` é o CONTRATO do prompt do subagent. Rodada N+1 pode continuar o MESMO subagent (SendMessage) com as correções aplicadas; o relatório atribui cada rodada ao executor (linha `REVISORES:`).
 - O revisor deve terminar com `ADVERSARIAL-VERIFICATION: SATISFEITO`, `CORRIGIR` ou `BLOQUEADO`, listando gaps por severidade.
@@ -208,6 +210,7 @@ PLAN_SOURCE=<path | inline | issue | diff>
 AUTO_DECIDE=true | false
 PLAN_REVIEW_MAX={{ harness_plan_review_max }}
 EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}
+REVIEW_MODE=SINGLE | FULL
 AUTO_EXECUTE_AFTER_PLAN=false | true
 
 TASK:
@@ -219,6 +222,7 @@ TASK:
 - `START_AT=PLAN_REVIEW`: plano já existe. Ler `PLAN_SOURCE` ou bloco `PLAN:`, revisar o plano com **Planning Adversarial Loop** até {{ harness_plan_review_max }} rodadas, executar se o review ficar `SATISFEITO`, e depois rodar o **Adversarial Verification Loop** da execução. Não refazer planejamento inicial amplo.
 - `START_AT=AUTO`: inferir pelo verbo do usuário; “implemente/corrija/termine” = execução, “planeje/desenhe/audite estratégia” = planejamento, “plano já existe/revise execute” = plan review.
 - `AUTO_DECIDE=true`: comparar trade-offs e escolher a melhor opção sem perguntar, exceto quando envolver ação destrutiva, credencial, prod/deploy, decisão de negócio irreversível ou ambiguidade D[n] realmente bloqueante.
+- `REVIEW_MODE=SINGLE` é o default e executa somente o review adversarial consolidado; `FULL` adiciona Quality e Simplification e só deve ser usado quando o usuário pedir expressamente.
 - `PLAN_SOURCE` é obrigatório para `START_AT=PLAN_REVIEW` quando o plano não estiver colado no prompt; pode ser path, diff, issue ou indicação de bloco `PLAN:`.
 - `AUTO_EXECUTE_AFTER_PLAN=false` é default em `START_AT=PLANNING`; em `START_AT=PLAN_REVIEW`, o default efetivo é `true`, porque esse modo significa “revisar plano existente, executar e revisar execução”. Use `AUTO_EXECUTE_AFTER_PLAN=false` apenas para review-only.
 - `PLAN_REVIEW_MAX` não pode passar de {{ harness_plan_review_max }}; `EXECUTION_REVIEW_MAX` não pode passar de {{ harness_execution_review_max }}.
@@ -607,7 +611,7 @@ Padrão canônico descoberto/decidido na execução é incorporado ao doc de pla
 
 Fonte: CLAUDE.md do Boris Cherny (gist.github.com/hqman/e29cb6386c539d795767e8c3fd2c959b) + howborisusesclaudecode.com. Cada princípio abaixo está MAPEADO no maquinário deste repo — usar a ferramenta local, não reinventar:
 
-1. **Plan-first** — tarefa não-trivial (3+ passos ou decisão arquitetural) começa por plano (§6, council `START_AT=PLANNING`, skill `grill-me` quando o Gate Condicional de Grill a exigir). **Se algo der errado no meio da execução: PARE e replaneje imediatamente — não continue empurrando.** Plan mode também serve para VERIFICAÇÃO, não só para construir.
+1. **Plan-first** — tarefa não-trivial (3+ passos ou decisão arquitetural) começa por plano proporcional (§6 e `planning-and-task-breakdown`; use Council `START_AT=PLANNING` somente depois de ativação expressa do Council). **Se algo der errado no meio da execução: PARE e replaneje imediatamente — não continue empurrando.** Plan mode também serve para VERIFICAÇÃO, não só para construir.
 2. **Subagents liberais** — manter o contexto principal limpo: pesquisa, exploração e análise paralela vão para subagents (1 investigação por subagent; cap {{ harness_subagent_max_concurrent }} via hook `subagent-throttle`). Problema difícil = jogar mais compute via subagents (council/adversarial loops), não insistir inline.
 3. **Self-Improvement Loop** — §16 (executável, com hooks).
 4. **Verification before done** — já ENFORCED por §10 (`prova-de-conclusao` + Stop hook `completion-gate`{% if use_ui_evidence %} + `ui-evidence-gate`{% endif %}). Pergunta-guia do Boris adotada: **"um staff engineer aprovaria isto?"** — fazer a si mesmo ANTES de apresentar.

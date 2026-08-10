@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import stat
+import subprocess
 from pathlib import Path
 from typing import Any
 
+from context_receipt_fields import DEFINITION_ID_RE
 from context_provider_probe import ProviderProbeError, parse_codegraph_status
 
 
@@ -46,6 +50,67 @@ def _sha256(path: Path) -> str:
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _fingerprinted_path(relative: str) -> bool:
+    return not (
+        relative == ".git"
+        or relative.startswith(".git/")
+        or relative == ".harness/runs"
+        or relative.startswith(".harness/runs/")
+        or relative in {".harness/council-active", ".harness/council-active.required-next"}
+    )
+
+
+def repository_fingerprint(root: Path) -> str:
+    """Hash HEAD plus repository file identities/content, excluding runtime state."""
+    resolved = root.resolve(strict=True)
+    digest = hashlib.sha256(b"orions-repository-fingerprint-v1\0")
+    try:
+        head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=resolved, text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        raw_paths = subprocess.check_output(
+            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "."],
+            cwd=resolved,
+        )
+        paths = sorted(
+            value.decode("utf-8", errors="surrogateescape")
+            for value in raw_paths.split(b"\0")
+            if value
+        )
+    except (OSError, subprocess.CalledProcessError):
+        head = "NO_GIT_HEAD"
+        paths = []
+        for directory, names, files in os.walk(resolved, followlinks=False):
+            relative_directory = Path(directory).relative_to(resolved).as_posix()
+            names[:] = [
+                name for name in names
+                if _fingerprinted_path(
+                    name if relative_directory == "." else f"{relative_directory}/{name}"
+                )
+            ]
+            for name in files:
+                relative = name if relative_directory == "." else f"{relative_directory}/{name}"
+                if _fingerprinted_path(relative):
+                    paths.append(relative)
+        paths.sort()
+    digest.update(head.encode("ascii", errors="replace") + b"\0")
+    for relative in paths:
+        if not _fingerprinted_path(relative):
+            continue
+        path = resolved / relative
+        metadata = path.lstat()
+        digest.update(relative.encode("utf-8", errors="surrogateescape") + b"\0")
+        digest.update(oct(stat.S_IFMT(metadata.st_mode) | stat.S_IMODE(metadata.st_mode)).encode() + b"\0")
+        if stat.S_ISLNK(metadata.st_mode):
+            digest.update(os.readlink(path).encode("utf-8", errors="surrogateescape"))
+        elif stat.S_ISREG(metadata.st_mode):
+            digest.update(_sha256(path).encode())
+        else:
+            digest.update(b"SPECIAL")
+        digest.update(b"\0")
     return digest.hexdigest()
 
 
@@ -96,11 +161,17 @@ def _verify_lifecycle(root: Path, delivery: dict[str, Any], plan: dict[str, Any]
     agent_id = delivery["agent_id"]
     agent_type = delivery["agent_type"]
     runtime = delivery["runtime"]
+    run_id = delivery["run_id"]
+    session_id = delivery["session_id"]
+    fingerprint = delivery["repository_fingerprint"]
     matching = [
         item for item in records
         if item.get("agent_id") == agent_id
         and item.get("agent_type") == agent_type
         and item.get("runtime") == runtime
+        and item.get("run_id") == run_id
+        and item.get("session_id") == session_id
+        and item.get("repository_fingerprint") == fingerprint
     ]
     _require(any(item.get("event") == "SubagentStart" for item in matching), "missing matching SubagentStart receipt")
     _require(any(item.get("event") == "SubagentStop" for item in matching), "missing matching SubagentStop receipt")
@@ -137,7 +208,7 @@ def _verify_lifecycle(root: Path, delivery: dict[str, Any], plan: dict[str, Any]
         if item.get("agent_transcript_path") or item.get("transcript_path")
     }
     sessions = {str(item.get("session_id") or "") for item in matching}
-    _require(len(sessions) == 1 and "" not in sessions, "context lifecycle receipt must carry one non-empty session_id")
+    _require(sessions == {session_id}, "context lifecycle receipt must match delivery session_id")
     transcript_records = [item for item in matching if item.get("source") == "codex-transcript-v1"]
     if transcript_records:
         _require(runtime == "codex", "transcript-derived lifecycle receipts are Codex-only")
@@ -174,6 +245,9 @@ def _verify_tools(root: Path, delivery: dict[str, Any], lifecycle: dict[str, Any
     context_records = [
         item for item in records
         if item.get("runtime") == runtime
+        and item.get("run_id") == delivery["run_id"]
+        and item.get("session_id") == delivery["session_id"]
+        and item.get("repository_fingerprint") == delivery["repository_fingerprint"]
         and (not item.get("agent_type") or item.get("agent_type") == agent_type)
         and (
             not item.get("model")
@@ -188,6 +262,8 @@ def _verify_tools(root: Path, delivery: dict[str, Any], lifecycle: dict[str, Any
     coordinator_status_records = [
         item for item in records
         if item.get("runtime") == runtime
+        and item.get("run_id") == delivery["run_id"]
+        and item.get("repository_fingerprint") == delivery["repository_fingerprint"]
         and str(item.get("session_id") or "") in lifecycle["sessions"]
         and not item.get("agent_id")
         and not item.get("agent_type")
@@ -230,6 +306,13 @@ def _verify_tools(root: Path, delivery: dict[str, Any], lifecycle: dict[str, Any
         _require(pre.get("methods") == post.get("methods"), f"tool call {call_id} method classification changed between pre/post receipts")
         _require(pre.get("input_sha256") == post.get("input_sha256"), f"tool call {call_id} input changed between pre/post receipts")
         _require(re.fullmatch(r"[0-9a-f]{64}", str(post.get("output_sha256") or "")) is not None, f"tool receipt {call_id} lacks output hash")
+        definitions = post.get("definition_ids")
+        _require(isinstance(definitions, list), f"tool receipt {call_id} lacks structured definition_ids")
+        _require(len(definitions) == len(set(definitions)), f"tool receipt {call_id} duplicates definition_ids")
+        _require(
+            all(isinstance(value, str) and DEFINITION_ID_RE.fullmatch(value) for value in definitions),
+            f"tool receipt {call_id} contains an invalid definition id",
+        )
         _require(int(pre.get("seq", 0)) < int(post.get("seq", 0)), f"tool call {call_id} has invalid pre/post sequence")
         successful[call_id] = {
             "pre": pre,
@@ -240,6 +323,7 @@ def _verify_tools(root: Path, delivery: dict[str, Any], lifecycle: dict[str, Any
             "post_seq": int(post["seq"]),
             "response_excerpt": post.get("response_excerpt", ""),
             "input_excerpt": post.get("input_excerpt", ""),
+            "definition_ids": definitions,
         }
     _require(successful, "tool receipt has no successful context-agent calls")
     return matching, successful
@@ -281,12 +365,13 @@ def _verify_predicates(delivery: dict[str, Any], plan: dict[str, Any], tools: di
             _require(isinstance(definition_count, int) and definition_count >= 0, "P4 definition_count must be non-negative")
             _require(isinstance(definition_ids, list) and len(definition_ids) == definition_count, "P4 definition_ids must match definition_count")
             _require(len(set(definition_ids)) == len(definition_ids), "P4 definition_ids must be unique")
-            response_text = "\n".join(str(tools[call_id].get("response_excerpt") or "") for call_id in call_ids)
-            observed_definitions = set(re.findall(r"(?<![A-Za-z0-9_./-])([A-Za-z0-9_./-]+\.[A-Za-z0-9_+-]+:\d+)(?!\d)", response_text))
+            observed_definitions = {
+                value
+                for call_id in call_ids
+                for value in tools[call_id].get("definition_ids", [])
+            }
             _require(bool(observed_definitions), "P4 definition ids require path:line locators in runtime output")
             _require(set(str(value) for value in definition_ids) == observed_definitions, "P4 definition_ids must be the complete observed definition set")
-            for definition_id in definition_ids:
-                _require(str(definition_id) in response_text, f"P4 definition id is absent from runtime tool output: {definition_id}")
             _require(item.get("status") is (definition_count > 1), "P4 status must be derived from definition_count > 1")
         elif predicate == "P5":
             _require(len(call_ids) == 1, "P5 requires exactly one CodeGraph status call")
@@ -483,10 +568,42 @@ def _verify_metrics(delivery: dict[str, Any], lifecycle: dict[str, Any], tool_co
     _require(not metrics.get("reason"), "OBSERVED metrics must not carry an unavailable reason")
 
 
-def verify_context_delivery(delivery: dict[str, Any], plan: dict[str, Any], repository_root: Path) -> dict[str, Any]:
+def verify_context_delivery(
+    delivery: dict[str, Any],
+    plan: dict[str, Any],
+    repository_root: Path,
+    *,
+    expected_run_id: str | None = None,
+    expected_base_sha: str | None = None,
+    verify_current_repository: bool = True,
+) -> dict[str, Any]:
     _require(delivery.get("status") == "SATISFEITO", "CONTEXT-DELIVERY requires SATISFEITO")
     _require(delivery.get("skill") == "context-delivery", "CONTEXT-DELIVERY requires context-delivery skill")
     _require(delivery.get("plan_id") == plan.get("plan_id"), "CONTEXT-DELIVERY plan_id differs from CONTEXT-PLAN")
+    run_id = str(delivery.get("run_id") or "")
+    session_id = str(delivery.get("session_id") or "")
+    base_sha = str(delivery.get("base_sha") or "")
+    fingerprint = str(delivery.get("repository_fingerprint") or "")
+    _require(bool(run_id) and re.fullmatch(r"[A-Za-z0-9_.-]+", run_id) is not None, "CONTEXT-DELIVERY run_id is invalid")
+    _require(bool(session_id), "CONTEXT-DELIVERY session_id is required")
+    _require(re.fullmatch(r"[0-9a-f]{40}", base_sha) is not None, "CONTEXT-DELIVERY base_sha is invalid")
+    _require(re.fullmatch(r"[0-9a-f]{64}", fingerprint) is not None, "CONTEXT-DELIVERY repository_fingerprint is invalid")
+    if expected_run_id is not None:
+        _require(run_id == expected_run_id, "CONTEXT-DELIVERY run_id differs from the active Council run")
+    if expected_base_sha is not None:
+        _require(base_sha == expected_base_sha, "CONTEXT-DELIVERY base_sha differs from the Council anchor")
+    binding = plan.get("council_binding") or {}
+    _require(binding.get("run_id") == run_id, "CONTEXT-DELIVERY run_id differs from CONTEXT-PLAN")
+    _require(binding.get("base_sha") == base_sha, "CONTEXT-DELIVERY base_sha differs from CONTEXT-PLAN")
+    _require(
+        binding.get("repository_fingerprint") == fingerprint,
+        "CONTEXT-DELIVERY repository fingerprint differs from CONTEXT-PLAN",
+    )
+    if verify_current_repository:
+        _require(
+            repository_fingerprint(repository_root) == fingerprint,
+            "CONTEXT-DELIVERY repository fingerprint drifted after context collection",
+        )
     lifecycle = _verify_lifecycle(repository_root, delivery, plan)
     tool_records, tools = _verify_tools(repository_root, delivery, lifecycle)
     resolutions = _verify_predicates(delivery, plan, tools)
@@ -520,6 +637,10 @@ def verify_context_delivery(delivery: dict[str, Any], plan: dict[str, Any], repo
         _require(locator_ok, f"claim {number} lacks an existing artifact or valid path:line locator")
     return {
         "plan_id": delivery["plan_id"],
+        "run_id": run_id,
+        "session_id": session_id,
+        "base_sha": base_sha,
+        "repository_fingerprint": fingerprint,
         "agent_id": delivery["agent_id"],
         "agent_type": delivery["agent_type"],
         "runtime": delivery["runtime"],

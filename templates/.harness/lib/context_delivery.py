@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from _tooling_conf import get_config, get_config_csv, project_root
-from council_runtime import TransitionError, apply_transition
+from council_runtime import TransitionError, apply_transition, bind_context_payload
 from context_routing import route_context, route_from_repository
 
 ROOT = project_root()
@@ -44,11 +44,19 @@ def transition(run_id: str, event: str, payload: dict[str, Any]) -> Path:
         state = None
         try:
             for item in events:
-                state = apply_transition(state, item["event"], item["payload"], repository_root=ROOT)
+                state = apply_transition(
+                    state,
+                    item["event"],
+                    item["payload"],
+                    repository_root=ROOT,
+                    run_id=run_id,
+                    replaying=True,
+                )
             if state is None or state.get("mutation_mode") != "WORKSPACE_WRITE":
                 raise TransitionError("context transition requires WORKSPACE_WRITE")
+            payload = bind_context_payload(state, event, payload, ROOT, run_id=run_id)
             item = {"seq": len(events) + 1, "event": event, "payload": payload}
-            state = apply_transition(state, event, payload, repository_root=ROOT)
+            state = apply_transition(state, event, payload, repository_root=ROOT, run_id=run_id)
         except (TransitionError, KeyError, TypeError, ValueError) as exc:
             raise SystemExit(f"invalid Council context transition: {exc}") from exc
         stream.seek(0, 2)

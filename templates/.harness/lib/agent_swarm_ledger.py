@@ -212,7 +212,14 @@ def transition(args: argparse.Namespace) -> None:
         state = None
         try:
             for item in events:
-                state = apply_transition(state, item["event"], item["payload"], repository_root=ROOT)
+                state = apply_transition(
+                    state,
+                    item["event"],
+                    item["payload"],
+                    repository_root=ROOT,
+                    run_id=args.run_id,
+                    replaying=True,
+                )
             if state and state.get("mutation_mode") == "READ_ONLY":
                 raise TransitionError("read-only Council runs are inline and cannot mutate the ledger")
             if args.council_event == "VALIDATION":
@@ -229,7 +236,13 @@ def transition(args: argparse.Namespace) -> None:
                 event_payload["validated_at"] = utc_now()
                 event_payload["file_hashes"] = [{"path": name, "sha256": hashlib.sha256((ROOT / name).read_bytes()).hexdigest()} for name in checked]
             item = {"seq": len(events) + 1, "ts": utc_now(), "event": args.council_event, "payload": event_payload}
-            state = apply_transition(state, item["event"], item["payload"], repository_root=ROOT)
+            state = apply_transition(
+                state,
+                item["event"],
+                item["payload"],
+                repository_root=ROOT,
+                run_id=args.run_id,
+            )
             if args.council_event in {"QUALITY", "ADVERSARIAL"}:
                 persist_deferred(args.run_id, event_payload)
         except (TransitionError, KeyError, TypeError, ValueError) as exc:

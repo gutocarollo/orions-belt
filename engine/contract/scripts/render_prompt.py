@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # engine/
 from _tooling_conf import get_config  # noqa: E402
 
 START_AT = ("AUTO", "EXECUTION", "PLANNING", "PLAN_REVIEW")
+REVIEW_MODE = ("SINGLE", "FULL")
 
 
 def bool_text(value: bool) -> str:
@@ -33,8 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--task", required=True)
     parser.add_argument("--plan-source")
     parser.add_argument("--auto-decide", action=argparse.BooleanOptionalAction, default=True)
-    parser.add_argument("--plan-review-max", type=int, default=2)
-    parser.add_argument("--execution-review-max", type=int, default=3)
+    parser.add_argument("--plan-review-max", type=int, default=1)
+    parser.add_argument("--execution-review-max", type=int, default=1)
+    parser.add_argument("--review-mode", choices=REVIEW_MODE, default="SINGLE")
     parser.add_argument("--auto-execute-after-plan", action=argparse.BooleanOptionalAction, default=None)
     return parser
 
@@ -61,6 +63,7 @@ def main() -> int:
         f"AUTO_DECIDE={bool_text(args.auto_decide)}",
         f"PLAN_REVIEW_MAX={args.plan_review_max}",
         f"EXECUTION_REVIEW_MAX={args.execution_review_max}",
+        f"REVIEW_MODE={args.review_mode}",
         f"AUTO_EXECUTE_AFTER_PLAN={bool_text(auto_execute)}",
     ]
     if args.plan_source:

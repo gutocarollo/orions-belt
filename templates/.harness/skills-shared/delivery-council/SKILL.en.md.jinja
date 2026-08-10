@@ -22,12 +22,17 @@
 -#}
 ---
 name: {{ project_name }}-delivery-council
-description: Use on complex {{ project_name }} tasks involving implementation, planning, review of an existing plan, architecture, design-system, database, auth, tenancy, security, tests, PR review, or any change that needs to start from EXECUTION, PLANNING, PLAN_REVIEW or AUTO, with automatic trade-off and adversarial loops.
+description: Use only when the user explicitly requests the {{ project_name }} Delivery Council, or to resume a run already marked by .harness/council-active. Never trigger it automatically from task size, risk, file count, or task type.
 ---
 
 # {{ project_name }} Delivery Council
 
 Coordinate a delivery inside `{{ project_root }}` using native Codex: `AGENTS.md`, repo skills, custom agents, real commands and evidence from this session.
+
+**Opt-in only.** If the user did not explicitly request the Council and
+`.harness/council-active` does not exist, stop loading this skill and route the
+task directly through the proportional tactical skill. The marker resumes an
+already-started run; it is not permission to create a Council run automatically.
 
 {#
 PROVENANCE (lives ONLY in the framework repo — a Jinja comment does not render in the
@@ -54,6 +59,7 @@ AUTO_DECIDE=true | false
 PLAN_REVIEW_MAX={{ harness_plan_review_max }}
 EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}
 AUTO_EXECUTE_AFTER_PLAN=false | true
+REVIEW_MODE=SINGLE | FULL
 ```
 
 Defaults:
@@ -64,11 +70,12 @@ Defaults:
 - `PLAN_REVIEW_MAX={{ harness_plan_review_max }}`
 - `EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}`
 - `AUTO_EXECUTE_AFTER_PLAN=false` for `START_AT=PLANNING`; effective default `true` for `START_AT=PLAN_REVIEW`
+- `REVIEW_MODE=SINGLE`
 
 ## Operational Contract (mandatory override)
 
-This section overrides any older compact-flow wording below. It applies to every
-Council execution, including trivial work and `START_AT=EXECUTION`.
+This section overrides any older compact-flow wording below. It applies only
+after the Council was explicitly activated, including `START_AT=EXECUTION`.
 
 ```text
 MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE
@@ -95,9 +102,9 @@ MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE
   `python3 .harness/lib/council_git.py push|merge-main --authorization <evidence.json> -- <remote-command>`.
   `git push --no-verify` is forbidden. The pre-push hook is defense in depth for
   the local workflow, not a security boundary against a hostile Git client owner.
-- A compact/trivial flow may reduce breadth, but it still requires phase/item
-  preflight, incremental implementation, validation, a local commit and quality
-  review.
+- `REVIEW_MODE=SINGLE` is the default: after validation and a local commit, run
+  one consolidated adversarial review. `REVIEW_MODE=FULL` is opt-in and adds
+  the separate quality and simplification stages before that review.
 
 {%- include "templates/.harness/skills-shared/objective-control/CONTROL.en.md.jinja" %}
 
@@ -114,9 +121,9 @@ Materialize the plan as a START→GOAL graph: journeys, nodes, edges, dependenci
 | `ITEM-PLAN` | `planning-and-task-breakdown`; item `PRONTO` | `SLICE` |
 | `SLICE` | changed files and acceptance target | `VALIDATION` |
 | `VALIDATION` | every functional/quality/regression ID bound to a successful executed command | `LOCAL-COMMIT` |
-| `LOCAL-COMMIT` | existing local SHA containing exactly those files | `ITEM-PLAN` or `QUALITY` |
-| `QUALITY` | zero `Critical` and zero `Required` | `SIMPLIFICATION` or fix `ITEM-PLAN` |
-| `SIMPLIFICATION` | `APLICAR` with reason or evidence-based N/A | new `ITEM-PLAN` to apply, or `ADVERSARIAL` |
+| `LOCAL-COMMIT` | existing local SHA containing exactly those files | `ITEM-PLAN`, `ADVERSARIAL`, or `QUALITY` in `FULL` mode |
+| `QUALITY` (`FULL` only) | zero `Critical` and zero `Required` | `SIMPLIFICATION` or fix `ITEM-PLAN` |
+| `SIMPLIFICATION` (`FULL` only) | `APLICAR` with reason or evidence-based N/A | new `ITEM-PLAN` to apply, or `ADVERSARIAL` |
 | `ADVERSARIAL` | zero Blocking/High and satisfied sentinel | `DELIVERY` or fix `ITEM-PLAN` |
 | `DELIVERY` | SHA-bound manifest and replayable evidence | terminal |
 | `BLOCKED` | named missing decision/access/evidence | terminal |
@@ -125,9 +132,10 @@ Materialize the plan as a START→GOAL graph: journeys, nodes, edges, dependenci
 that validation. Review rounds increase exactly by one and retain the same
 reviewer thread for correction rounds. `BLOQUEADO` is terminal.
 
-### Quality, simplification and correction loop
+### Quality, simplification and correction loop (`REVIEW_MODE=FULL` only)
 
-Run `code-review-and-quality` in an isolated `code-reviewer` subagent after the
+Skip this whole section in the default `REVIEW_MODE=SINGLE`. In `FULL`, run
+`code-review-and-quality` in an isolated `code-reviewer` subagent after the
 implementation commits. The executable taxonomy is `CRITICAL_BLOCK`,
 `HIGH_FIX_NOW`, `DEFER_RUN`; blocking counts must equal individually assessed
 findings, while `DEFER_RUN` is persisted and does not block. A blocking finding must return:
@@ -159,10 +167,12 @@ subagent in isolated context. Never self-review inline.
 
 The final code-necessity report covers every added code line by semantic portion: path/range, purpose, objective, inputs, outputs, real evidence, simpler alternative, and necessity. The final pipeline proves `base_sha != head_sha`, binds the base to ANCHOR, covers every critical edge and every slice commit, rejects new uncommitted drift, and accepts test IDs only through commands the ledger actually executed.
 
-At delivery, the review edge closes only when its evidence files contain the exact terminal lines `QUALITY-REVIEW: SATISFEITO`, `SIMPLIFICATION: NAO_NECESSARIA`, and `ADVERSARIAL-VERIFICATION: SATISFEITO`. Each file that supplies a verdict must also contain the exact line `CHECKED-CODE-SHA: <code-necessity head_sha>`, introduced by a later commit than that SHA. A historical, stale-SHA or pre-code review may remain as history but never satisfies this gate.
-
-Limit: maximum 2 rounds for plan review.
-Limit: maximum 3 rounds for execution adversarial review.
+At delivery, `SINGLE` requires the terminal line `ADVERSARIAL-VERIFICATION: SATISFEITO`.
+`FULL` additionally requires `QUALITY-REVIEW: SATISFEITO` and
+`SIMPLIFICATION: NAO_NECESSARIA`. Each file that supplies a verdict must also
+contain the exact line `CHECKED-CODE-SHA: <code-necessity head_sha>`, introduced
+by a later commit than that SHA. A historical, stale-SHA or pre-code review may
+remain as history but never satisfies this gate.
 
 Limits:
 
@@ -180,7 +190,9 @@ Interpret:
 
 ## Scope Rule
 
-Use the full flow when the task has medium/high risk, touches multiple files, changes a domain contract, UI, data, auth, tenancy, security, architecture or test. For a trivial single-file adjustment, use a compact version: minimal context, implementation, validation and report.
+Never use the Council as an automatic router. Use it only after explicit user
+activation or while resuming `.harness/council-active`. Once active, use
+`REVIEW_MODE=SINGLE` unless the user explicitly requests `FULL`.
 
 Do not delegate raw ambiguity to the user. Explore code, docs and real data first. The only clarification mechanism is `$grill-me`, invoked only by the Conditional Grill Gate.
 
@@ -215,7 +227,8 @@ Do not delegate raw ambiguity to the user. Explore code, docs and real data firs
    - a visual claim requires rendered evidence when pixels matter;
    - a data claim requires a query or equivalent proof.
 10. Record critical rounds with the installed `.harness/lib/agent_swarm_ledger.py`; this is auxiliary evidence, it does not replace the review.
-11. Run the Adversarial Verification Loop for execution.
+11. In `REVIEW_MODE=FULL`, run the separate quality and simplification stages.
+12. Run one consolidated Adversarial Verification Loop for execution.
 12. Report without inflating conclusions:
     - state exactly what changed;
     - list commands run and results;
@@ -341,7 +354,7 @@ REVISORES: [round 1: new subagent | round 2: same subagent via SendMessage/conti
 
 ## Adversarial Verification Loop
 
-Run this loop at the end of a medium/high-risk task.
+Run this loop at the end of an explicitly activated Council execution.
 
 Limit: maximum of {{ harness_execution_review_max }} rounds.
 

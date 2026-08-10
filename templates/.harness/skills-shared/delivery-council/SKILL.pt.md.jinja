@@ -22,12 +22,17 @@
 -#}
 ---
 name: {{ project_name }}-delivery-council
-description: Use em tarefas complexas do {{ project_name }} que envolvam implementacao, planejamento, revisao de plano existente, arquitetura, design-system, banco, auth, tenancy, seguranca, testes, PR review ou qualquer mudanca que precise iniciar por EXECUTION, PLANNING, PLAN_REVIEW ou AUTO, com planning-and-task-breakdown antes de cada fase/item, incremental-implementation como disciplina de execucao, trade-off automatico e adversarial loops.
+description: Use somente quando o usuario pedir expressamente o Delivery Council do {{ project_name }}, ou para retomar um run ja marcado por .harness/council-active. Nunca acione automaticamente por tamanho, risco, numero de arquivos ou tipo da tarefa.
 ---
 
 # {{ project_name }} Delivery Council
 
 Coordene uma entrega dentro de `{{ project_root }}` usando Codex nativo: `AGENTS.md`, repo skills, custom agents, comandos reais e evidencia desta sessao.
+
+**Somente opt-in.** Se o usuario nao pediu expressamente o Council e
+`.harness/council-active` nao existe, pare de carregar esta skill e encaminhe a
+tarefa diretamente pela skill tatica proporcional. O marcador apenas retoma um
+run ja iniciado; ele nao autoriza criar um run do Council automaticamente.
 
 
 
@@ -44,6 +49,7 @@ PLAN_REVIEW_MAX={{ harness_plan_review_max }}
 EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}
 AUTO_EXECUTE_AFTER_PLAN=false | true
 MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE
+REVIEW_MODE=SINGLE | FULL
 ```
 
 Defaults:
@@ -55,6 +61,7 @@ Defaults:
 - `EXECUTION_REVIEW_MAX={{ harness_execution_review_max }}`
 - `AUTO_EXECUTE_AFTER_PLAN=false` para `START_AT=PLANNING`; default efetivo `true` para `START_AT=PLAN_REVIEW`
 - `MUTATION_MODE=READ_ONLY` para auditoria/review/diagnostico sem pedido de mudanca; `WORKSPACE_WRITE` somente quando o usuario pedir implementacao ou alteracao.
+- `REVIEW_MODE=SINGLE`
 
 Limites:
 
@@ -72,7 +79,9 @@ Interprete:
 
 ## Regra de Escopo
 
-Use o fluxo completo quando a tarefa tiver risco medio/alto, tocar multiplos arquivos, alterar contrato de dominio, UI, dados, auth, tenancy, seguranca, arquitetura ou teste. Para ajuste trivial, compacte somente a amplitude: fase e item implicitos, preflight `planning-and-task-breakdown`, ciclo `incremental-implementation`, validacao, commit local e quality review continuam obrigatorios; apenas a review adversarial completa pode ser proporcionalmente dispensada com justificativa e evidencia.
+Nunca use o Council como roteador automatico. Use-o somente depois de pedido
+expresso do usuario ou ao retomar `.harness/council-active`. Depois de ativado,
+use `REVIEW_MODE=SINGLE`, salvo pedido expresso por `FULL`.
 
 Nao delegue ambiguidade crua ao usuario. Explore codigo, docs e dados reais primeiro. Use `interview-me` para descobrir objetivo/START/GOAL ainda indefinidos, `clarification-plan` para decisões materiais e `$grill-me` quando o Gate Condicional de Grill autorizar a sabatina.
 
@@ -115,7 +124,7 @@ Antes do primeiro slice executável, inicie o run com `python3 .harness/lib/coun
    - rode testes, typecheck, lint, queries, scripts ou evidencia visual conforme o risco;
    - claim visual exige evidencia renderizada quando pixels importam;
    - claim de dado exige query ou prova equivalente.
-10. Execute o Quality and Simplification Gate para a execucao (secao abaixo), antes do Adversarial Verification Loop.
+10. Em `REVIEW_MODE=FULL`, execute o Quality and Simplification Gate antes do review adversarial.
 11. Registre rodadas criticas com o `.harness/lib/agent_swarm_ledger.py` instalado; isso e evidencia auxiliar, nao substitui o review.
 12. Execute o Adversarial Verification Loop para execucao.
 13. Relate sem inflar conclusao:
@@ -134,9 +143,9 @@ Antes do primeiro slice executável, inicie o run com `python3 .harness/lib/coun
 | `ITEM-PLAN` | item `PRONTO`, dependencias e aceite | `SLICE` |
 | `SLICE` | menor incremento vertical | `VALIDATION` |
 | `VALIDATION` | cada ID funcional/qualidade/regressao ligado a comando executado com PASS | `LOCAL-COMMIT` |
-| `LOCAL-COMMIT` | SHA local atomico do slice | proximo `ITEM-PLAN` ou `QUALITY` |
-| `QUALITY` | zero `Critical` e zero `Required` | `SIMPLIFICATION` ou novo `ITEM-PLAN` de fix |
-| `SIMPLIFICATION` | `APLICAR` com motivo ou `NAO_NECESSARIA` com motivo | novo `ITEM-PLAN` para aplicar ou `ADVERSARIAL` |
+| `LOCAL-COMMIT` | SHA local atomico do slice | proximo `ITEM-PLAN`, `ADVERSARIAL` ou `QUALITY` em modo `FULL` |
+| `QUALITY` (`FULL` somente) | zero `Critical` e zero `Required` | `SIMPLIFICATION` ou novo `ITEM-PLAN` de fix |
+| `SIMPLIFICATION` (`FULL` somente) | `APLICAR` com motivo ou `NAO_NECESSARIA` com motivo | novo `ITEM-PLAN` para aplicar ou `ADVERSARIAL` |
 | `ADVERSARIAL` | review independente satisfeita ou dispensa proporcional valida | `DELIVERY` ou novo `ITEM-PLAN` de fix |
 | `DELIVERY` | aceite mapeado a evidencias e SHAs locais | terminal |
 
@@ -268,9 +277,12 @@ PROXIMA-ACAO: proximo-item | corrigir | parar
 
 Toda correcao pedida por quality review ou adversarial review vira um novo item de execucao: rode `planning-and-task-breakdown` antes dela e aplique a correcao via `incremental-implementation`. Nenhum reviewer implementa diretamente.
 
-## Quality and Simplification Gate
+## Quality and Simplification Gate (`REVIEW_MODE=FULL` somente)
 
-Este gate integra as skills `code-review-and-quality` e `code-simplification` ao caminho de execucao do Council. Ele roda depois da implementacao e da validacao inicial, e antes do Adversarial Verification Loop. Nao substitui o `{{ project_name }}-adversarial-reviewer`: sao perspectivas e contratos diferentes.
+Pule esta secao inteira no default `REVIEW_MODE=SINGLE`. Em `FULL`, este gate
+integra as skills `code-review-and-quality` e `code-simplification` ao caminho
+de execucao do Council. Ele roda depois da implementacao e da validacao inicial,
+e antes do Adversarial Verification Loop.
 
 Nao aplique este gate como se houvesse codigo quando a tarefa for exclusivamente documental. Nesse caso, reporte `QUALITY-GATE: NAO_APLICAVEL` e siga para o fechamento correspondente. Para qualquer mudanca em codigo, teste, migration, configuracao executavel, script, template ou contrato de runtime, o gate e obrigatorio.
 
@@ -308,7 +320,7 @@ Cada rodada de qualidade deve ser registrada no ledger de execucao como `event=r
 
 ### Fechamento do gate
 
-O Council so pode iniciar o Adversarial Verification Loop quando houver:
+Em `FULL`, o Council so pode iniciar o Adversarial Verification Loop quando houver:
 
 ```md
 Para mudanca de codigo:
@@ -321,7 +333,11 @@ QUALITY-GATE: NAO_APLICAVEL
 ```
 
 `PENDENTE` ou `BLOQUEADO` exige reporte explicito e impede declarar `ADVERSARIAL-VERIFICATION: SATISFEITO`.
-Na entrega, a aresta de review só fecha quando seus arquivos de evidência contêm, como linhas terminais exatas, `QUALITY-REVIEW: SATISFEITO`, `SIMPLIFICATION: NAO_NECESSARIA` e `ADVERSARIAL-VERIFICATION: SATISFEITO`. Cada arquivo que fornece um veredicto também deve conter a linha exata `CHECKED-CODE-SHA: <head_sha do code-necessity>`, introduzida por commit posterior a esse SHA. Rodada histórica, vinculada a SHA obsoleto ou anterior ao código pode permanecer como histórico, mas nunca satisfaz esse gate.
+Na entrega, `SINGLE` exige somente `ADVERSARIAL-VERIFICATION: SATISFEITO`.
+`FULL` exige também `QUALITY-REVIEW: SATISFEITO` e
+`SIMPLIFICATION: NAO_NECESSARIA`. Cada arquivo que fornece um veredicto deve
+conter `CHECKED-CODE-SHA: <head_sha do code-necessity>`, introduzido por commit
+posterior a esse SHA.
 
 ## Planning Adversarial Loop
 
@@ -404,7 +420,7 @@ REVISORES: [rodada 1: subagent novo | rodada 2: mesmo subagent via SendMessage/c
 
 ## Adversarial Verification Loop
 
-Execute este loop ao final de tarefa de risco medio/alto.
+Execute este loop ao final de uma execucao do Council ativada expressamente.
 
 Limite: maximo de {{ harness_execution_review_max }} rodadas.
 
@@ -470,7 +486,7 @@ Nao corrija automaticamente:
 Pare quando:
 
 - o review retornar `ADVERSARIAL-VERIFICATION: SATISFEITO`;
-- completar 3 rodadas;
+- completar {{ harness_execution_review_max }} rodadas;
 - sobrar apenas `DEFER_RUN` registrado no RUN.md;
 - sobrar bloqueio real fora do alcance da sessao.
 
@@ -530,7 +546,7 @@ Para tarefas completas, entregue nesta ordem:
 4. Arquivos alterados.
 5. Resultado do Planning-by-Item and Incremental Execution Loop por fase/item.
 6. Comandos de validacao com resultado.
-7. Resultado do Quality and Simplification Gate.
+7. Resultado do Quality and Simplification Gate somente em `REVIEW_MODE=FULL`.
 8. Resultado do Adversarial Verification Loop ou justificativa de por que nao se aplicava.
 9. Pendencias reais.
 10. Relatório de necessidade de código com cobertura integral.
@@ -540,7 +556,7 @@ Para tarefas completas, entregue nesta ordem:
 Regras duras:
 
 - Toda rodada de review adversarial (Planning Adversarial Loop e Adversarial Verification Loop) roda OBRIGATORIAMENTE em subagent `{{ project_name }}-adversarial-reviewer`, em contexto isolado. PROIBIDO o agente principal executar a review inline: self-review no mesmo contexto herda os vieses de quem produziu o plano/diff (nao e adversarial de fato) e as dezenas de leituras da review estouram o contexto principal.
-- A rodada de qualidade do Quality and Simplification Gate roda em subagent isolado `code-reviewer`; ela segue `code-review-and-quality` e nao substitui nenhuma rodada adversarial. `code-simplification` e aplicada pelo Council no contexto de implementacao, com testes incrementais e nova quality review se houver mudanca.
+- Em `REVIEW_MODE=FULL`, a rodada de qualidade roda em subagent isolado `code-reviewer`; no default `SINGLE`, ela e a simplificacao separada nao existem.
 - Rodada 1 de um loop = subagent novo. Rodadas seguintes do MESMO loop podem continuar o MESMO subagent (Claude Code: SendMessage; Codex: mesma thread) — ele ja conhece os gaps e re-verifica mais barato. O veredito valido e sempre o texto retornado PELO subagent; o agente principal repassa, nao reescreve.
 - No relatorio final, atribua cada rodada ao seu executor (linha `REVISORES:` dos blocos de encerramento). Rodada sem atribuicao de executor nao conta como review valida.
 - Se o mecanismo de subagent estiver indisponivel, PARE e declare o bloqueio — nao rode a review inline como fallback silencioso.

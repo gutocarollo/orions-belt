@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import fcntl
 import hashlib
 import json
 import os
@@ -19,6 +18,13 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+
+LIB = Path(__file__).resolve().parents[1] / "lib"
+if str(LIB) not in sys.path:
+    sys.path.insert(0, str(LIB))
+from context_receipt_fields import definition_ids  # noqa: E402
+from context_evidence import repository_fingerprint  # noqa: E402
+from secure_runtime_io import open_locked_text  # noqa: E402
 
 MAX_EXCERPT = 16384
 
@@ -93,6 +99,27 @@ def _identity(payload: dict[str, Any]) -> tuple[str, str, str]:
     )
 
 
+def _active_run(root: Path, payload: dict[str, Any]) -> str:
+    explicit = str(payload.get("run_id") or "")
+    if explicit:
+        return explicit
+    active = root / ".harness/runs/ACTIVE"
+    return active.read_text(encoding="utf-8").strip() if active.is_file() else ""
+
+
+def _repository_binding(root: Path, run_id: str, payload: dict[str, Any]) -> str:
+    explicit = str(payload.get("repository_fingerprint") or "")
+    if explicit:
+        return explicit
+    state_path = root / ".harness/runs/agent-swarm" / run_id / "council-state.json"
+    if run_id and state_path.is_file():
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        value = str(state.get("repository_fingerprint") or "")
+        if value:
+            return value
+    return repository_fingerprint(root)
+
+
 def record_event(payload: dict[str, Any], runtime: str, root: Path | None = None) -> Path | None:
     """Append one canonical hook event and return the receipt path.
 
@@ -118,13 +145,14 @@ def record_event(payload: dict[str, Any], runtime: str, root: Path | None = None
     response = payload.get("tool_response") if "tool_response" in payload else payload.get("toolResponse")
     resolved_root = (root or _root(payload)).resolve()
     session = _slug(str(payload.get("session_id") or "unknown"))
-    folder = resolved_root / ".harness/runs/context-tools" / session
-    folder.mkdir(parents=True, exist_ok=True)
-    path = folder / "tools.jsonl"
+    run_id = _active_run(resolved_root, payload)
+    repository_binding = _repository_binding(resolved_root, run_id, payload)
     record = {
         "ts": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
         "time_ns": time.time_ns(),
         "runtime": runtime,
+        "run_id": run_id,
+        "repository_fingerprint": repository_binding,
         "event": event,
         "session_id": str(payload.get("session_id") or ""),
         "turn_id": payload.get("turn_id"),
@@ -140,15 +168,17 @@ def record_event(payload: dict[str, Any], runtime: str, root: Path | None = None
         "output_sha256": hashlib.sha256(_canonical_json(response)).hexdigest() if response is not None else None,
         "input_excerpt": _excerpt(tool_input),
         "response_excerpt": _excerpt(response) if event == "PostToolUse" else "",
+        "definition_ids": definition_ids(response) if event == "PostToolUse" else [],
         "error_excerpt": _excerpt(payload.get("error") or response) if event == "PostToolUseFailure" else "",
     }
-    with path.open("a+", encoding="utf-8") as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
+    with open_locked_text(
+        resolved_root, (".harness", "runs", "context-tools", session), "tools.jsonl"
+    ) as (path, stream):
         stream.seek(0)
         existing = [json.loads(line) for line in stream if line.strip()]
-        identity = (runtime, record["session_id"], tool_use_id, event)
+        identity = (runtime, run_id, record["session_id"], tool_use_id, event)
         if any(
-            (item.get("runtime"), item.get("session_id"), item.get("tool_use_id"), item.get("event")) == identity
+            (item.get("runtime"), item.get("run_id"), item.get("session_id"), item.get("tool_use_id"), item.get("event")) == identity
             for item in existing
         ):
             return path

@@ -34,6 +34,25 @@
       "type": "string",
       "minLength": 1
     },
+    "council_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "base_sha", "repository_fingerprint"],
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "base_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "repository_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
     "task_shape": {
       "enum": [
         "LEXICAL_ENUMERATION",

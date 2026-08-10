@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from context_evidence import ContextEvidenceError, verify_context_delivery
+from context_evidence import ContextEvidenceError, repository_fingerprint, verify_context_delivery
 from context_routing import RoutingError, validate_route
 from mini_schema_validate import validate_instance
 from objective_control import (
@@ -35,7 +35,7 @@ NEXT = {
     "ITEM-PLAN": {"SLICE"},
     "SLICE": {"VALIDATION"},
     "VALIDATION": {"LOCAL-COMMIT"},
-    "LOCAL-COMMIT": {"PHASE-PLAN", "ITEM-PLAN", "QUALITY"},
+    "LOCAL-COMMIT": {"PHASE-PLAN", "ITEM-PLAN", "QUALITY", "ADVERSARIAL"},
     "QUALITY": {"ITEM-PLAN", "SIMPLIFICATION"},
     "SIMPLIFICATION": {"ITEM-PLAN", "ADVERSARIAL"},
     "ADVERSARIAL": {"ITEM-PLAN", "DELIVERY"},
@@ -154,11 +154,81 @@ def remote_action_allowed(action: str, authority: dict[str, Any]) -> bool:
     )
 
 
+def bind_context_payload(
+    state: dict[str, Any],
+    event: str,
+    payload: dict[str, Any],
+    repository_root: Path,
+    *,
+    run_id: str | None = None,
+    replaying: bool = False,
+) -> dict[str, Any]:
+    """Bind context events to the active run, anchor and repository snapshot."""
+    _require(event in {"CONTEXT-PLAN", "CONTEXT-DELIVERY"}, f"cannot bind context event: {event}")
+    expected_run = str(state.get("run_id") or run_id or "")
+    expected_base = str(state.get("base_sha") or "")
+    _require(bool(expected_run), f"{event} requires an active Council run_id")
+    _require(not run_id or run_id == expected_run, f"{event} run_id differs from its Council ledger")
+    _require(re.fullmatch(r"[0-9a-f]{40}", expected_base) is not None, f"{event} requires the Council base_sha")
+    result = deepcopy(payload)
+    if event == "CONTEXT-PLAN":
+        supplied = result.get("council_binding")
+        anchored_fingerprint = str(state.get("repository_fingerprint") or "")
+        _require(re.fullmatch(r"[0-9a-f]{64}", anchored_fingerprint) is not None, "CONTEXT-PLAN requires the anchor repository fingerprint")
+        if replaying:
+            _require(isinstance(supplied, dict), "historical CONTEXT-PLAN lacks Council binding")
+            fingerprint = str(supplied.get("repository_fingerprint") or "")
+        else:
+            fingerprint = repository_fingerprint(repository_root)
+            _require(fingerprint == anchored_fingerprint, "repository drifted after Council ANCHOR")
+            if supplied is not None:
+                _require(isinstance(supplied, dict), "CONTEXT-PLAN council_binding must be an object")
+                _require(
+                    supplied == {
+                        "run_id": expected_run,
+                        "base_sha": expected_base,
+                        "repository_fingerprint": fingerprint,
+                    },
+                    "CONTEXT-PLAN council_binding differs from the active run or repository",
+                )
+        _require(re.fullmatch(r"[0-9a-f]{64}", fingerprint) is not None, "CONTEXT-PLAN repository fingerprint is invalid")
+        result["council_binding"] = {
+            "run_id": expected_run,
+            "base_sha": expected_base,
+            "repository_fingerprint": fingerprint,
+        }
+        return result
+
+    plan = state.get("context_plan") or {}
+    binding = plan.get("council_binding") or {}
+    _require(binding.get("run_id") == expected_run, "CONTEXT-PLAN is not bound to the active Council run")
+    _require(binding.get("base_sha") == expected_base, "CONTEXT-PLAN is not bound to the Council anchor")
+    expected = {
+        "run_id": expected_run,
+        "base_sha": expected_base,
+        "repository_fingerprint": binding.get("repository_fingerprint"),
+    }
+    for key, value in expected.items():
+        if key in result:
+            _require(result[key] == value, f"CONTEXT-DELIVERY {key} differs from CONTEXT-PLAN")
+        result[key] = value
+    _require(bool(result.get("session_id")), "CONTEXT-DELIVERY requires runtime session_id")
+    if not replaying:
+        _require(
+            repository_fingerprint(repository_root) == result["repository_fingerprint"],
+            "CONTEXT-DELIVERY repository fingerprint drifted after CONTEXT-PLAN",
+        )
+    return result
+
+
 def apply_transition(
     state: dict[str, Any] | None,
     event: str,
     payload: dict[str, Any],
     repository_root: Path | None = None,
+    *,
+    run_id: str | None = None,
+    replaying: bool = False,
 ) -> dict[str, Any]:
     current = state.get("stage") if state else None
     if state and current == "QUALITY" and state.get("quality_status") == "CORRIGIR":
@@ -179,6 +249,15 @@ def apply_transition(
         allowed = {"CONTEXT-PLAN", "DELIVERY"}
     _require(event in allowed, f"{event} cannot follow {current}; expected {sorted(allowed)}")
 
+    if state and run_id:
+        _require(state.get("run_id") == run_id, "Council state run_id differs from its ledger")
+    if event in {"CONTEXT-PLAN", "CONTEXT-DELIVERY"}:
+        _require(repository_root is not None, f"{event} requires repository resolution")
+        _require(state is not None, f"{event} requires an anchored Council state")
+        payload = bind_context_payload(
+            state, event, payload, repository_root, run_id=run_id, replaying=replaying
+        )
+
     schema_name = PAYLOAD_SCHEMAS.get(event)
     if schema_name:
         errors = validate_instance(payload, json.loads((SCHEMA_DIR / schema_name).read_text(encoding="utf-8")))
@@ -192,6 +271,31 @@ def apply_transition(
         _require(bool(payload.get("anchor_source")), "ANCHOR requires anchor_source")
         result["mutation_mode"] = mode
         result["context_required"] = bool(payload.get("context_required", False))
+        effective_run_id = str(payload.get("run_id") or run_id or "")
+        if payload.get("run_id") and run_id:
+            _require(payload["run_id"] == run_id, "ANCHOR run_id differs from its Council ledger")
+        if result["context_required"]:
+            _require(bool(effective_run_id), "context-enabled ANCHOR requires run_id")
+        if effective_run_id:
+            _require(re.fullmatch(r"[A-Za-z0-9_.-]+", effective_run_id) is not None, "ANCHOR run_id is invalid")
+            result["run_id"] = effective_run_id
+        if result["context_required"]:
+            supplied_fingerprint = str(payload.get("repository_fingerprint") or "")
+            if replaying:
+                _require(
+                    re.fullmatch(r"[0-9a-f]{64}", supplied_fingerprint) is not None,
+                    "historical context-enabled ANCHOR lacks repository fingerprint",
+                )
+            else:
+                _require(repository_root is not None, "context-enabled ANCHOR requires repository resolution")
+                current_fingerprint = repository_fingerprint(repository_root)
+                if supplied_fingerprint:
+                    _require(
+                        supplied_fingerprint == current_fingerprint,
+                        "ANCHOR repository fingerprint differs from the current checkout",
+                    )
+                supplied_fingerprint = current_fingerprint
+            result["repository_fingerprint"] = supplied_fingerprint
         result["implementer_id"] = payload.get("implementer_id", "council-implementer")
         if mode == "WORKSPACE_WRITE":
             base_sha = str(payload.get("base_sha", ""))
@@ -229,7 +333,14 @@ def apply_transition(
         plan = result.get("context_plan")
         _require(isinstance(plan, dict), "CONTEXT-DELIVERY requires persisted CONTEXT-PLAN")
         try:
-            result["context_delivery"] = verify_context_delivery(payload, plan, repository_root)
+            result["context_delivery"] = verify_context_delivery(
+                payload,
+                plan,
+                repository_root,
+                expected_run_id=str(result.get("run_id") or ""),
+                expected_base_sha=str(result.get("base_sha") or ""),
+                verify_current_repository=not replaying,
+            )
         except ContextEvidenceError as exc:
             raise TransitionError(str(exc)) from exc
 
@@ -365,7 +476,10 @@ def apply_transition(
         _require(payload.get("status") == "SATISFEITO" and payload.get("manifest"), "DELIVERY requires SATISFEITO and manifest")
         if result.get("mutation_mode") == "WORKSPACE_WRITE":
             _require(bool(result.get("commits")), "workspace delivery requires local commits")
-            _require(result.get("quality_status") == "SATISFEITO", "DELIVERY requires QUALITY: SATISFEITO")
+            _require(
+                not result.get("quality_status") or result.get("quality_status") == "SATISFEITO",
+                "DELIVERY requires any executed QUALITY review to be SATISFEITO",
+            )
             _require(result.get("adversarial_status") == "SATISFEITO", "DELIVERY requires ADVERSARIAL: SATISFEITO")
 
     result["stage"] = event

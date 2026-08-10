@@ -27,7 +27,7 @@ render both --data use_claude=true --data use_codex=true "${COMMON[@]}"
 
 for d in claude codex both; do
   test -f "$WORK/$d/.harness/context-delivery.enabled"
-  python3 -m py_compile "$WORK/$d/.harness/lib/context_predicates.py" "$WORK/$d/.harness/lib/context_provider_probe.py" "$WORK/$d/.harness/lib/context_routing.py" "$WORK/$d/.harness/lib/context_evidence.py" "$WORK/$d/.harness/hooks/context-tool-ledger.py"
+  python3 -m py_compile "$WORK/$d/.harness/lib/context_predicates.py" "$WORK/$d/.harness/lib/context_provider_probe.py" "$WORK/$d/.harness/lib/context_routing.py" "$WORK/$d/.harness/lib/context_receipt_fields.py" "$WORK/$d/.harness/lib/context_evidence.py" "$WORK/$d/.harness/lib/secure_runtime_io.py" "$WORK/$d/.harness/hooks/context-tool-ledger.py"
   grep -q '^HARNESS_CONTEXT_DELIVERY_ENABLED=true$' "$WORK/$d/.harness/harness.conf"
   grep -q 'F5' "$WORK/$d/.agents/skills/exploration-protocol/SKILL.md" 2>/dev/null || grep -q 'F5' "$WORK/$d/.claude/skills/exploration-protocol/SKILL.md"
   ! grep -q 'fork is MANDATORY and PARALLEL' "$WORK/$d/AGENTS.md" 2>/dev/null || false

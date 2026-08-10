@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from context_evidence import repository_fingerprint
 from council_runtime import apply_transition
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -50,13 +51,17 @@ def start_session(
         "payload": {
             "mutation_mode": mutation_mode,
             "anchor_source": anchor_source,
+            "run_id": run_id,
             "context_required": bool(context_required),
             "base_sha": base_sha,
+            "repository_fingerprint": repository_fingerprint(root),
             "worktree_baseline": worktree_state(root),
             "execution_graph": graph,
         },
     }
-    state = apply_transition(None, event["event"], event["payload"], repository_root=root)
+    state = apply_transition(
+        None, event["event"], event["payload"], repository_root=root, run_id=run_id
+    )
     (folder / "council-events.jsonl").write_text(json.dumps(event, sort_keys=True) + "\n", encoding="utf-8")
     state_path = (folder / "council-state.json").resolve()
     state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")

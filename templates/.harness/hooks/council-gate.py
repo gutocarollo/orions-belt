@@ -27,7 +27,14 @@ def verified_state(state_path: Path) -> dict[str, object]:
     for line in ledger.read_text(encoding="utf-8").splitlines():
         if line.strip():
             item = json.loads(line)
-            replay = apply_transition(replay, item["event"], item["payload"], repository_root=ROOT)
+            replay = apply_transition(
+                replay,
+                item["event"],
+                item["payload"],
+                repository_root=ROOT,
+                run_id=resolved.parent.name,
+                replaying=True,
+            )
     if replay is None:
         raise ValueError("Council event ledger is empty")
     if state.get("delivery_verified") is True:

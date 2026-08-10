@@ -379,6 +379,19 @@ REPLAN-REQUEST:
         self.assertIn("scripts/validate_contract.py", readme)
 
     def test_prompt_generator_validates_args(self):
+        defaults = subprocess.run(
+            ["python3", "scripts/render_prompt.py", "--task", "Small fix"],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+        self.assertEqual(defaults.returncode, 0, defaults.stdout)
+        self.assertIn("PLAN_REVIEW_MAX=1", defaults.stdout)
+        self.assertIn("EXECUTION_REVIEW_MAX=1", defaults.stdout)
+        self.assertIn("REVIEW_MODE=SINGLE", defaults.stdout)
+
         result = subprocess.run(
             ["python3", "scripts/render_prompt.py", "--start-at", "PLAN_REVIEW", "--task", "Executar plano"],
             cwd=ROOT,

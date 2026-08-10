@@ -29,6 +29,20 @@ git config user.email test@example.invalid
 git config user.name Test
 git add -A
 git commit -q -m baseline
+
+grep -q "Opt-in activation" AGENTS.md
+grep -q "HARNESS_PLAN_REVIEW_MAX=1" .harness/harness.conf
+grep -q "HARNESS_EXECUTION_REVIEW_MAX=1" .harness/harness.conf
+grep -q "REVIEW_MODE=SINGLE" .agents/skills/councilproof-delivery-council/SKILL.md
+grep -q "REVIEW_MODE=FULL.*only" .agents/skills/councilproof-delivery-council/SKILL.md
+test ! -e .harness/council-active
+printf '{}\n' | python3 .harness/hooks/council-gate.py pre
+
+PROMPT="$(python3 "$REPO_ROOT/engine/contract/scripts/render_prompt.py" --task 'small fix')"
+grep -q "PLAN_REVIEW_MAX=1" <<<"$PROMPT"
+grep -q "EXECUTION_REVIEW_MAX=1" <<<"$PROMPT"
+grep -q "REVIEW_MODE=SINGLE" <<<"$PROMPT"
+
 python3 .harness/lib/tests/test_objective_control.py
 python3 .harness/lib/tests/test_context_delivery.py
 python3 .harness/lib/tests/test_council_runtime.py

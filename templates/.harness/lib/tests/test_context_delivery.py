@@ -14,11 +14,15 @@ LIB = Path(__file__).resolve().parents[1]
 ROOT = LIB.parents[1]
 sys.path.insert(0, str(LIB))
 
-from context_evidence import ContextEvidenceError, _verify_lifecycle, _verify_predicates, verify_context_delivery  # noqa: E402
+from context_evidence import ContextEvidenceError, _verify_lifecycle, _verify_predicates, repository_fingerprint, verify_context_delivery  # noqa: E402
 from context_predicates import PredicateError, evaluate_repository_predicates  # noqa: E402
 from context_provider_probe import ProviderProbeError, parse_codegraph_status  # noqa: E402
 from context_routing import RoutingError, route_context, route_from_repository, validate_route  # noqa: E402
-from codex_context_receipts import TranscriptReceiptError, capture as capture_codex_receipts  # noqa: E402
+from codex_context_receipts import (  # noqa: E402
+    TranscriptReceiptError,
+    _read_only_shell,
+    capture as capture_codex_receipts,
+)
 from council_runtime import TransitionError, apply_transition  # noqa: E402
 
 _tool_spec = importlib.util.spec_from_file_location("context_tool_ledger", ROOT / ".harness/hooks/context-tool-ledger.py")
@@ -89,12 +93,13 @@ def definition(root: Path, runtime: str, agent_type: str, model: str) -> None:
 
 def lifecycle(root: Path, runtime: str, model: str, agent_type: str = "sample-context-scout") -> Path:
     definition(root, runtime, agent_type, model)
+    fingerprint = repository_fingerprint(root)
     path = root / ".harness/runs/subagents/session-1/agent-1.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     records = [
-        {"event": "SubagentStart", "session_id": "session-1", "runtime": runtime, "agent_id": "agent-1", "agent_type": agent_type, "configured_model": model, "model": model, "agent_transcript_path": "/tmp/agent-1.jsonl"},
-        {"event": "AgentToolResult", "session_id": "session-1", "runtime": runtime, "agent_id": "agent-1", "agent_type": agent_type, "configured_model": model, "model": model, "agent_transcript_path": "/tmp/agent-1.jsonl", "usage": {"input_tokens": 10, "output_tokens": 5}, "duration_ms": 20},
-        {"event": "SubagentStop", "session_id": "session-1", "runtime": runtime, "agent_id": "agent-1", "agent_type": agent_type, "configured_model": model, "model": model, "agent_transcript_path": "/tmp/agent-1.jsonl"},
+        {"event": "SubagentStart", "run_id": "run-1", "repository_fingerprint": fingerprint, "session_id": "session-1", "runtime": runtime, "agent_id": "agent-1", "agent_type": agent_type, "configured_model": model, "model": model, "agent_transcript_path": "/tmp/agent-1.jsonl"},
+        {"event": "AgentToolResult", "run_id": "run-1", "repository_fingerprint": fingerprint, "session_id": "session-1", "runtime": runtime, "agent_id": "agent-1", "agent_type": agent_type, "configured_model": model, "model": model, "agent_transcript_path": "/tmp/agent-1.jsonl", "usage": {"input_tokens": 10, "output_tokens": 5}, "duration_ms": 20},
+        {"event": "SubagentStop", "run_id": "run-1", "repository_fingerprint": fingerprint, "session_id": "session-1", "runtime": runtime, "agent_id": "agent-1", "agent_type": agent_type, "configured_model": model, "model": model, "agent_transcript_path": "/tmp/agent-1.jsonl"},
     ]
     path.write_text("".join(json.dumps(item) + "\n" for item in records), encoding="utf-8")
     return path
@@ -102,6 +107,7 @@ def lifecycle(root: Path, runtime: str, model: str, agent_type: str = "sample-co
 
 def emit_tool(root: Path, runtime: str, call_id: str, tool_name: str, tool_input: dict, response: object) -> None:
     common = {
+        "run_id": "run-1", "repository_fingerprint": repository_fingerprint(root),
         "session_id": "session-1", "agent_id": "agent-1", "agent_type": "sample-context-scout",
         "agent_transcript_path": "/tmp/agent-1.jsonl", "cwd": str(root), "model": "sonnet" if runtime == "claude" else "gpt-5.6-terra",
         "tool_use_id": call_id, "tool_name": tool_name, "tool_input": tool_input,
@@ -164,8 +170,15 @@ def lexical_evidence(root: Path, plan: dict, *, runtime="claude", model="sonnet"
     provider = parse_codegraph_status(post["graph-status"]["response_excerpt"])
     provider["source_tool_call_id"] = "graph-status"
     analyzed = 3 if complete else 2
+    fingerprint = repository_fingerprint(root)
+    plan["council_binding"] = {
+        "run_id": "run-1", "base_sha": "0" * 40,
+        "repository_fingerprint": fingerprint,
+    }
     return {
         "status": "SATISFEITO", "skill": "context-delivery", "plan_id": plan["plan_id"],
+        "run_id": "run-1", "session_id": "session-1", "base_sha": "0" * 40,
+        "repository_fingerprint": fingerprint,
         "runtime": runtime, "agent_id": "agent-1", "agent_type": "sample-context-scout", "model": model,
         "lifecycle_receipt": {"path": lifecycle_path.relative_to(root).as_posix(), "sha256": sha(lifecycle_path)},
         "tool_receipt": {"path": receipt_path.relative_to(root).as_posix(), "sha256": sha(receipt_path)},
@@ -194,6 +207,9 @@ def lexical_evidence(root: Path, plan: dict, *, runtime="claude", model="sonnet"
 class CodexTranscriptReceiptTest(unittest.TestCase):
     def _transcript(self, root: Path, command: str) -> tuple[Path, Path, str]:
         session_id = "session-codex"
+        active = root / ".harness/runs/ACTIVE"
+        active.parent.mkdir(parents=True, exist_ok=True)
+        active.write_text("run-1\n", encoding="utf-8")
         definition(root, "codex", "sample-context-scout", "gpt-5.6-terra")
         sessions = root / "codex-home/sessions/2026/08/10"
         sessions.mkdir(parents=True)
@@ -253,6 +269,8 @@ class CodexTranscriptReceiptTest(unittest.TestCase):
             delivery = {
                 "agent_id": "agent-codex", "agent_type": "sample-context-scout",
                 "runtime": "codex", "model": "gpt-5.6-terra",
+                "run_id": "run-1", "session_id": session_id,
+                "repository_fingerprint": repository_fingerprint(root),
                 "lifecycle_receipt": {"path": lifecycle_path.relative_to(root).as_posix(), "sha256": sha(lifecycle_path)},
             }
             plan = {"allowed_models": ["gpt-5.6-terra"], "allowed_agent_types": ["sample-context-scout"]}
@@ -275,6 +293,29 @@ class CodexTranscriptReceiptTest(unittest.TestCase):
                     os.environ.pop("CODEX_HOME", None)
                 else:
                     os.environ["CODEX_HOME"] = previous
+
+    def test_shell_validator_rejects_operator_and_executable_option_bypasses(self):
+        attacks = (
+            "ls ; touch /tmp/orions-write",
+            "ls & touch /tmp/orions-write",
+            "find . -name '*.tmp' -delete",
+            "find . -exec sh -c 'touch /tmp/orions-write' \\;",
+            "rg --pre 'touch /tmp/orions-write' pattern .",
+        )
+        for command in attacks:
+            with self.subTest(command=command):
+                self.assertFalse(_read_only_shell(command))
+
+    def test_shell_validator_preserves_required_read_only_commands(self):
+        commands = (
+            "sed -n '1,80p' src/a.tsx",
+            "rg -n hover src",
+            "git diff -- src/a.tsx",
+            "codegraph status",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertTrue(_read_only_shell(command))
 
 
 class PredicateAndRoutingTest(unittest.TestCase):
@@ -600,6 +641,14 @@ class EvidenceTest(unittest.TestCase):
             with self.assertRaisesRegex(ContextEvidenceError, "analyzed_files"):
                 verify_context_delivery(delivery, plan, root)
 
+    def test_delivery_is_rejected_after_repository_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); plan = self.plan()
+            delivery = lexical_evidence(root, plan)
+            (root / "src/a.tsx").write_text("changed after context\n", encoding="utf-8")
+            with self.assertRaisesRegex(ContextEvidenceError, "fingerprint|drift"):
+                verify_context_delivery(delivery, plan, root)
+
     def test_coverage_counts_must_be_derived_from_existing_identities(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); plan = self.plan(); delivery = lexical_evidence(root, plan)
@@ -610,9 +659,11 @@ class EvidenceTest(unittest.TestCase):
 
     def test_coverage_identities_must_appear_in_source_receipts(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory); plan = self.plan(); delivery = lexical_evidence(root, plan)
+            root = Path(directory)
             fake = root / "src/fabricated.tsx"
+            fake.parent.mkdir(parents=True)
             fake.write_text("hover:scale-105\n")
+            plan = self.plan(); delivery = lexical_evidence(root, plan)
             delivery["coverage"]["eligible_paths"][2] = "src/fabricated.tsx"
             delivery["coverage"]["analyzed_paths"][2] = "src/fabricated.tsx"
             delivery["coverage"]["candidate_ids"][1] = "src/fabricated.tsx:1"
@@ -627,6 +678,11 @@ class EvidenceTest(unittest.TestCase):
             root = Path(directory)
             delivery = lexical_evidence(root, self.plan())
             delivery["plan_id"] = plan["plan_id"]
+            plan["council_binding"] = {
+                "run_id": delivery["run_id"],
+                "base_sha": delivery["base_sha"],
+                "repository_fingerprint": delivery["repository_fingerprint"],
+            }
             delivery["predicate_resolutions"] = [resolution, {"predicate": "P5", "status": True, "source_tool_call_ids": ["graph-status"], "evidence": ["fresh"], "definition_count": 0, "definition_ids": []}]
             with self.assertRaisesRegex(ContextEvidenceError, "definition id"):
                 verify_context_delivery(delivery, plan, root)
@@ -634,8 +690,8 @@ class EvidenceTest(unittest.TestCase):
     def test_p4_status_is_derived_from_proven_definition_count(self):
         plan = route_context(task_shape="KNOWN_SYMBOL_IMPACT", risk_tier="HIGH", codegraph_available=True, lsp_available=True)
         tools = {
-            "graph": {"methods": ["codegraph"], "tool_name": "mcp__codegraph__codegraph_search", "response_excerpt": "definitions: src/a.py:10 src/b.py:20"},
-            "status": {"methods": ["codegraph-status"], "tool_name": "mcp__codegraph__codegraph_status", "response_excerpt": "[OK] Index is up to date"},
+            "graph": {"methods": ["codegraph"], "tool_name": "mcp__codegraph__codegraph_search", "response_excerpt": "definitions: src/a.py:10 src/b.py:20", "definition_ids": ["src/a.py:10", "src/b.py:20"]},
+            "status": {"methods": ["codegraph-status"], "tool_name": "mcp__codegraph__codegraph_status", "response_excerpt": "[OK] Index is up to date", "definition_ids": []},
         }
         delivery = {"predicate_resolutions": [
             {"predicate": "P4", "status": False, "source_tool_call_ids": ["graph"], "evidence": ["definitions"], "definition_count": 2, "definition_ids": ["src/a.py:10", "src/b.py:20"]},
@@ -647,8 +703,26 @@ class EvidenceTest(unittest.TestCase):
     def test_p4_cannot_omit_an_observed_definition(self):
         plan = route_context(task_shape="KNOWN_SYMBOL_IMPACT", risk_tier="HIGH", codegraph_available=True, lsp_available=True)
         tools = {
-            "graph": {"methods": ["codegraph"], "tool_name": "mcp__codegraph__codegraph_explore", "response_excerpt": "definitions: src/a.py:10 src/b.py:20"},
-            "status": {"methods": ["codegraph-status"], "tool_name": "mcp__codegraph__codegraph_status", "response_excerpt": "[OK] Index is up to date"},
+            "graph": {"methods": ["codegraph"], "tool_name": "mcp__codegraph__codegraph_explore", "response_excerpt": "definitions: src/a.py:10 src/b.py:20", "definition_ids": ["src/a.py:10", "src/b.py:20"]},
+            "status": {"methods": ["codegraph-status"], "tool_name": "mcp__codegraph__codegraph_status", "response_excerpt": "[OK] Index is up to date", "definition_ids": []},
+        }
+        delivery = {"predicate_resolutions": [
+            {"predicate": "P4", "status": False, "source_tool_call_ids": ["graph"], "evidence": ["definitions"], "definition_count": 1, "definition_ids": ["src/a.py:10"]},
+            {"predicate": "P5", "status": True, "source_tool_call_ids": ["status"], "evidence": ["fresh"], "definition_count": 0, "definition_ids": []},
+        ]}
+        with self.assertRaisesRegex(ContextEvidenceError, "complete observed definition set"):
+            _verify_predicates(delivery, plan, tools)
+
+    def test_p4_uses_full_structured_definitions_beyond_excerpt_limit(self):
+        plan = route_context(task_shape="KNOWN_SYMBOL_IMPACT", risk_tier="HIGH", codegraph_available=True, lsp_available=True)
+        tools = {
+            "graph": {
+                "methods": ["codegraph"],
+                "tool_name": "mcp__codegraph__codegraph_explore",
+                "response_excerpt": "definitions: src/a.py:10 " + ("note " * 4000),
+                "definition_ids": ["src/a.py:10", "src/b.py:20"],
+            },
+            "status": {"methods": ["codegraph-status"], "tool_name": "mcp__codegraph__codegraph_status", "response_excerpt": "[OK] Index is up to date", "definition_ids": []},
         }
         delivery = {"predicate_resolutions": [
             {"predicate": "P4", "status": False, "source_tool_call_ids": ["graph"], "evidence": ["definitions"], "definition_count": 1, "definition_ids": ["src/a.py:10"]},
@@ -662,12 +736,57 @@ class StateMachineTest(unittest.TestCase):
     def test_phase_plan_is_blocked_until_verified_context_delivery(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); plan = route_context(task_shape="DIRECT_TARGETED", allowed_agent_types=["sample-context-scout"], allowed_models=["sonnet"], plan_id="state")
-            state = apply_transition(None, "ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "prompt", "context_required": True, "base_sha": "0" * 40, "worktree_baseline": [], "execution_graph": GRAPH}, repository_root=root)
+            state = apply_transition(None, "ANCHOR", {"mutation_mode": "WORKSPACE_WRITE", "anchor_source": "prompt", "context_required": True, "run_id": "state-run", "base_sha": "0" * 40, "worktree_baseline": [], "execution_graph": GRAPH}, repository_root=root, run_id="state-run")
             with self.assertRaisesRegex(TransitionError, "CONTEXT-PLAN"):
                 apply_transition(state, "PHASE-PLAN", phase(), repository_root=root)
-            state = apply_transition(state, "CONTEXT-PLAN", plan, repository_root=root)
+            state = apply_transition(state, "CONTEXT-PLAN", plan, repository_root=root, run_id="state-run")
             with self.assertRaisesRegex(TransitionError, "CONTEXT-DELIVERY"):
                 apply_transition(state, "PHASE-PLAN", phase(), repository_root=root)
+
+    def test_context_delivery_cannot_be_replayed_into_a_different_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            plan = route_context(
+                task_shape="LEXICAL_ENUMERATION",
+                codegraph_available=True,
+                claims_completeness=True,
+                canonical_docs=["docs/index.md"],
+                allowed_agent_types=["sample-context-scout"],
+                allowed_models=["sonnet"],
+                plan_id="replay-plan",
+            )
+            delivery = lexical_evidence(root, plan)
+            anchor = {
+                "mutation_mode": "WORKSPACE_WRITE", "anchor_source": "prompt",
+                "context_required": True, "base_sha": "0" * 40,
+                "worktree_baseline": [], "execution_graph": GRAPH,
+            }
+            state_a = apply_transition(
+                None, "ANCHOR", {**anchor, "run_id": "run-1"},
+                repository_root=root, run_id="run-1",
+            )
+            state_a = apply_transition(
+                state_a, "CONTEXT-PLAN", plan, repository_root=root, run_id="run-1"
+            )
+            apply_transition(
+                state_a, "CONTEXT-DELIVERY", delivery,
+                repository_root=root, run_id="run-1",
+            )
+
+            plan_b = dict(plan)
+            plan_b.pop("council_binding")
+            state_b = apply_transition(
+                None, "ANCHOR", {**anchor, "run_id": "run-2"},
+                repository_root=root, run_id="run-2",
+            )
+            state_b = apply_transition(
+                state_b, "CONTEXT-PLAN", plan_b, repository_root=root, run_id="run-2"
+            )
+            with self.assertRaisesRegex(TransitionError, "run_id"):
+                apply_transition(
+                    state_b, "CONTEXT-DELIVERY", delivery,
+                    repository_root=root, run_id="run-2",
+                )
 
 
 class ToolLedgerHookCliTest(unittest.TestCase):
@@ -688,6 +807,60 @@ class ToolLedgerHookCliTest(unittest.TestCase):
             bad = dict(payload); bad.pop("tool_use_id")
             result = run([sys.executable, str(hook), "--runtime", "claude"], root, env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)}, stdin=bad)
             self.assertEqual(2, result.returncode)
+
+    def test_context_tool_ledger_rejects_symlinked_session_directory(self):
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside_directory:
+            root = Path(directory); outside = Path(outside_directory)
+            session_parent = root / ".harness/runs/context-tools"
+            session_parent.mkdir(parents=True)
+            (session_parent / "s").symlink_to(outside, target_is_directory=True)
+            payload = {
+                "hook_event_name": "PreToolUse", "session_id": "s", "agent_id": "a",
+                "agent_type": "sample-context-scout", "cwd": str(root), "model": "sonnet",
+                "tool_use_id": "call-1", "tool_name": "Grep", "tool_input": {"pattern": "x"},
+            }
+            with self.assertRaises(OSError):
+                TOOL_LEDGER.record_event(payload, "claude", root)
+            self.assertFalse((outside / "tools.jsonl").exists())
+
+    def test_context_tool_ledger_rejects_symlinked_final_file(self):
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as outside_directory:
+            root = Path(directory); outside = Path(outside_directory)
+            session = root / ".harness/runs/context-tools/s"
+            session.mkdir(parents=True)
+            target = outside / "outside.jsonl"
+            (session / "tools.jsonl").symlink_to(target)
+            payload = {
+                "hook_event_name": "PreToolUse", "run_id": "run-1", "session_id": "s",
+                "agent_id": "a", "agent_type": "sample-context-scout", "cwd": str(root),
+                "model": "sonnet", "tool_use_id": "call-1", "tool_name": "Grep",
+                "tool_input": {"pattern": "x"},
+            }
+            with self.assertRaises(OSError):
+                TOOL_LEDGER.record_event(payload, "claude", root)
+            self.assertFalse(target.exists())
+
+    def test_definition_ids_are_extracted_before_response_excerpt_truncation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            full = "definitions: src/a.py:10 " + ("note " * 4000) + " src/b.py:20"
+            common = {
+                "run_id": "run-1", "session_id": "s", "agent_id": "a",
+                "agent_type": "sample-context-scout", "cwd": str(root), "model": "sonnet",
+                "tool_use_id": "graph", "tool_name": "mcp__codegraph__codegraph_explore",
+                "tool_input": {"symbol": "x"},
+            }
+            TOOL_LEDGER.record_event({**common, "hook_event_name": "PreToolUse"}, "claude", root)
+            TOOL_LEDGER.record_event(
+                {**common, "hook_event_name": "PostToolUse", "tool_response": full}, "claude", root
+            )
+            records = [
+                json.loads(line)
+                for line in (root / ".harness/runs/context-tools/s/tools.jsonl").read_text().splitlines()
+            ]
+            post = next(item for item in records if item["event"] == "PostToolUse")
+            self.assertNotIn("src/b.py:20", post["response_excerpt"])
+            self.assertEqual(["src/a.py:10", "src/b.py:20"], post["definition_ids"])
 
 
 class SerenaHealthTest(unittest.TestCase):

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import fcntl
 import hashlib
 import json
 import os
@@ -12,6 +11,12 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+
+LIB = Path(__file__).resolve().parents[1] / "lib"
+if str(LIB) not in sys.path:
+    sys.path.insert(0, str(LIB))
+from context_evidence import repository_fingerprint  # noqa: E402
+from secure_runtime_io import open_locked_text  # noqa: E402
 
 CONTEXT_SUFFIXES = ("-context-scout", "-context-shard")
 
@@ -28,6 +33,27 @@ def _root(payload: dict[str, Any]) -> Path:
 
 def _slug(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", value).strip("-")[:160] or "unknown"
+
+
+def _active_run(root: Path, payload: dict[str, Any]) -> str:
+    explicit = str(payload.get("run_id") or "")
+    if explicit:
+        return explicit
+    active = root / ".harness/runs/ACTIVE"
+    return active.read_text(encoding="utf-8").strip() if active.is_file() else ""
+
+
+def _repository_binding(root: Path, run_id: str, payload: dict[str, Any]) -> str:
+    explicit = str(payload.get("repository_fingerprint") or "")
+    if explicit:
+        return explicit
+    state_path = root / ".harness/runs/agent-swarm" / run_id / "council-state.json"
+    if run_id and state_path.is_file():
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        value = str(state.get("repository_fingerprint") or "")
+        if value:
+            return value
+    return repository_fingerprint(root)
 
 
 def _definition(root: Path, runtime: str, agent_type: str) -> tuple[str, str, str]:
@@ -108,14 +134,15 @@ def main() -> int:
         root = _root(payload)
         definition_path, definition_sha, configured_model = _definition(root, args.runtime, agent_type)
         session_id = _slug(str(payload.get("session_id") or "unknown"))
-        folder = root / ".harness/runs/subagents" / session_id
-        folder.mkdir(parents=True, exist_ok=True)
-        path = folder / f"{_slug(agent_id)}.jsonl"
+        run_id = _active_run(root, payload)
+        repository_binding = _repository_binding(root, run_id, payload)
         message = payload.get("last_assistant_message")
         usage, duration = _extract_metrics(payload, response)
         record = {
             "ts": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
             "runtime": args.runtime,
+            "run_id": run_id,
+            "repository_fingerprint": repository_binding,
             "event": event,
             "session_id": str(payload.get("session_id") or ""),
             "turn_id": payload.get("turn_id"),
@@ -133,12 +160,16 @@ def main() -> int:
             "usage": usage,
             "duration_ms": duration,
         }
-        with path.open("a+", encoding="utf-8") as stream:
-            fcntl.flock(stream, fcntl.LOCK_EX)
+        with open_locked_text(
+            root,
+            (".harness", "runs", "subagents", session_id),
+            f"{_slug(agent_id)}.jsonl",
+        ) as (path, stream):
             stream.seek(0)
             existing = [json.loads(line) for line in stream if line.strip()]
             duplicate = any(
                 item.get("runtime") == args.runtime
+                and item.get("run_id") == run_id
                 and item.get("session_id") == record["session_id"]
                 and item.get("agent_id") == agent_id
                 and item.get("event") == event

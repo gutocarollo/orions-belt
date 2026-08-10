@@ -634,12 +634,12 @@ harness_marathon_stale_days:
 harness_plan_review_max:
     type: int
     help: Máximo de rodadas do Planning Adversarial Loop.
-    default: 2
+    default: 1
 
 harness_execution_review_max:
     type: int
     help: Máximo de rodadas do Adversarial Verification Loop de execução.
-    default: 3
+    default: 1
 
 harness_adversarial_reviewer_model:
     type: str
