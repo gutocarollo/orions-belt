@@ -28,9 +28,6 @@ SCHEMA_NAMES = (
 )
 MARKER_GROUPS = (
     ("MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE",),
-    ("CONTEXT-PLAN",),
-    ("CONTEXT-DELIVERY",),
-    ("context-delivery",),
     ("planning-and-task-breakdown",),
     ("incremental-implementation",),
     ("Cada slice validado DEVE produzir imediatamente um commit LOCAL atomico", "Every validated slice MUST immediately produce an atomic LOCAL commit"),
@@ -49,6 +46,11 @@ MARKER_GROUPS = (
     ("## Pendências não bloqueantes", "## Non-blocking pending items"),
     ("relatório de necessidade", "code-necessity report"),
 )
+CONTEXT_MARKER_GROUPS = (
+    ("CONTEXT-PLAN",),
+    ("CONTEXT-DELIVERY",),
+    ("context-delivery",),
+)
 
 
 class ContractError(ValueError):
@@ -65,7 +67,10 @@ def validate_contract(root: Path) -> dict[str, Any]:
         raise ContractError("Council skill surfaces drifted")
     text = source_bytes.decode("utf-8")
     project = surfaces[0].parent.name.removesuffix("-delivery-council")
-    marker_groups = MARKER_GROUPS + (
+    marker_groups = MARKER_GROUPS
+    if (root / ".harness/context-delivery.enabled").is_file():
+        marker_groups += CONTEXT_MARKER_GROUPS
+    marker_groups += (
         (f"subagent `{project}-adversarial-reviewer`", f"`{project}-adversarial-reviewer` subagent"),
     )
     missing = [" | ".join(group) for group in marker_groups if not any(marker in text for marker in group)]

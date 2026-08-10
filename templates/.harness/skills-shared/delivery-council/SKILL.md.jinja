@@ -1,2 +1,2 @@
 {%- include "templates/.harness/skills-shared/delivery-council/SKILL." ~ harness_language ~ ".md.jinja" -%}
-{%- include "templates/.harness/i18n/delivery-council-context-appendix." ~ harness_language ~ ".md.jinja" -%}
+{% if use_context_delivery %}{%- include "templates/.harness/i18n/delivery-council-context-appendix." ~ harness_language ~ ".md.jinja" -%}{% endif %}

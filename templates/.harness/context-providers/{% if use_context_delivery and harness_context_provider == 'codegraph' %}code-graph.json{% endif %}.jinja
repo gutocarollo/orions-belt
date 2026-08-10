@@ -1,0 +1,51 @@
+{
+  "manifest_schema_version": 2,
+  "provider": "codegraph",
+  "provider_version_policy": "detect-at-runtime",
+  "transport": {
+    "command": "codegraph",
+    "args": [
+      "serve",
+      "--mcp"
+    ]
+  },
+  "required_capabilities": {
+    "semantic_or_structural_query": "REQUIRED",
+    "reverse_transitive_impact": "REQUIRED_FOR_IMPACT",
+    "status_or_freshness": "REQUIRED_VIA_COORDINATOR_CLI",
+    "exact_symbol_identity": "PARTIAL_OR_BETTER"
+  },
+  "required_tool_name_patterns": [
+    "^mcp__codegraph__.*(explore|context|impact|callers|search).*$"
+  ],
+  "freshness_contract": "Before delegation, the coordinator must execute codegraph status --json in the same runtime session. The verifier accepts that coordinator call only for codegraph-status; operational graph evidence must still come from the context agent through MCP.",
+  "fallbacks": {
+    "stale_or_unavailable": [
+      "rg",
+      "lsp",
+      "targeted-read"
+    ],
+    "ambiguous_symbol": [
+      "lsp",
+      "targeted-read"
+    ],
+    "documentation": [
+      "canonical-docs",
+      "rg"
+    ]
+  },
+  "version_probe": [
+    "codegraph",
+    "--version"
+  ],
+  "capability_probe": [
+    "codegraph",
+    "serve",
+    "--help"
+  ],
+  "status_probe": [
+    "codegraph",
+    "status",
+    "--json"
+  ]
+}

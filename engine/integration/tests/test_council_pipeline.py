@@ -77,9 +77,51 @@ class CouncilPipelineE2ETest(unittest.TestCase):
             target = Path(directory)
             lib = target / ".harness" / "lib"
             lib.mkdir(parents=True)
-            for name in ("agent_swarm_ledger.py", "_tooling_conf.py"):
+            for name in (
+                "agent_swarm_ledger.py",
+                "_tooling_conf.py",
+                "context_evidence.py",
+                "context_predicates.py",
+                "context_provider_probe.py",
+                "context_routing.py",
+                "council_runtime.py",
+                "mini_schema_validate.py",
+                "objective_control.py",
+            ):
                 shutil.copy2(ROOT / "templates" / ".harness" / "lib" / name, lib / name)
+            shutil.copytree(
+                ROOT / "templates" / ".harness" / "schemas",
+                target / ".harness" / "schemas",
+            )
             environment = {**os.environ, "HARNESS_PROJECT_ROOT": str(target)}
+            anchor = {
+                "mutation_mode": "WORKSPACE_WRITE",
+                "anchor_source": "integration-test",
+                "base_sha": "0" * 40,
+                "worktree_baseline": [],
+                "execution_graph": {
+                    "objective": "exercise the installed ledger",
+                    "start_node": "request",
+                    "goal_node": "done",
+                    "nodes": ["request", "done"],
+                    "edges": [{
+                        "edge_id": "E1",
+                        "from": "request",
+                        "to": "done",
+                        "critical": True,
+                        "phase": "integration",
+                        "item": "ledger",
+                        "tests": {"functional": ["F1"], "quality": ["Q1"], "regression": ["R1"]},
+                        "evidence": [".harness/runs/agent-swarm/real-ledger/loop.jsonl"],
+                    }],
+                },
+            }
+            proc = subprocess.run(
+                ["python3", str(lib / "agent_swarm_ledger.py"), "transition", "--run-id", "real-ledger",
+                 "--event", "ANCHOR", "--payload-json", json.dumps(anchor)],
+                cwd=target, env=environment, capture_output=True, text=True,
+            )
+            self.assertEqual(0, proc.returncode, proc.stdout + proc.stderr)
             commands = [
                 ("planning", "1", "review", "SABATINAR", "{}"),
                 ("planning", "1", "validation", "DECIDIDO", '{"agent_id":"human-owner"}'),

@@ -5,17 +5,20 @@ description: Mandatory evidence-bound context routing before non-trivial writabl
 
 # Context Delivery
 
-For a writable Council session, the mandatory prefix is:
+When enabled, a writable Council run uses:
 
 ```text
 ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN
 ```
 
-1. Classify the task as `LEXICAL_ENUMERATION`, `KNOWN_SYMBOL_IMPACT`, `DYNAMIC_STATE_FLOW`, `DOCS_OR_CONFIG`, `LIVE_STATE`, or `DIRECT_TARGETED`.
-2. Generate the route with `python3 .harness/lib/context_delivery.py route --input-json '<json>'`.
-3. Persist `CONTEXT-PLAN` with `context_delivery.py transition`.
-4. Run only independent, non-overlapping lexical shards in parallel. Collect their compact results before invoking the context scout.
-5. Materialize one hashed artifact per required method plus the lifecycle receipt.
-6. Persist `CONTEXT-DELIVERY`; the state machine verifies model/agent identity, lifecycle, hashes, method order, provider freshness, coverage and unresolved items.
+1. Classify only the task shape. Generate the plan with `python3 .harness/lib/context_delivery.py route --repository --input-json '<json with base_ref/head_ref>'`; Git computes P1-P3, runtime receipts resolve P4/P5, and task shape determines P6.
+2. Persist `CONTEXT-PLAN` before tools. Never lower its derived risk.
+3. `parallel_shards` currently fails closed: per-shard lifecycle/tool/coverage receipts are not yet enforced. Do not dispatch a context shard.
+4. Every method must execute through a real runtime tool recorded by `context-tool-ledger.py`. On Codex, after `wait_agent`, run the exact session-bound `codex_context_receipts.py` command injected by the coordinator status hook; this fail-closed adapter is required when the installed Codex does not propagate child hooks. A hash-only or prose-only artifact is invalid.
+5. Materialize one JSON artifact per method. Its payload must contain the same `method` and exact `{tool_use_id,input_sha256,output_sha256}` receipts declared in `CONTEXT-DELIVERY`.
+6. Before delegating, the coordinator runs `codegraph status --json`. The same-session receipt is accepted only for `codegraph-status`; search/impact/explore must have its own successful context-agent MCP receipt after the preflight. P4 status is derived from the complete observed set of `path:line` definition identities. Conditional LSP runs only when P4 requires it.
+7. Persist `CONTEXT-DELIVERY`; the state machine verifies lifecycle/model, tool pairs, actual order, provider freshness, coverage, claims and unresolved items.
 
-`rg` discovers textual candidates. CodeGraph resolves transitive relationships and blast radius. LSP arbitrates identity/alias/re-export/conflicting edges. They are not interchangeable and are not always launched together.
+`rg` discovers text. CodeGraph resolves semantic/transitive reachability. LSP arbitrates identity/alias/re-export/conflicts. They are not interchangeable and are not always parallel.
+
+Unit tests prove the deterministic contract. `templates/tests/test_context_delivery_runtime_smoke.sh` proves the installed Claude/Codex behavior. A missing binary/authentication is SKIP/BLOCKED, never PASS.

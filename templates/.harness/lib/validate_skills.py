@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Validate installed skills, runtime-native agents, TOML and Council contracts."""
+"""Validate installed skills, runtime-native agents and Council contracts."""
 from __future__ import annotations
 
-import re
+import json
 import sys
 import tomllib
 from pathlib import Path
@@ -35,7 +35,7 @@ def parse_frontmatter(path: Path) -> dict[str, str]:
         fail(f"{path}: unterminated YAML frontmatter")
     data: dict[str, str] = {}
     for line in text[4:end].splitlines():
-        if ":" in line and not line.startswith(" "):
+        if ":" in line and not line.startswith((" ", "-")):
             key, value = line.split(":", 1)
             data[key.strip()] = value.strip().strip('"')
     return data
@@ -64,9 +64,22 @@ def validate_openai_yaml() -> None:
             fail(f"{path}: missing {marker}")
 
 
-def validate_toml() -> None:
-    if CODEX_CONFIG_PATH.is_file():
-        tomllib.loads(CODEX_CONFIG_PATH.read_text(encoding="utf-8"))
+def _codex_config() -> dict:
+    if not CODEX_CONFIG_PATH.is_file():
+        return {}
+    data = tomllib.loads(CODEX_CONFIG_PATH.read_text(encoding="utf-8"))
+    agents = data.get("agents", {})
+    if "max_depth" in agents:
+        fail(f"{CODEX_CONFIG_PATH}: max_depth is not emitted by the current contract")
+    if "max_threads" in agents:
+        fail(f"{CODEX_CONFIG_PATH}: use canonical agents.max_concurrent_threads_per_session, not legacy max_threads")
+    if "max_concurrent_threads_per_session" not in agents:
+        fail(f"{CODEX_CONFIG_PATH}: missing agents.max_concurrent_threads_per_session")
+    return data
+
+
+def validate_toml() -> dict:
+    config = _codex_config()
     if CODEX_AGENTS_DIR.is_dir():
         for path in sorted(CODEX_AGENTS_DIR.glob("*.toml")):
             data = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -75,45 +88,85 @@ def validate_toml() -> None:
                     fail(f"{path}: missing {field}")
             if path.stem.endswith(("-context-scout", "-context-shard")) and not data.get("model"):
                 fail(f"{path}: context agent must pin model")
+    return config
 
 
-def validate_context_delivery() -> None:
+def _expected_models() -> dict[str, dict[str, str]]:
+    return {
+        "Claude": {
+            "scout": get_config("HARNESS_CLAUDE_CONTEXT_SCOUT_MODEL", "sonnet"),
+            "shard": get_config("HARNESS_CLAUDE_CONTEXT_SHARD_MODEL", "haiku"),
+        },
+        "Codex": {
+            "scout": get_config("HARNESS_CODEX_CONTEXT_SCOUT_MODEL", "gpt-5.6-terra"),
+            "shard": get_config("HARNESS_CODEX_CONTEXT_SHARD_MODEL", "gpt-5.6-luna"),
+        },
+    }
+
+
+def validate_context_delivery(codex_config: dict) -> None:
     if not CONTEXT_ENABLED:
         return
     required_files = (
+        ".harness/lib/context_predicates.py",
+        ".harness/lib/context_provider_probe.py",
         ".harness/lib/context_routing.py",
         ".harness/lib/context_evidence.py",
         ".harness/lib/context_delivery.py",
+        ".harness/lib/codex_context_receipts.py",
         ".harness/schemas/context-plan-result.schema.json",
         ".harness/schemas/context-delivery-result.schema.json",
+        ".harness/hooks/context-tool-ledger.py",
         ".harness/hooks/subagent-lifecycle-ledger.py",
-        ".harness/hooks/serena-health-gate.py",
     )
     for name in required_files:
         if not (ROOT / name).is_file():
             fail(f"missing Context Delivery file: {name}")
 
-    for runtime, folder, suffix, expected in (
-        ("Claude", ROOT / ".claude/agents", ".md", {"scout": "sonnet", "shard": "haiku"}),
-        ("Codex", ROOT / ".codex/agents", ".toml", {"scout": "gpt-5.6-terra", "shard": "gpt-5.6-luna"}),
+    expected = _expected_models()
+    for runtime, folder, suffix in (
+        ("Claude", ROOT / ".claude/agents", ".md"),
+        ("Codex", ROOT / ".codex/agents", ".toml"),
     ):
         if not folder.is_dir():
             continue
-        for role, model in expected.items():
+        for role, model in expected[runtime].items():
             matches = list(folder.glob(f"*-context-{role}{suffix}"))
             if len(matches) != 1:
                 fail(f"{runtime}: expected exactly one context-{role} agent, got {len(matches)}")
             path = matches[0]
-            if suffix == ".md":
-                actual = parse_frontmatter(path).get("model")
-            else:
-                actual = tomllib.loads(path.read_text(encoding="utf-8")).get("model")
+            actual = parse_frontmatter(path).get("model") if suffix == ".md" else tomllib.loads(path.read_text(encoding="utf-8")).get("model")
             if actual != model:
-                fail(f"{path}: model={actual!r}, expected {model!r}")
+                fail(f"{path}: model={actual!r}, expected configured {model!r}")
 
     for skill_root in (ROOT / ".claude/skills", ROOT / ".agents/skills"):
         if skill_root.is_dir() and not (skill_root / "context-delivery/SKILL.md").is_file():
             fail(f"runtime skill surface lacks context-delivery: {skill_root}")
+
+    context_provider = get_config("HARNESS_CONTEXT_PROVIDER", "none")
+    if context_provider == "codegraph":
+        manifest = ROOT / ".harness/context-providers/code-graph.json"
+        if not manifest.is_file():
+            fail("CodeGraph provider configured but capability manifest is missing")
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        if data.get("manifest_schema_version") != 2:
+            fail(f"{manifest}: manifest_schema_version must be 2")
+        if (ROOT / ".codex").is_dir() and "codegraph" not in codex_config.get("mcp_servers", {}):
+            fail("Codex Context Delivery with CodeGraph requires [mcp_servers.codegraph]")
+        if (ROOT / ".claude").is_dir():
+            mcp_path = ROOT / ".mcp.json"
+            if not mcp_path.is_file():
+                fail("Claude Context Delivery with CodeGraph requires project-scoped .mcp.json")
+            mcp = json.loads(mcp_path.read_text(encoding="utf-8"))
+            server = mcp.get("mcpServers", {}).get("codegraph", {})
+            if server.get("command") != "codegraph" or server.get("args") != ["serve", "--mcp"]:
+                fail(f"{mcp_path}: invalid CodeGraph stdio server configuration")
+
+    lsp_provider = get_config("HARNESS_LSP_PROVIDER", "none")
+    if lsp_provider == "serena":
+        manifest = ROOT / ".harness/context-providers/serena.json"
+        if not manifest.is_file() or not (ROOT / ".harness/hooks/serena-health-gate.py").is_file():
+            fail("Serena configured without its manifest and health gate")
 
 
 def main() -> int:
@@ -127,8 +180,8 @@ def main() -> int:
     for skill in REQUIRED_SKILLS:
         validate_skill(skill)
     validate_openai_yaml()
-    validate_toml()
-    validate_context_delivery()
+    codex_config = validate_toml()
+    validate_context_delivery(codex_config)
     if COUNCIL_SKILL_NAME:
         try:
             validate_contract(ROOT)

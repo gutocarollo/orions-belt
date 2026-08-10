@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Inject adaptive Context Delivery routing at substantive task start."""
+"""Inject the repository's adaptive exploration order at task start.
+
+This remains a prompt injection, not evidence that exploration executed. When
+Context Delivery is enabled, the executable Council transition is the proof.
+"""
+from __future__ import annotations
+
 import json
 import re
 import sys
@@ -13,37 +19,45 @@ KICKOFF_RE = re.compile(
     r"|verificar|planej[ea]|planejar|monte\s+um\s+plano|desenh[ea]\s+(a\s+)?arquitetura)\b"
 )
 MIN_LEN = 25
-SKILL = "exploration-protocol"
 
-ROUTING = """<context-delivery-kickoff>
-ADAPTIVE EXPLORATION — before planning, classify the task and persist CONTEXT-PLAN with skill `context-delivery`.
-- F0: preserve the ORIGINAL request from `.harness/requests/`.
+ROUTING = """<exploration-protocol-kickoff>
+EXPLORATION STANDARD — prompt guidance only; executable proof comes from `context-delivery` when enabled.
+- F0: anchor the ORIGINAL request from `.harness/requests/`; do not substitute a derived plan.
 {%- if harness_entry_docs %}
-- Canonical docs first, in order: {{ harness_entry_docs.split(',') | map('trim') | select | join(' -> ') }}.
+- F1 canonical docs, in order: {{ harness_entry_docs.split(',') | map('trim') | select | join(' -> ') }}.
 {%- endif %}
 {%- if harness_reference_index %}
-- Read the living subsystem reference routed by `{{ harness_reference_index }}` before treating its code as authority.
+- F1-bis: read the living subsystem page routed by `{{ harness_reference_index }}` before treating its code as authority.
 {%- endif %}
-- `LEXICAL_ENUMERATION`: shard `rg` discovery in non-overlapping scopes; classify candidates; only then use graph/LSP for candidate-to-entrypoint reachability.
-- `KNOWN_SYMBOL_IMPACT`: a known high-radius/completeness symbol uses CodeGraph ∥ `rg`; a low-radius leaf uses one semantic route plus focused verification.
-- `DYNAMIC_STATE_FLOW`: prove event -> state/data -> behavior locally before graph reachability.
-- `DOCS_OR_CONFIG`: canonical docs + textual search + focused reads.
-{%- if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}
-- `LIVE_STATE`: read-only database/runtime evidence ∥ relevant code. Permission failure is not absence.
-{%- endif %}
-- LSP/Serena is an escalation for identity, alias/re-export or conflicting decisive edges; it is not a universal parallel branch.
-- Record provider freshness, every skipped method, coverage and unresolved items. A stale graph cannot support an exhaustive claim.
-- For WORKSPACE_WRITE Council runs: ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN.
-</context-delivery-kickoff>"""
+{% if use_context_delivery %}- F2/F4 adaptive route: classify the task and persist CONTEXT-PLAN.
+  - LEXICAL_ENUMERATION: non-overlapping `rg` shards -> classification -> graph/LSP reachability.
+  - KNOWN_SYMBOL_IMPACT: CodeGraph ∥ `rg` only for independently queryable high-radius/completeness work; resolve P4 after the join and use LSP when required.
+  - DYNAMIC_STATE_FLOW: prove event -> data/state -> behavior locally before outward graph reachability.
+  - DOCS_OR_CONFIG: canonical docs + textual search + focused reads.
+  - DIRECT_TARGETED: focused text/semantic route without ceremonial fan-out.
+{% else %}- F2: use `rg` and focused reads for lexical discovery. Use graph/LSP only when the question requires semantic identity or transitive reachability; do not launch all tools by default.
+{% endif %}{% if harness_understand_apps_root %}
+- Architecture provider: Understand Anything under `{{ harness_understand_apps_root }}/`; incremental paths are relative to that graph root. Freshness: `bash .harness/lib/understand-apps-changed-files.sh`.
+{% endif %}{% if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}
+- F3 LIVE_STATE: query the read-only database/runtime source in parallel with independent code discovery. Permission failure is not absence of data.
+{% endif %}
+- Provider capabilities are version-specific. A graph miss never proves documentation absence; use docs routing/search for Markdown.
+- F5: consult current official documentation for external libraries, SDKs and CLIs.
+- Clarification is legitimate only after applicable phases; load `clarification-plan` before asking.
+{% if use_context_delivery %}- New writable Council runs: ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN. A prose Context Brief is not proof.
+{% endif %}</exploration-protocol-kickoff>"""
 
 
 def main() -> int:
     try:
         data = json.load(sys.stdin)
-        prompt = data.get("prompt") or ""
+        prompt = str(data.get("prompt") or "")
     except Exception:
         return 0
-    if len(prompt) < MIN_LEN or SKILL in prompt.lower() or "context-delivery" in prompt.lower():
+    if len(prompt) < MIN_LEN:
+        return 0
+    lowered = prompt.lower()
+    if "exploration-protocol" in lowered or "context-delivery" in lowered:
         return 0
     if KICKOFF_RE.search(prompt):
         print(ROUTING)
@@ -51,4 +65,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

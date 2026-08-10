@@ -23,7 +23,7 @@ O segundo dado: sem uma ordem declarada, cada sessão inventa a própria rota. O
 | **F0** âncora | o pedido ORIGINAL (`.harness/requests/`), nunca a paráfrase pós-compactação | sempre |
 | **F1** docs canônicos | lidos NESTA ordem; o primeiro é o roteador | `harness_entry_docs` não vazio |
 | **F1-bis** referência viva | a página do subsistema, ANTES do código dele | `harness_reference_index` não vazio |
-| **F2** código | grafo **∥** grep, em paralelo obrigatório | sempre (degrada para grep sem `use_context_graph`) |
+| **F2/F4** código | rota adaptativa: lexical primeiro; graph ∥ grep só para símbolo conhecido de alto raio; LSP após o join/conflito | sempre (degrada para grep/leitura sem providers) |
 | **F3** estado vivo | MCP de banco antes de inferir comportamento | `harness_mcp_db_dev_port > 0` |
 | **F4** LSP | depois do join de F2 — só ali se sabe qual aresta decide | sempre |
 | **F5** lib externa | documentação oficial atual, nunca conhecimento de treinamento | sempre |
@@ -32,8 +32,8 @@ Fase cujo parâmetro está vazio **não é emitida**. Rota que aponta para nada 
 
 ### As três regras que a fase F2 carrega
 
-1. **O fork é paralelo, nunca sequencial.** É a mesma medição do capítulo 16, aplicada mais cedo: grafo e grep erram de formas complementares, e serializar é latência pura.
-2. **Nenhum grafo de código indexa Markdown.** Medido nos dois grafos do projeto adotante: zero `.md` em ambos os índices. A consequência prática é que um agente conclui *"não existe documentação sobre X"* porque a consulta ao grafo não trouxe nada — e a documentação existe. Documentação se acha pela rota das fases F1/F1-bis, jamais por consulta a grafo.
+1. **Não existe fork universal.** Paralelize apenas inputs independentes. Em enumeração lexical, o grafo depende dos candidatos de `rg`; em blast radius de símbolo conhecido e alto raio, grafo e texto podem rodar em paralelo.
+2. **Documentação não é inferida por miss de grafo.** Os providers medidos não indexavam `.md`, mas isso é capability/version específica; a rota canônica de docs continua sendo F1/F1-bis + busca textual. A consequência prática é que um agente conclui *"não existe documentação sobre X"* porque a consulta ao grafo não trouxe nada — e a documentação existe. Documentação se acha pela rota das fases F1/F1-bis, jamais por consulta a grafo.
 3. **Documento com banner de histórico é genealogia, não fonte.** No adotante, 22 páginas marcadas assim carregavam 110 divergências medidas contra o HEAD.
 
 ### Onde a rota é materializada
@@ -150,3 +150,5 @@ multi-linha, e mesma razão para o valor não morar no `.harness/harness.conf`.
 ## O que fica de lição
 
 As três capabilities atacam o mesmo modo de falha por ângulos diferentes: **uma regra que depende de o agente lembrar dela não é uma regra, é uma esperança.** A rota vira injeção de prompt; o contrato de decisão vira precondição de ferramenta; a suite vira githook. Ao portar isso para uma regra própria, a pergunta de projeto é sempre: *qual é o momento mecânico em que essa regra precisa estar presente, e que evento do runtime corresponde a ele?*
+
+<!-- ORIONS_CONTEXT_DELIVERY_V2_DOC17 -->

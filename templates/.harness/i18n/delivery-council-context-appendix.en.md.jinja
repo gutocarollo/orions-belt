@@ -1,4 +1,4 @@
 
 ## Context Delivery precondition
 
-A `WORKSPACE_WRITE` Council run created by `council_session.py` sets `context_required=true`. Before `PHASE-PLAN`, run `context-delivery`, persist `CONTEXT-PLAN`, execute its isolated workers, materialize hashed receipts and persist `CONTEXT-DELIVERY`. An informal Context Brief does not authorize planning.
+When Context Delivery is enabled, a `WORKSPACE_WRITE` Council run created by `council_session.py` sets `context_required=true`. Before `PHASE-PLAN`, run `context-delivery`, persist `CONTEXT-PLAN`, execute the coordinator freshness preflight and isolated scout, materialize hashed receipts and persist `CONTEXT-DELIVERY`. Codex must run the session-bound `codex_context_receipts.py` command injected by the status hook after `wait_agent`; it binds lifecycle, resolved model and child tool calls to the completed runtime transcript. `parallel_shards` fails closed until per-shard receipts are enforced. An informal Context Brief does not authorize planning.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Append auditable lifecycle records for context subagents."""
+"""Append auditable Claude/Codex context-subagent lifecycle events."""
 from __future__ import annotations
 
 import argparse
@@ -10,7 +10,6 @@ import json
 import os
 import re
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -46,9 +45,10 @@ def _definition(root: Path, runtime: str, agent_type: str) -> tuple[str, str, st
         if not path.is_file():
             raise ValueError(f"missing Codex agent definition: {path.relative_to(root)}")
         content = path.read_bytes()
-        model = str(tomllib.loads(content.decode()).get("model", ""))
-        if not model:
+        match = re.search(rb'(?m)^model\s*=\s*["\']([^"\']+)["\']', content)
+        if not match:
             raise ValueError(f"missing Codex agent model: {path.relative_to(root)}")
+        model = match.group(1).decode()
     return path.relative_to(root).as_posix(), hashlib.sha256(content).hexdigest(), model
 
 
@@ -59,6 +59,12 @@ def _args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _extract_metrics(payload: dict[str, Any], response: dict[str, Any]) -> tuple[Any, Any]:
+    usage = response.get("usage") or payload.get("usage")
+    duration = response.get("durationMs") or response.get("duration_ms") or payload.get("duration_ms")
+    return usage, duration
+
+
 def main() -> int:
     try:
         args = _args()
@@ -66,33 +72,35 @@ def main() -> int:
         if not isinstance(payload, dict):
             raise ValueError("hook input must be an object")
         hook_event = str(payload.get("hook_event_name", ""))
-        tool_response: dict[str, Any] = {}
+        response: dict[str, Any] = {}
 
         if args.observe_agent_tool:
-            if hook_event != "PostToolUse" or str(payload.get("tool_name", "")) not in {"Agent", "Task"}:
+            if hook_event != "PostToolUse" or str(payload.get("tool_name", "")) not in {"Agent", "Task", "spawn_agent"}:
                 return 0
             tool_input = payload.get("tool_input") or {}
             if not isinstance(tool_input, dict):
                 return 0
-            agent_type = str(tool_input.get("subagent_type") or tool_input.get("agent_type") or "")
+            agent_type = str(tool_input.get("subagent_type") or tool_input.get("agent_type") or tool_input.get("role") or "")
             if not agent_type.endswith(CONTEXT_SUFFIXES):
                 return 0
-            tool_response = payload.get("tool_response") or {}
-            if not isinstance(tool_response, dict):
-                raise ValueError("context Agent PostToolUse requires structured tool_response")
-            agent_id = str(tool_response.get("agentId") or tool_response.get("agent_id") or "")
-            model = str(tool_response.get("resolvedModel") or tool_response.get("resolved_model") or "")
-            if not agent_id or not model:
-                raise ValueError("context Agent PostToolUse requires agentId and resolvedModel")
+            response = payload.get("tool_response") or {}
+            if not isinstance(response, dict):
+                raise ValueError("context agent PostToolUse requires structured tool_response")
+            agent_id = str(response.get("agentId") or response.get("agent_id") or response.get("id") or "")
+            model = str(response.get("resolvedModel") or response.get("resolved_model") or response.get("model") or "")
+            if not agent_id:
+                raise ValueError("context agent PostToolUse requires agentId")
             event = "AgentToolResult"
         else:
             event = hook_event
             if event not in {"SubagentStart", "SubagentStop"}:
                 return 0
-            agent_type = str(payload.get("agent_type") or "")
+            agent_type = str(payload.get("agent_type") or payload.get("agentType") or "")
             if not agent_type.endswith(CONTEXT_SUFFIXES):
                 return 0
-            agent_id = str(payload.get("agent_id") or "")
+            agent_id = str(payload.get("agent_id") or payload.get("agentId") or "")
+            # Both current runtimes expose the active model in common hook
+            # context. The verifier requires this observation for Codex too.
             model = str(payload.get("model") or "")
             if not agent_id:
                 raise ValueError("context lifecycle event requires agent_id")
@@ -104,40 +112,54 @@ def main() -> int:
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f"{_slug(agent_id)}.jsonl"
         message = payload.get("last_assistant_message")
+        usage, duration = _extract_metrics(payload, response)
         record = {
-            "ts": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "ts": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
             "runtime": args.runtime,
             "event": event,
             "session_id": str(payload.get("session_id") or ""),
+            "turn_id": payload.get("turn_id"),
             "agent_id": agent_id,
             "agent_type": agent_type,
             "model": model or None,
             "configured_model": configured_model,
             "agent_definition_path": definition_path,
             "agent_definition_sha256": definition_sha,
+            "permission_mode": payload.get("permission_mode"),
             "transcript_path": payload.get("transcript_path"),
             "agent_transcript_path": payload.get("agent_transcript_path"),
+            "last_message_chars": len(message) if isinstance(message, str) else 0,
             "last_message_sha256": hashlib.sha256(message.encode()).hexdigest() if isinstance(message, str) else None,
-            "usage": tool_response.get("usage") if tool_response else None,
+            "usage": usage,
+            "duration_ms": duration,
         }
         with path.open("a+", encoding="utf-8") as stream:
             fcntl.flock(stream, fcntl.LOCK_EX)
-            stream.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
-            stream.flush()
+            stream.seek(0)
+            existing = [json.loads(line) for line in stream if line.strip()]
+            duplicate = any(
+                item.get("runtime") == args.runtime
+                and item.get("session_id") == record["session_id"]
+                and item.get("agent_id") == agent_id
+                and item.get("event") == event
+                for item in existing
+            )
+            stream.seek(0, 2)
+            if not duplicate:
+                stream.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+                stream.flush()
         if event == "SubagentStart":
             relative = path.relative_to(root).as_posix()
             context = (
-                "CONTEXT-DELIVERY receipt: preserve agent_id=" + agent_id
-                + "; agent_type=" + agent_type
-                + "; runtime=" + args.runtime
-                + "; lifecycle_receipt_path=" + relative
-                + ". The parent hashes the receipt after SubagentStop."
+                f"CONTEXT-DELIVERY receipt: agent_id={agent_id}; agent_type={agent_type}; "
+                f"runtime={args.runtime}; lifecycle_receipt_path={relative}. "
+                "Hash the receipt only after SubagentStop and any AgentToolResult record."
             )
             print(json.dumps({"hookSpecificOutput": {"hookEventName": "SubagentStart", "additionalContext": context}}))
         else:
             print("{}")
         return 0
-    except (OSError, ValueError, TypeError, json.JSONDecodeError, tomllib.TOMLDecodeError) as exc:
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
         print(f"subagent lifecycle ledger failed: {exc}", file=sys.stderr)
         return 2
 

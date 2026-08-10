@@ -1,5 +1,7 @@
 {
   "provider": "understand-anything",
+  "manifest_schema_version": 2,
+  "provider_version_policy": "runtime-detected-when-used",
   "contract_version": 1,
   "project_root": "{{ harness_understand_apps_root }}",
   "role": "architecture-docs-domain-context",
@@ -12,5 +14,11 @@
     "incremental_sync": "SUPPORTED"
   },
   "changed_files_command": "git diff --relative={{ harness_understand_apps_root }} <last>..HEAD --name-only -- {{ harness_understand_apps_root }}",
-  "fallbacks": ["codegraph", "lsp", "rg", "targeted-read"]
+  "fallbacks": [
+    "codegraph",
+    "lsp",
+    "rg",
+    "targeted-read"
+  ],
+  "version_probe_policy": "runtime package/metadata version plus graph meta gitCommitHash"
 }

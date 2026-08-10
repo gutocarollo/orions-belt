@@ -15,7 +15,7 @@ Origem: adoção real num repositório Python de 42k LOC, 2026-07-28, com dois c
 
 Conclusão que vira arquitetura: **as duas camadas erram de formas diferentes e complementares.** Nenhuma substitui a outra; o LSP (que resolve símbolo de verdade) é o desempate quando a aresta decide o veredito.
 
-## Os 4 predicados
+## Os 6 predicados
 
 Determinísticos por construção — cada um é um comando, não um julgamento:
 
@@ -25,6 +25,8 @@ Determinísticos por construção — cada um é um comando, não um julgamento:
 | **P2** | Diff é multi-arquivo? | ≥ 3 arquivos de código no diff | constante |
 | **P3** | Toca escrita em banco? | diff casa a alternação de padrões de escrita | `harness_data_write_patterns` |
 | **P4** | Símbolo é ambíguo? | saída do grafo reporta mais de uma definição do mesmo nome | derivado em runtime |
+| **P5** | Índice está fresco? | receipt real do status do provider prova pending=0 e freshness | derivado em runtime |
+| **P6** | Há fluxo dinâmico de estado/controle? | `task_shape=DYNAMIC_STATE_FLOW` | derivado do plano |
 
 `harness_core_paths` **não é inferível por scan** — um diretório chamado `utils/` não é automaticamente o hub do projeto. Por isso a regra do scanner classifica esta capability como `CONDICIONAL` sempre: exige confirmação humana, nunca é ativada sozinha (D5).
 
@@ -107,3 +109,7 @@ Deixar um parâmetro vazio **não** gera a regra correspondente — regra que di
 ```
 
 Materializa `HARNESS_CORE_PATHS` e `HARNESS_DATA_WRITE_PATTERNS` em `.harness/harness.conf` e gera o bloco ⭐ nas instruções dos runtimes ativos.
+
+> **Atualização Context Delivery:** este capítulo é a rota de diff-time para símbolo conhecido. Enumeração lexical e fluxo dinâmico seguem a ordem adaptativa do capítulo 18; limitações pertencem ao provider/version, não à categoria ‘grafo’.
+
+<!-- ORIONS_CONTEXT_DELIVERY_V2_DOC16 -->

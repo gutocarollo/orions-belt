@@ -12,27 +12,131 @@
     "agent_type",
     "model",
     "lifecycle_receipt",
+    "tool_receipt",
+    "predicate_resolutions",
     "artifacts",
     "provider_state",
     "coverage",
     "claims",
-    "unresolved_items"
+    "unresolved_items",
+    "execution_metrics"
   ],
   "properties": {
-    "status": {"const": "SATISFEITO"},
-    "skill": {"const": "context-delivery"},
-    "plan_id": {"type": "string", "minLength": 1},
-    "runtime": {"enum": ["claude", "codex"]},
-    "agent_id": {"type": "string", "minLength": 1},
-    "agent_type": {"type": "string", "minLength": 1},
-    "model": {"type": "string", "minLength": 1},
+    "status": {
+      "const": "SATISFEITO"
+    },
+    "skill": {
+      "const": "context-delivery"
+    },
+    "plan_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runtime": {
+      "enum": [
+        "claude",
+        "codex"
+      ]
+    },
+    "agent_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
     "lifecycle_receipt": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "sha256"],
+      "required": [
+        "path",
+        "sha256"
+      ],
       "properties": {
-        "path": {"type": "string", "minLength": 1},
-        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "tool_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "predicate_resolutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "predicate",
+          "status",
+          "source_tool_call_ids",
+          "evidence",
+          "definition_count",
+          "definition_ids"
+        ],
+        "properties": {
+          "predicate": {
+            "enum": [
+              "P4",
+              "P5"
+            ]
+          },
+          "status": {
+            "type": "boolean"
+          },
+          "source_tool_call_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "definition_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "definition_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
       }
     },
     "artifacts": {
@@ -41,37 +145,182 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["method", "path", "sha256", "stage"],
+        "required": [
+          "method",
+          "path",
+          "sha256",
+          "tool_receipts"
+        ],
         "properties": {
-          "method": {"type": "string", "minLength": 1},
-          "path": {"type": "string", "minLength": 1},
-          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-          "stage": {"type": "integer", "minimum": 0}
+          "method": {
+            "enum": [
+              "canonical-docs",
+              "rg",
+              "targeted-read",
+              "codegraph-status",
+              "codegraph",
+              "lsp",
+              "live-state"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "tool_receipts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "tool_use_id",
+                "input_sha256",
+                "output_sha256"
+              ],
+              "properties": {
+                "tool_use_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "input_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "output_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          }
         }
       }
     },
     "provider_state": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["provider", "status", "index_fresh", "pending_changes"],
+      "required": [
+        "provider",
+        "status",
+        "index_fresh",
+        "pending_changes",
+        "provider_version",
+        "source_tool_call_id"
+      ],
       "properties": {
-        "provider": {"type": "string", "minLength": 1},
-        "status": {"enum": ["AVAILABLE", "UNAVAILABLE", "NOT_REQUIRED"]},
-        "index_fresh": {"type": "boolean"},
-        "pending_changes": {"type": "integer", "minimum": 0}
+        "provider": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "AVAILABLE",
+            "UNAVAILABLE",
+            "NOT_REQUIRED"
+          ]
+        },
+        "index_fresh": {
+          "type": "boolean"
+        },
+        "pending_changes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "provider_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_tool_call_id": {
+          "type": "string"
+        },
+        "indexed_sha": {},
+        "head_sha": {}
       }
     },
     "coverage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["eligible_files", "analyzed_files", "candidates", "confirmed", "false_positives", "unresolved"],
+      "required": [
+        "eligible_files",
+        "analyzed_files",
+        "candidates",
+        "confirmed",
+        "false_positives",
+        "unresolved",
+        "eligible_paths",
+        "analyzed_paths",
+        "candidate_ids",
+        "confirmed_candidate_ids",
+        "false_positive_candidate_ids",
+        "unresolved_candidate_ids",
+        "source_tool_call_ids"
+      ],
       "properties": {
-        "eligible_files": {"type": "integer", "minimum": 0},
-        "analyzed_files": {"type": "integer", "minimum": 0},
-        "candidates": {"type": "integer", "minimum": 0},
-        "confirmed": {"type": "integer", "minimum": 0},
-        "false_positives": {"type": "integer", "minimum": 0},
-        "unresolved": {"type": "integer", "minimum": 0}
+        "eligible_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "analyzed_files": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confirmed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "false_positives": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unresolved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "eligible_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "analyzed_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "candidate_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "confirmed_candidate_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "false_positive_candidate_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "unresolved_candidate_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "source_tool_call_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        }
       }
     },
     "claims": {
@@ -80,13 +329,22 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["claim", "evidence"],
+        "required": [
+          "claim",
+          "evidence"
+        ],
         "properties": {
-          "claim": {"type": "string", "minLength": 1},
+          "claim": {
+            "type": "string",
+            "minLength": 1
+          },
           "evidence": {
             "type": "array",
             "minItems": 1,
-            "items": {"type": "string", "minLength": 1}
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       }
@@ -96,11 +354,67 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "severity", "reason"],
+        "required": [
+          "id",
+          "severity",
+          "reason"
+        ],
         "properties": {
-          "id": {"type": "string", "minLength": 1},
-          "severity": {"enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
-          "reason": {"type": "string", "minLength": 1}
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "execution_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "duration_ms",
+        "input_tokens",
+        "output_tokens",
+        "tool_calls",
+        "reason"
+      ],
+      "properties": {
+        "source": {
+          "enum": [
+            "OBSERVED",
+            "UNAVAILABLE"
+          ]
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tool_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string"
         }
       }
     }

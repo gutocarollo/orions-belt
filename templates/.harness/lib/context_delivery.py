@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Persist CONTEXT-PLAN/CONTEXT-DELIVERY into an active Council event stream."""
+"""Route and persist CONTEXT-PLAN/CONTEXT-DELIVERY for an active Council."""
 from __future__ import annotations
 
 import argparse
@@ -8,9 +8,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-from _tooling_conf import get_config, project_root
+from _tooling_conf import get_config, get_config_csv, project_root
 from council_runtime import TransitionError, apply_transition
-from context_routing import route_context
+from context_routing import route_context, route_from_repository
 
 ROOT = project_root()
 RUNS_DIR = ROOT / get_config("HARNESS_LEDGER_DIR", ".harness/runs/agent-swarm")
@@ -58,18 +58,50 @@ def transition(run_id: str, event: str, payload: dict[str, Any]) -> Path:
     return state_path
 
 
+def _configured_port(key: str) -> bool:
+    raw = str(get_config(key, "0")).strip()
+    try:
+        return int(raw) > 0
+    except ValueError:
+        return bool(raw and raw.lower() not in {"false", "no", "none", "off"})
+
+
+def _route_payload(request: dict[str, Any], *, use_repository: bool) -> dict[str, Any]:
+    request = dict(request)
+    runtime = str(request.pop("runtime", "claude"))
+    project = get_config("PROJECT_NAME", ROOT.name)
+    if runtime == "claude":
+        request.setdefault("allowed_agent_types", [f"{project}-context-scout"])
+        request.setdefault("allowed_models", [get_config("HARNESS_CLAUDE_CONTEXT_SCOUT_MODEL", "sonnet")])
+    elif runtime == "codex":
+        request.setdefault("allowed_agent_types", [f"{project}-context-scout"])
+        request.setdefault("allowed_models", [get_config("HARNESS_CODEX_CONTEXT_SCOUT_MODEL", "gpt-5.6-terra")])
+    else:
+        raise SystemExit("runtime must be claude or codex")
+    request.setdefault("canonical_docs", get_config_csv("HARNESS_ENTRY_DOCS", []))
+    request.setdefault("codegraph_available", get_config("HARNESS_CONTEXT_PROVIDER", "none") == "codegraph")
+    request.setdefault("lsp_available", get_config("HARNESS_LSP_PROVIDER", "none") != "none")
+    request.setdefault("live_state_available", _configured_port("HARNESS_MCP_DB_DEV_PORT"))
+    if use_repository:
+        request.setdefault("core_paths", get_config("HARNESS_CORE_PATHS", ""))
+        request.setdefault("data_write_patterns", get_config("HARNESS_DATA_WRITE_PATTERNS", ""))
+        return route_from_repository(ROOT, **request)
+    return route_context(**request)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
     route = sub.add_parser("route")
     route.add_argument("--input-json", required=True)
+    route.add_argument("--repository", action="store_true", help="compute P1-P3 from the Git diff")
     move = sub.add_parser("transition")
     move.add_argument("--run-id", required=True)
     move.add_argument("--event", choices=sorted(CONTEXT_EVENTS), required=True)
     move.add_argument("--payload-json", required=True)
     args = parser.parse_args()
     if args.command == "route":
-        print(json.dumps(route_context(**_load_payload(args.input_json)), indent=2, sort_keys=True))
+        print(json.dumps(_route_payload(_load_payload(args.input_json), use_repository=args.repository), indent=2, sort_keys=True))
     else:
         print(transition(args.run_id, args.event, _load_payload(args.payload_json)).relative_to(ROOT))
     return 0

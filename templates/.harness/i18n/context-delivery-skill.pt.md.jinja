@@ -5,17 +5,20 @@ description: Roteamento de contexto obrigatório e vinculado a evidências antes
 
 # Context Delivery
 
-Em sessão mutável do Council, o prefixo obrigatório é:
+Quando habilitado, um run mutável do Council usa:
 
 ```text
 ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN
 ```
 
-1. Classifique a tarefa como `LEXICAL_ENUMERATION`, `KNOWN_SYMBOL_IMPACT`, `DYNAMIC_STATE_FLOW`, `DOCS_OR_CONFIG`, `LIVE_STATE` ou `DIRECT_TARGETED`.
-2. Gere a rota com `python3 .harness/lib/context_delivery.py route --input-json '<json>'`.
-3. Persista `CONTEXT-PLAN` com `context_delivery.py transition`.
-4. Rode em paralelo somente shards lexicais independentes e sem sobreposição. Colete os resultados compactos antes de invocar o context scout.
-5. Materialize um artefato com hash por método obrigatório, além do recibo de lifecycle.
-6. Persista `CONTEXT-DELIVERY`; a máquina de estados verifica agente/modelo, lifecycle, hashes, ordem dos métodos, frescor do provider, cobertura e não resolvidos.
+1. Classifique somente a forma da tarefa. Gere o plano com `python3 .harness/lib/context_delivery.py route --repository --input-json '<json com base_ref/head_ref>'`; Git calcula P1-P3, receipts de runtime resolvem P4/P5 e a forma determina P6.
+2. Persista `CONTEXT-PLAN` antes das ferramentas. Nunca reduza o risco derivado.
+3. `parallel_shards` falha fechado no estado atual: ainda não há enforcement de lifecycle/tools/cobertura por shard. Não despache context shard.
+4. Todo método deve executar por ferramenta real registrada por `context-tool-ledger.py`. No Codex, após `wait_agent`, execute o comando exato e vinculado à sessão de `codex_context_receipts.py` injetado pelo hook de status do coordenador; esse adaptador falha fechado quando o Codex instalado não propaga hooks da thread filha. Artefato somente com hash ou prosa é inválido.
+5. Materialize um artefato JSON por método. O payload deve conter o mesmo `method` e os receipts exatos `{tool_use_id,input_sha256,output_sha256}` declarados em `CONTEXT-DELIVERY`.
+6. Antes da delegação, o coordenador executa `codegraph status --json`. O receipt da mesma sessão é aceito somente para `codegraph-status`; search/impact/explore precisa de receipt MCP próprio do context agent e posterior. P4 deriva do conjunto observado completo de identidades de definição `path:line`. LSP condicional roda apenas quando P4 exigir.
+7. Persista `CONTEXT-DELIVERY`; a máquina verifica lifecycle/modelo, pares de tool call, ordem real, freshness, cobertura, claims e não resolvidos.
 
-`rg` descobre candidatos textuais. CodeGraph resolve relações transitivas e blast radius. LSP arbitra identidade/alias/re-export/arestas conflitantes. Não são intercambiáveis nem devem ser sempre disparados juntos.
+`rg` descobre texto. CodeGraph resolve reachability semântica/transitiva. LSP arbitra identidade/alias/re-export/conflitos. Não são intercambiáveis nem devem sempre rodar em paralelo.
+
+Testes unitários provam o contrato determinístico. `templates/tests/test_context_delivery_runtime_smoke.sh` prova o comportamento Claude/Codex instalado. Binário/autenticação ausente é SKIP/BLOCKED, nunca PASS.

@@ -27,6 +27,7 @@ def start_session(
     anchor_source: str,
     mutation_mode: str = "WORKSPACE_WRITE",
     execution_graph: Path | None = None,
+    context_required: bool | None = None,
 ) -> Path | None:
     if mutation_mode == "READ_ONLY":
         return None
@@ -41,13 +42,15 @@ def start_session(
     folder = root / ".harness/runs/agent-swarm" / run_id
     folder.mkdir(parents=True, exist_ok=True)
     base_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    if context_required is None:
+        context_required = (root / ".harness/context-delivery.enabled").is_file()
     event = {
         "seq": 1,
         "event": "ANCHOR",
         "payload": {
             "mutation_mode": mutation_mode,
             "anchor_source": anchor_source,
-            "context_required": (root / ".harness/context-delivery.enabled").is_file(),
+            "context_required": bool(context_required),
             "base_sha": base_sha,
             "worktree_baseline": worktree_state(root),
             "execution_graph": graph,
@@ -104,11 +107,21 @@ def main() -> int:
     start.add_argument("--anchor-source", required=True)
     start.add_argument("--mutation-mode", choices=("READ_ONLY", "WORKSPACE_WRITE"), default="WORKSPACE_WRITE")
     start.add_argument("--execution-graph", type=Path)
+    start.add_argument(
+        "--context-required",
+        choices=("auto", "required", "off"),
+        default="auto",
+        help="auto follows the rendered capability marker; required/off are explicit overrides",
+    )
     finish = commands.add_parser("finish")
     finish.add_argument("--root", type=Path, default=Path.cwd())
     args = parser.parse_args()
     if args.command == "start":
-        state = start_session(args.root.resolve(), args.run_id, args.anchor_source, args.mutation_mode, args.execution_graph)
+        context_required = None if args.context_required == "auto" else args.context_required == "required"
+        state = start_session(
+            args.root.resolve(), args.run_id, args.anchor_source,
+            args.mutation_mode, args.execution_graph, context_required,
+        )
         print(state if state else "INLINE_READ_ONLY")
     else:
         finish_session(args.root.resolve())

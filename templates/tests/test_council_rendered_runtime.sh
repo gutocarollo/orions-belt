@@ -18,6 +18,8 @@ uvx copier copy "$REPO_ROOT" "$WORK/project" --vcs-ref HEAD \
   --data use_context_graph=true \
   --data harness_core_paths=src/core/ \
   --data use_exploration_protocol=true \
+  --data use_context_delivery=true \
+  --data harness_context_provider=codegraph \
   --data harness_language=en \
   --defaults --trust -q
 
