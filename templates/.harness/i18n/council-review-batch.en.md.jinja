@@ -1,0 +1,34 @@
+## Review Batch — parallel prisms without extra Council states
+
+`REVIEW_MODE=AUTO | SINGLE | BATCH | FULL` controls execution review.
+
+The default policy is proportional:
+
+- `DIRECT`: no execution review unless the user explicitly asks for one.
+- `LIGHT + AUTO`: one consolidated reviewer.
+- `FULL + AUTO`: prefer `BATCH`, using parallel prisms on the same frozen objective/diff.
+- `FULL` as a review mode is the compatibility escape hatch for the legacy sequential `QUALITY -> SIMPLIFICATION -> ADVERSARIAL` pipeline. Never select it automatically.
+
+`BATCH` does **not** add a state to `council_runtime.py`. Parallel reviewers return independent findings and the premium parent consolidates them into the existing single `ADVERSARIAL` transition.
+
+Recommended independent prisms:
+1. `correctness-security-data`
+2. `tests-acceptance-regression`
+3. `simplicity-maintainability`
+
+Use at most two prisms in LIGHT and three in FULL. Do not create a reviewer merely to fill a prism: if only one perspective is materially useful, downgrade the review to `SINGLE`.
+
+All prisms receive the same frozen `OBJECTIVE`, `DONE-WHEN`, anchor/amendments, HEAD SHA or diff identity, and scope. They review concurrently, do not review one another, and do not mutate code.
+
+Consolidation policy:
+
+```text
+reachable CRITICAL/HIGH -> FIX_NOW
+Medium/Low              -> BACKLOG
+unreachable findings    -> BACKLOG
+```
+
+After a blocking fix, rerun only the prisms that produced reachable Critical/High findings, at most once by default. Do not automatically repeat the entire batch.
+
+Helper: `python3 .harness/lib/council_review_batch.py --input-json '<json>'`.
+It plans concurrency and classifies findings; it is not a new gate and does not replace model judgment.

@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # engine/
 from _tooling_conf import get_config  # noqa: E402
 
 START_AT = ("AUTO", "EXECUTION", "PLANNING", "PLAN_REVIEW")
-REVIEW_MODE = ("SINGLE", "FULL")
+REVIEW_MODE = ("AUTO", "SINGLE", "BATCH", "FULL")
 EXECUTION_PROFILE = ("AUTO", "DIRECT", "LIGHT", "FULL")
 
 
@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--auto-decide", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--plan-review-max", type=int, default=1)
     parser.add_argument("--execution-review-max", type=int, default=1)
-    parser.add_argument("--review-mode", choices=REVIEW_MODE, default="SINGLE")
+    parser.add_argument("--review-mode", choices=REVIEW_MODE, default="AUTO")
     parser.add_argument("--execution-profile", choices=EXECUTION_PROFILE, default="AUTO")
     parser.add_argument("--auto-execute-after-plan", action=argparse.BooleanOptionalAction, default=None)
     return parser
