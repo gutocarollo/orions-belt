@@ -15,6 +15,9 @@ uvx copier copy "$REPO_ROOT" "$WORK/project" --vcs-ref HEAD \
   --data owner_name=Tester \
   --data use_claude=true \
   --data use_codex=true \
+  --data use_context_graph=true \
+  --data harness_core_paths=src/core/ \
+  --data use_exploration_protocol=true \
   --data harness_language=en \
   --defaults --trust -q
 
@@ -25,6 +28,7 @@ git config user.name Test
 git add -A
 git commit -q -m baseline
 python3 .harness/lib/tests/test_objective_control.py
+python3 .harness/lib/tests/test_context_delivery.py
 python3 .harness/lib/tests/test_council_runtime.py
 python3 .harness/lib/tests/test_council_pipeline.py
 python3 .harness/lib/tests/test_council_contract.py

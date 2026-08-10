@@ -1,293 +1,61 @@
 {
   "hooks": {
     "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/dev-doctor.sh\" status 2>/dev/null || true",
-            "timeout": 10,
-            "statusMessage": "dev-doctor: dev stack snapshot"
-          }
-        ]
-      },
-      {
-        "matcher": "compact|resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-reinject.sh\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/git-doctor.sh\"",
-            "timeout": 15,
-            "statusMessage": "git-doctor: checking repo state"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/lessons-inject.sh\"",
-            "timeout": 10,
-            "statusMessage": "lessons: injecting lessons from prior sessions"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/harness-freshness.sh\"",
-            "timeout": 20,
-            "statusMessage": "orions-belt: checking install freshness"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/harness-block-guard.py\"",
-            "timeout": 15,
-            "statusMessage": "orions-belt: checking for edits inside the generated block"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/request-reinject.py\"",
-            "timeout": 10,
-            "statusMessage": "orions-belt: re-anchoring the original request"
-          }
-        ]
-      }
+      {"hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/dev-doctor.sh\" status 2>/dev/null || true", "timeout": 10, "statusMessage": "dev-doctor: dev stack snapshot"}]},
+      {"matcher": "compact|resume", "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-reinject.sh\"", "timeout": 10}]},
+      {"hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/git-doctor.sh\"", "timeout": 15, "statusMessage": "git-doctor: checking repo state"}]},
+      {"hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/lessons-inject.sh\"", "timeout": 10, "statusMessage": "lessons: injecting lessons from prior sessions"}]},
+      {"hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/harness-freshness.sh\"", "timeout": 20, "statusMessage": "orions-belt: checking install freshness"}]},
+      {"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/harness-block-guard.py\"", "timeout": 15, "statusMessage": "orions-belt: checking generated block"}]},
+      {"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/request-reinject.py\"", "timeout": 10, "statusMessage": "orions-belt: re-anchoring original request"}]}
     ],
     "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/lei-zero-kickoff.py\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/request-ledger.py\"",
-            "timeout": 10
-          }
-        ]
-      }{% if use_exploration_protocol %},
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/exploration-kickoff.py\"",
-            "timeout": 10
-          }
-        ]
-      }
-      {%- endif %}{% if harness_understand_apps_root %},
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-context-inject.py\"",
-            "timeout": 10,
-            "statusMessage": "understand: injecting relative-diff rule for {{ harness_understand_apps_root }}"
-          }
-        ]
-      }
-      {%- endif %}
+      {"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/lei-zero-kickoff.py\"", "timeout": 10}]},
+      {"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/request-ledger.py\"", "timeout": 10}]}{% if use_exploration_protocol %},
+      {"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/exploration-kickoff.py\"", "timeout": 10}]}{% endif %}{% if harness_understand_apps_root %},
+      {"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-context-inject.py\"", "timeout": 10, "statusMessage": "understand: injecting relative-diff rule"}]}{% endif %}
     ],
     "PreToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" pre",
-            "timeout": 10,
-            "statusMessage": "council: checking item-plan readiness"
-          }
-        ]
-      },
-      {%- if harness_understand_apps_root %}
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-apps-diff-guard.sh\"",
-            "timeout": 10,
-            "statusMessage": "understand: checking relative diff for {{ harness_understand_apps_root }}"
-          }
-        ]
-      },
-      {%- endif %}
-      {
-        "matcher": "Task|Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-throttle.sh\"",
-            "timeout": 10,
-            "statusMessage": "throttle: checking subagent slots (cap {{ harness_subagent_max_concurrent }})"
-          }
-        ]
-      }{% if use_clarification_gate %},
-      {
-        "matcher": "AskUserQuestion",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/clarification-plan-gate.py\"",
-            "timeout": 10,
-            "statusMessage": "clarification: checking the decision contract is loaded"
-          }
-        ]
-      }
-      {%- endif %}
+      {"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" pre", "timeout": 10, "statusMessage": "council: checking item-plan readiness"}]},
+      {% if harness_understand_apps_root %}{"matcher": "Bash", "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-apps-diff-guard.sh\"", "timeout": 10, "statusMessage": "understand: checking relative diff"}]},{% endif %}
+      {"matcher": "Task|Agent", "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-throttle.sh\"", "timeout": 10, "statusMessage": "throttle: checking subagent slots"}]},
+      {"matcher": "mcp__serena__.*", "hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/serena-health-gate.py\"", "timeout": 10, "statusMessage": "serena: checking process and RSS limits"}]}{% if use_clarification_gate %},
+      {"matcher": "AskUserQuestion", "hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/clarification-plan-gate.py\"", "timeout": 10, "statusMessage": "clarification: checking decision contract"}]}{% endif %}
     ],
     "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" post",
-            "timeout": 10,
-            "statusMessage": "council: requiring validation after edit"
-          }
-        ]
-      },
-      {%- if use_ds_gate %}
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/ds-gate-posttool.sh\"",
-            "timeout": 30,
-            "statusMessage": "ds-gate: checking design-system tokenization"
-          }
-        ]
-      },
-      {%- endif %}
-      {
-        "matcher": "Task|Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-release.sh\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/deliverable-scrub-gate.sh\"",
-            "timeout": 15,
-            "statusMessage": "scrub: checking internal jargon in client doc"
-          }
-        ]
-      }
+      {"matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" post", "timeout": 10, "statusMessage": "council: requiring validation after edit"}]},
+      {% if use_ds_gate %}{"matcher": "Edit|Write|MultiEdit", "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/ds-gate-posttool.sh\"", "timeout": 30, "statusMessage": "ds-gate: checking design-system tokenization"}]},{% endif %}
+      {"matcher": "Task|Agent", "hooks": [
+        {"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-lifecycle-ledger.py\" --runtime claude --observe-agent-tool", "timeout": 10},
+        {"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-release.sh\"", "timeout": 10}
+      ]},
+      {"matcher": "Write|Edit|MultiEdit", "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/deliverable-scrub-gate.sh\"", "timeout": 15, "statusMessage": "scrub: checking client doc"}]}
     ],
     "PostToolUseFailure": [
-      {
-        "matcher": "Task|Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-release.sh\"",
-            "timeout": 10
-          }
-        ]
-      }
+      {"matcher": "Task|Agent", "hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-release.sh\"", "timeout": 10}]}
+    ],
+    "SubagentStart": [
+      {"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-lifecycle-ledger.py\" --runtime claude", "timeout": 10}]}
+    ],
+    "SubagentStop": [
+      {"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-lifecycle-ledger.py\" --runtime claude", "timeout": 10}]}
     ],
     "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-precompact.sh\"",
-            "timeout": 10
-          }
-        ]
-      }
+      {"hooks": [{"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-precompact.sh\"", "timeout": 10}]}
     ],
     "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" stop",
-            "timeout": 10,
-            "statusMessage": "council: checking delivery evidence"
-          },
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate.py\"",
-            "timeout": 15,
-            "statusMessage": "completion-gate: checking completion claim vs evidence"
-          },
-          {%- if use_clarification_gate %}
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/clarification-stop-gate.py\"",
-            "timeout": 10,
-            "statusMessage": "clarification-stop-gate: choice/handoff sem bloco D[n]"
-          },
-          {%- endif %}
-          {%- if use_ui_evidence %}
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/ui-evidence-gate.sh\"",
-            "timeout": 15,
-            "statusMessage": "ui-evidence-gate: checking UI change vs visual evidence"
-          },
-          {%- endif %}
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-stop-gate.sh\"",
-            "timeout": 10,
-            "statusMessage": "marathon: checking active marathon vs checklist"
-          },
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/reap-leaks.sh\"",
-            "timeout": 10,
-            "statusMessage": "reap-leaks: reaping leaked chromium/orphans"
-          }
-        ]
-      }
+      {"hooks": [
+        {"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" stop", "timeout": 10, "statusMessage": "council: checking delivery evidence"},
+        {"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate.py\"", "timeout": 15, "statusMessage": "completion-gate: checking claims"}{% if use_clarification_gate %},
+        {"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/clarification-stop-gate.py\"", "timeout": 10, "statusMessage": "clarification: checking D[n] blocks"}{% endif %}{% if use_ui_evidence %},
+        {"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/ui-evidence-gate.sh\"", "timeout": 15, "statusMessage": "ui-evidence: checking visual proof"}{% endif %},
+        {"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-stop-gate.sh\"", "timeout": 10, "statusMessage": "marathon: checking active run"},
+        {"type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/reap-leaks.sh\"", "timeout": 10, "statusMessage": "reap-leaks: reaping owned leaks"}
+      ]}
     ]
   }{% if use_hookify %},
   "extraKnownMarketplaces": {
-    "claude-plugins-official": {
-      "source": {
-        "source": "github",
-        "repo": "anthropics/claude-plugins-official"
-      }
-    }
+    "claude-plugins-official": {"source": {"source": "github", "repo": "anthropics/claude-plugins-official"}}
   },
-  "enabledPlugins": {
-    "hookify@claude-plugins-official": true
-  }{% endif %}
+  "enabledPlugins": {"hookify@claude-plugins-official": true}{% endif %}
 }

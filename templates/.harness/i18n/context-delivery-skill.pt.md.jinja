@@ -1,0 +1,21 @@
+---
+name: context-delivery
+description: Roteamento de contexto obrigatório e vinculado a evidências antes de planejamento ou implementação mutável não trivial no Council.
+---
+
+# Context Delivery
+
+Em sessão mutável do Council, o prefixo obrigatório é:
+
+```text
+ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN
+```
+
+1. Classifique a tarefa como `LEXICAL_ENUMERATION`, `KNOWN_SYMBOL_IMPACT`, `DYNAMIC_STATE_FLOW`, `DOCS_OR_CONFIG`, `LIVE_STATE` ou `DIRECT_TARGETED`.
+2. Gere a rota com `python3 .harness/lib/context_delivery.py route --input-json '<json>'`.
+3. Persista `CONTEXT-PLAN` com `context_delivery.py transition`.
+4. Rode em paralelo somente shards lexicais independentes e sem sobreposição. Colete os resultados compactos antes de invocar o context scout.
+5. Materialize um artefato com hash por método obrigatório, além do recibo de lifecycle.
+6. Persista `CONTEXT-DELIVERY`; a máquina de estados verifica agente/modelo, lifecycle, hashes, ordem dos métodos, frescor do provider, cobertura e não resolvidos.
+
+`rg` descobre candidatos textuais. CodeGraph resolve relações transitivas e blast radius. LSP arbitra identidade/alias/re-export/arestas conflitantes. Não são intercambiáveis nem devem ser sempre disparados juntos.

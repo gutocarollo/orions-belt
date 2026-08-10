@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude hook adapter for Council guards; inactive without Council state."""
+"""Claude/Codex hook adapter for Council guards; inactive without Council state."""
 from __future__ import annotations
 import argparse
 import json
@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path(__file__).resolve().parents[2]))
-LIB = ROOT / ".harness" / "lib"
+LIB = ROOT / ".harness/lib"
 if not LIB.is_dir():
     LIB = Path(__file__).resolve().parents[1] / "lib"
 sys.path.insert(0, str(LIB))
@@ -27,7 +27,7 @@ def verified_state(state_path: Path) -> dict[str, object]:
     for line in ledger.read_text(encoding="utf-8").splitlines():
         if line.strip():
             item = json.loads(line)
-            replay = apply_transition(replay, item["event"], item["payload"])
+            replay = apply_transition(replay, item["event"], item["payload"], repository_root=ROOT)
     if replay is None:
         raise ValueError("Council event ledger is empty")
     if state.get("delivery_verified") is True:
@@ -41,7 +41,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("event", choices=("pre", "post", "stop"))
     args = parser.parse_args()
-    pointer = ROOT / ".harness" / "council-active"
+    pointer = ROOT / ".harness/council-active"
     active = pointer.is_file()
     try:
         payload = json.load(sys.stdin)

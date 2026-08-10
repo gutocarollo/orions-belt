@@ -1,0 +1,21 @@
+---
+name: context-delivery
+description: Mandatory evidence-bound context routing before non-trivial writable Council planning or implementation.
+---
+
+# Context Delivery
+
+For a writable Council session, the mandatory prefix is:
+
+```text
+ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN
+```
+
+1. Classify the task as `LEXICAL_ENUMERATION`, `KNOWN_SYMBOL_IMPACT`, `DYNAMIC_STATE_FLOW`, `DOCS_OR_CONFIG`, `LIVE_STATE`, or `DIRECT_TARGETED`.
+2. Generate the route with `python3 .harness/lib/context_delivery.py route --input-json '<json>'`.
+3. Persist `CONTEXT-PLAN` with `context_delivery.py transition`.
+4. Run only independent, non-overlapping lexical shards in parallel. Collect their compact results before invoking the context scout.
+5. Materialize one hashed artifact per required method plus the lifecycle receipt.
+6. Persist `CONTEXT-DELIVERY`; the state machine verifies model/agent identity, lifecycle, hashes, method order, provider freshness, coverage and unresolved items.
+
+`rg` discovers textual candidates. CodeGraph resolves transitive relationships and blast radius. LSP arbitrates identity/alias/re-export/conflicting edges. They are not interchangeable and are not always launched together.

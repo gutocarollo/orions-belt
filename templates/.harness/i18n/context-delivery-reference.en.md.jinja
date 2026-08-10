@@ -1,0 +1,11 @@
+
+## ⭐ CANONICAL REFERENCE — Runtime-native Context Delivery
+
+**This block supersedes any older task-start F2 wording that mandates graph ∥ `rg` for every non-trivial task.**
+
+- Claude Code registers `.claude/agents/{{ project_name }}-context-scout.md` and `{{ project_name }}-context-shard.md`. It does not register Codex TOMLs. Use `@agent-{{ project_name }}-context-scout` when invocation itself must be deterministic.
+- Codex registers `.codex/agents/{{ project_name }}-context-scout.toml` and `{{ project_name }}-context-shard.toml`; verify the active Codex surface exposes named roles before relying on automatic selection.
+- Pinned workers: Claude scout=`sonnet`, shard=`haiku`; Codex scout=`gpt-5.6-terra`, shard=`gpt-5.6-luna`. The premium parent owns task classification, conflicts and the final plan.
+- Writable Council prefix: `ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN`.
+- Lexical enumeration is `rg`/classification first and graph reachability second. A known high-radius symbol is CodeGraph ∥ `rg`. Dynamic state/callback flow proves the local path before outward reachability. LSP arbitrates decisive ambiguity.
+- Only independent, non-overlapping lexical scopes are parallelized. Lifecycle, model, artifacts, freshness, coverage and unresolved items are verified before planning.

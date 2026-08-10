@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Semantic contract validator for the installed Delivery Council."""
-
 from __future__ import annotations
 
 import json
@@ -9,8 +8,9 @@ from typing import Any
 
 from sync_council import council_paths
 
-
 SCHEMA_NAMES = (
+    "context-plan-result.schema.json",
+    "context-delivery-result.schema.json",
     "phase-plan-result.schema.json",
     "item-plan-result.schema.json",
     "execution-item-result.schema.json",
@@ -28,6 +28,9 @@ SCHEMA_NAMES = (
 )
 MARKER_GROUPS = (
     ("MUTATION_MODE=READ_ONLY | WORKSPACE_WRITE",),
+    ("CONTEXT-PLAN",),
+    ("CONTEXT-DELIVERY",),
+    ("context-delivery",),
     ("planning-and-task-breakdown",),
     ("incremental-implementation",),
     ("Cada slice validado DEVE produzir imediatamente um commit LOCAL atomico", "Every validated slice MUST immediately produce an atomic LOCAL commit"),
@@ -62,11 +65,13 @@ def validate_contract(root: Path) -> dict[str, Any]:
         raise ContractError("Council skill surfaces drifted")
     text = source_bytes.decode("utf-8")
     project = surfaces[0].parent.name.removesuffix("-delivery-council")
-    marker_groups = MARKER_GROUPS + ((f"subagent `{project}-adversarial-reviewer`", f"`{project}-adversarial-reviewer` subagent"),)
+    marker_groups = MARKER_GROUPS + (
+        (f"subagent `{project}-adversarial-reviewer`", f"`{project}-adversarial-reviewer` subagent"),
+    )
     missing = [" | ".join(group) for group in marker_groups if not any(marker in text for marker in group)]
     if missing:
         raise ContractError("missing Council semantic markers: " + ", ".join(missing))
-    schema_dir = root / ".harness" / "schemas"
+    schema_dir = root / ".harness/schemas"
     for name in SCHEMA_NAMES:
         path = schema_dir / name
         if not path.is_file():

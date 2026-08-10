@@ -1,0 +1,18 @@
+{
+  "provider": "serena",
+  "role": "optional-lsp-escalation",
+  "default_route": false,
+  "use_only_when": [
+    "symbol identity remains ambiguous after graph/text join",
+    "aliases or re-exports require language-server resolution",
+    "graph and text evidence conflict on a decisive edge"
+  ],
+  "health_gate": ".harness/hooks/serena-health-gate.py",
+  "limits": {
+    "max_processes_env": "SERENA_MAX_PROCESSES",
+    "max_rss_mb_env": "SERENA_MAX_RSS_MB",
+    "default_max_processes": 2,
+    "default_max_rss_mb": 4096
+  },
+  "failure_policy": "fallback; never kill processes automatically"
+}

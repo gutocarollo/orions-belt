@@ -21,7 +21,13 @@ def worktree_state(root: Path) -> list[str]:
     return sorted(item for item in subprocess.check_output(command, cwd=root, text=True).split("\0") if item)
 
 
-def start_session(root: Path, run_id: str, anchor_source: str, mutation_mode: str = "WORKSPACE_WRITE", execution_graph: Path | None = None) -> Path | None:
+def start_session(
+    root: Path,
+    run_id: str,
+    anchor_source: str,
+    mutation_mode: str = "WORKSPACE_WRITE",
+    execution_graph: Path | None = None,
+) -> Path | None:
     if mutation_mode == "READ_ONLY":
         return None
     if execution_graph is not None and not execution_graph.is_absolute():
@@ -35,20 +41,34 @@ def start_session(root: Path, run_id: str, anchor_source: str, mutation_mode: st
     folder = root / ".harness/runs/agent-swarm" / run_id
     folder.mkdir(parents=True, exist_ok=True)
     base_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-    event = {"seq": 1, "event": "ANCHOR", "payload": {"mutation_mode": mutation_mode, "anchor_source": anchor_source, "base_sha": base_sha, "worktree_baseline": worktree_state(root), "execution_graph": graph}}
-    state = apply_transition(None, event["event"], event["payload"])
+    event = {
+        "seq": 1,
+        "event": "ANCHOR",
+        "payload": {
+            "mutation_mode": mutation_mode,
+            "anchor_source": anchor_source,
+            "context_required": (root / ".harness/context-delivery.enabled").is_file(),
+            "base_sha": base_sha,
+            "worktree_baseline": worktree_state(root),
+            "execution_graph": graph,
+        },
+    }
+    state = apply_transition(None, event["event"], event["payload"], repository_root=root)
     (folder / "council-events.jsonl").write_text(json.dumps(event, sort_keys=True) + "\n", encoding="utf-8")
     state_path = (folder / "council-state.json").resolve()
     state_path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     pointer = root / ".harness/council-active"
     pointer.parent.mkdir(parents=True, exist_ok=True)
     pointer.write_text(str(state_path) + "\n", encoding="utf-8")
-    run_folder = root / ".harness" / "runs" / run_id
+    run_folder = root / ".harness/runs" / run_id
     run_folder.mkdir(parents=True, exist_ok=True)
     run_path = run_folder / "RUN.md"
     if not run_path.exists():
-        run_path.write_text(f"# Council run: {run_id}\n\nAnchor: `{anchor_source}`\n\n## Pendências não bloqueantes\n\n- Nenhuma no início do run.\n", encoding="utf-8")
-    (root / ".harness" / "runs" / "ACTIVE").write_text(run_id + "\n", encoding="utf-8")
+        run_path.write_text(
+            f"# Council run: {run_id}\n\nAnchor: `{anchor_source}`\n\n## Pendências não bloqueantes\n\n- Nenhuma no início do run.\n",
+            encoding="utf-8",
+        )
+    (root / ".harness/runs/ACTIVE").write_text(run_id + "\n", encoding="utf-8")
     hooks_dir = Path(subprocess.check_output(["git", "rev-parse", "--git-path", "hooks"], cwd=root, text=True).strip())
     if not hooks_dir.is_absolute():
         hooks_dir = root / hooks_dir
@@ -70,7 +90,7 @@ def finish_session(root: Path) -> None:
     if state.get("stage") != "DELIVERY":
         raise RuntimeError("Council session cannot finish before DELIVERY")
     pointer.unlink()
-    active = root / ".harness" / "runs" / "ACTIVE"
+    active = root / ".harness/runs/ACTIVE"
     if active.is_file() and active.read_text(encoding="utf-8").strip() == state_path.parent.name:
         active.unlink()
 

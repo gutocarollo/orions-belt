@@ -1,0 +1,24 @@
+{
+  "provider": "codegraph",
+  "contract_version": 1,
+  "capabilities": {
+    "symbol_search": "SUPPORTED",
+    "reverse_transitive_impact": "SUPPORTED",
+    "enclosing_symbol": "SUPPORTED",
+    "callback_resolution": "HEURISTIC",
+    "exact_symbol_identity": "PARTIAL",
+    "markdown_index": "UNSUPPORTED",
+    "incremental_sync": "SUPPORTED"
+  },
+  "required_preflight": [
+    "provider response available",
+    "no stale warning in cited evidence",
+    "no pending change affecting cited evidence"
+  ],
+  "fallbacks": {
+    "stale_or_unavailable": ["rg", "lsp", "targeted-read"],
+    "ambiguous_symbol": ["lsp", "targeted-read"],
+    "documentation": ["canonical-docs", "rg"]
+  },
+  "routing_precedence": "CONTEXT-PLAN overrides provider-level cost shortcuts"
+}

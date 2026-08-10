@@ -9,6 +9,7 @@ uso e configuração de cada componente, e `docs/planning/` permanece arquivo hi
 | Documento | Status | Função |
 |---|---|---|
 | [Arquitetura-alvo](arquitetura-alvo.md) | active | Estado atual versus alvo, três grafos, ingestão segura, confiança, evals, release gate e sequência de adoção. |
+| [Context Delivery](context-delivery.md) | active | Estado obrigatório de contexto, roteamento híbrido adaptativo, agentes runtime-native, lifecycle e prova de cobertura. |
 
 ## Precedência
 
