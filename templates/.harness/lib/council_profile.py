@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
-"""AI-first execution-profile policy for Orion's Belt.
-
-DIRECT and LIGHT are intentionally soft orchestration profiles. FULL is the
-only profile that requires the enforceable Council state machine. Deterministic
-logic here provides only a narrow safety floor; scope/complexity trade-offs stay
-with the orchestrating model.
-"""
+"""AI-first execution-profile policy for Orion's Belt."""
 from __future__ import annotations
 
 import argparse
 import json
 from typing import Any
+
+from council_findings import FindingPolicyError, partition_findings
 
 PROFILES = ("AUTO", "DIRECT", "LIGHT", "FULL")
 RANK = {"DIRECT": 0, "LIGHT": 1, "FULL": 2}
@@ -27,7 +23,6 @@ HARD_FULL_SIGNALS = (
     "irreversible_business_decision",
     "explicit_high_assurance",
 )
-BLOCKING_SEVERITIES = {"CRITICAL", "HIGH"}
 
 
 class ProfileError(ValueError):
@@ -49,13 +44,7 @@ def choose_profile(*, requested_profile: str = "AUTO", ai_choice: str | None = N
     hard_signals = [key for key in HARD_FULL_SIGNALS if signal_map.get(key)]
     minimum = "FULL" if hard_signals else "DIRECT"
     effective = proposed if RANK[proposed] >= RANK[minimum] else minimum
-    fix_now, backlog = [], []
-    for raw in findings or []:
-        item = dict(raw)
-        severity = str(item.get("severity") or "LOW").upper()
-        reachable = bool(item.get("reachable_in_current_task", True))
-        item["severity"], item["reachable_in_current_task"] = severity, reachable
-        (fix_now if severity in BLOCKING_SEVERITIES and reachable else backlog).append(item)
+    fix_now, backlog = partition_findings(findings)
     return {
         "requested_profile": requested,
         "ai_choice": proposed,
@@ -79,7 +68,7 @@ def main() -> int:
         raise SystemExit("input must be a JSON object")
     try:
         result = choose_profile(**request)
-    except (ProfileError, TypeError) as exc:
+    except (ProfileError, FindingPolicyError, TypeError) as exc:
         raise SystemExit(str(exc)) from exc
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0

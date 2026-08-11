@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 LIB = ROOT / "templates/.harness/lib"
 if str(LIB) not in sys.path:
     sys.path.insert(0, str(LIB))

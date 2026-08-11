@@ -4,31 +4,34 @@
 
 A política default é proporcional:
 
-- `DIRECT`: nenhuma review de execução, salvo pedido explícito do usuário.
+- `DIRECT + AUTO`: nenhuma review de execução.
+- `DIRECT + SINGLE/BATCH`: respeite a review pedida explicitamente; otimização nunca cancela review solicitada pelo usuário.
 - `LIGHT + AUTO`: um reviewer consolidado.
 - `FULL + AUTO`: prefira `BATCH`, com prismas paralelos sobre o mesmo objetivo/diff congelado.
-- `FULL` como review mode é o escape de compatibilidade para o pipeline legado sequencial `QUALITY -> SIMPLIFICATION -> ADVERSARIAL`. Nunca selecione-o automaticamente.
+- `REVIEW_MODE=FULL`: escape de compatibilidade para o pipeline legado sequencial `QUALITY -> SIMPLIFICATION -> ADVERSARIAL`. Ele exige execução FULL e duas identidades independentes de reviewer; nunca o selecione automaticamente.
 
-`BATCH` não adiciona estado em `council_runtime.py`. Reviewers paralelos devolvem findings independentes e o parent premium os consolida na única transição `ADVERSARIAL` já existente.
+`BATCH` não adiciona estado em `council_runtime.py`. Reviewers paralelos devolvem receipts e findings independentes; o parent premium consolida tudo na única transição `ADVERSARIAL` já existente. Persista cada prisma em `review_batch` (`prism`, UUID do reviewer, veredito, evidência), enquanto `reviewer_id` identifica o consolidador registrado pela máquina de estados existente. Se não houver identidade estável do consolidador, use `SINGLE` em vez de inventar uma.
 
 Prismas independentes recomendados:
 1. `correctness-security-data`
 2. `tests-acceptance-regression`
 3. `simplicity-maintainability`
 
-Use no máximo dois prismas no LIGHT e três no FULL. Não crie reviewer apenas para preencher prisma: se uma única perspectiva adiciona valor material, reduza a review para `SINGLE`.
+Use no máximo dois prismas em DIRECT/LIGHT e três em FULL. Não crie reviewer apenas para preencher prisma: se uma única perspectiva adicionar valor material, reduza a review para `SINGLE`.
 
 Todos os prismas recebem o mesmo `OBJECTIVE`, `DONE-WHEN`, âncora/emendas, HEAD SHA ou identidade do diff e escopo congelados. Eles revisam em paralelo, não revisam uns aos outros e não alteram código.
 
-Política de consolidação:
+A classificação de finding tem uma regra de precedência: quando existir o objeto canônico `impact` do Council, recalcule-o com `objective_control.assess_impact()` e respeite `CRITICAL_BLOCK`, `HIGH_FIX_NOW` ou `DEFER_RUN`. `severity`/`reachable_in_current_task` simplificados servem apenas para findings DIRECT/LIGHT sem impacto canônico. Nunca rebaixe impacto canônico para um default simplificado.
 
 ```text
-CRITICAL/HIGH alcançável -> FIX_NOW
-Medium/Low               -> BACKLOG
-finding não alcançável   -> BACKLOG
+CRITICAL_BLOCK / CRITICAL alcançável -> FIX_NOW
+HIGH_FIX_NOW / HIGH alcançável       -> FIX_NOW
+DEFER_RUN / Medium/Low/não alcançável -> BACKLOG
 ```
+
+Findings de prismas independentes nunca são deduplicados apenas porque reviewers reutilizaram o mesmo ID local. Preserve todos; o consolidador pode fundir equivalentes semanticamente sem reduzir severidade.
 
 Depois de fix bloqueante, rerode somente os prismas que produziram Critical/High alcançável, no máximo uma vez por default. Não reinicie automaticamente o batch inteiro.
 
 Helper: `python3 .harness/lib/council_review_batch.py --input-json '<json>'`.
-Ele planeja concorrência e classifica findings; não é um novo gate e não substitui o julgamento da IA.
+Ele planeja concorrência, valida receipts dos prismas e classifica findings; não é um novo gate e não substitui o julgamento da IA.
