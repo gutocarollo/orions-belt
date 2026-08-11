@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - tmp/pr16-release-check
+  pull_request:
+    branches:
+      - tmp/pr16-quality-fixes
 
 permissions:
   contents: read
