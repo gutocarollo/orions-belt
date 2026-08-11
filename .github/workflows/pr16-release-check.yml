@@ -1,9 +1,6 @@
 name: pr16-release-check
 
 on:
-  push:
-    branches:
-      - tmp/pr16-release-check
   pull_request:
     branches:
       - tmp/pr16-quality-fixes
@@ -16,14 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - name: Checkout staging branch
+        run: |
+          git clone --depth 1 --branch tmp/pr16-quality-fixes https://github.com/gutocarollo/orions-belt.git repo
+      - name: Install uv
+        run: |
+          python3 -m pip install --user uv
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run focused proportional Council integration tests
+        working-directory: repo
+        run: python3 -m unittest discover -s engine/integration/tests -v
       - name: Run Orion release check
-        run: python3 engine/release_check.py --output /tmp/orions-release-report.json
-      - name: Upload release report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr16-release-report
-          path: /tmp/orions-release-report.json
-          if-no-files-found: ignore
+        working-directory: repo
+        run: python3 engine/release_check.py
