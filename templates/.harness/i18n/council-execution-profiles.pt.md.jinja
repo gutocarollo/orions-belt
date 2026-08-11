@@ -1,0 +1,89 @@
+## Perfis de Execução — orquestração proporcional
+
+Esta seção substitui qualquer redação antiga que faça do fluxo Full do Council
+o default depois que esta skill é carregada.
+
+`EXECUTION_PROFILE=AUTO | DIRECT | LIGHT | FULL` controla a orquestração.
+`AUTO` sempre começa em `DIRECT`; depois de contexto direcionado, o modelo
+orquestrador pode elevar o perfil. Número de arquivos, tamanho da tarefa, edge
+case teórico ou finding Medium/Low nunca bastam isoladamente para escalar.
+
+Use o helper opcional para manter visível apenas o piso determinístico estreito
+de segurança, sem retirar da IA o julgamento normal de engenharia:
+
+```bash
+python3 .harness/lib/council_profile.py --input-json '<json>'
+```
+
+### DIRECT — default para trabalho claro, local e reversível
+
+**Não** inicie `council_session.py`. Não crie Context Delivery, execution graph,
+subagents, loops de review ou commit por item apenas porque a skill Council foi
+mencionada.
+
+Mantenha somente:
+
+```text
+OBJECTIVE: resultado observável
+DONE-WHEN: validação concreta
+NON-GOALS: escopo que não deve expandir
+```
+
+Depois leia apenas o contexto necessário, execute, valide com comandos reais e
+entregue. Escale somente quando evidência nova mudar materialmente risco ou
+escopo.
+
+### LIGHT — Council compacto para trabalho não trivial, mas reversível
+
+**Não** inicie a máquina rígida do Full Council e não exija Context Delivery
+formal. Preserve o objetivo e use um único plano compacto em vez de
+phase-plan + item-plan para cada microetapa:
+
+```text
+OBJECTIVE
+DONE-WHEN
+CONTEXT-SUMMARY
+PLAN: 3-7 passos ordenados
+EXECUTE
+VALIDATE
+CONSOLIDATED-REVIEW
+DELIVER + BACKLOG
+```
+
+Use no máximo dois subagents e somente para trabalho realmente independente.
+Uma review consolidada basta por default; no máximo um recheck direcionado
+depois de um fix bloqueante real. Não exija commit local por micro-slice.
+
+Findings `CRITICAL`/`HIGH` alcançáveis na tarefa atual são `FIX_NOW`.
+Medium/Low ou não alcançáveis vão para backlog da execução e não bloqueiam a
+entrega.
+
+### FULL — exceção de alta garantia
+
+Somente `FULL` ativa o lifecycle rígido atual do Council, Context Delivery
+(quando habilitado), vínculo de grafo/testes, transições persistidas e evidência
+estrita de review. Use quando o usuário pedir Full/alta garantia ou quando a
+evidência mostrar um piso material como:
+
+- produção/deploy;
+- ação destrutiva ou irreversível;
+- migration/backfill com risco material;
+- fronteira de segurança/privacidade/credencial;
+- decisão de negócio irreversível.
+
+A IA também pode escolher FULL para um caso genuinamente de alto risco e deve
+registrar a evidência concreta que justificou a escalada.
+
+### Política de escalada
+
+```text
+AUTO -> DIRECT
+DIRECT -> LIGHT   quando contexto direcionado provar que coordenação maior ajuda
+LIGHT  -> FULL    somente com risco material de alta garantia evidenciado
+```
+
+Antes da primeira mutação, a IA também pode reduzir o perfil se a exploração
+provar que a tarefa é menor do que parecia.
+
+Não otimize por zero findings. Otimize pelo objetivo solicitado com zero
+Critical/High alcançáveis bloqueando o caminho; registre o restante no backlog.

@@ -1,0 +1,37 @@
+## Review Batch — parallel prisms without extra Council states
+
+`REVIEW_MODE=AUTO | SINGLE | BATCH | FULL` controls execution review.
+
+The default policy is proportional:
+
+- `DIRECT + AUTO`: no execution review.
+- `DIRECT + SINGLE/BATCH`: respect the explicit review request; optimization never cancels user-requested review.
+- `LIGHT + AUTO`: one consolidated reviewer.
+- `FULL + AUTO`: prefer `BATCH`, using parallel prisms on the same frozen objective/diff.
+- `REVIEW_MODE=FULL`: compatibility escape hatch for the legacy sequential `QUALITY -> SIMPLIFICATION -> ADVERSARIAL` pipeline. It requires FULL execution and two independent reviewer identities; never select it automatically.
+
+`BATCH` does **not** add a state to `council_runtime.py`. Parallel reviewers return independent receipts and findings; the premium parent consolidates them into the existing single `ADVERSARIAL` transition. Persist every prism in `review_batch` (`prism`, reviewer UUID, verdict, evidence) while `reviewer_id` identifies the consolidator recorded by the existing state machine. If no stable consolidator identity is available, use `SINGLE` rather than fabricating one.
+
+Recommended independent prisms:
+1. `correctness-security-data`
+2. `tests-acceptance-regression`
+3. `simplicity-maintainability`
+
+Use at most two prisms in DIRECT/LIGHT and three in FULL. Do not create a reviewer merely to fill a prism: if only one perspective is materially useful, downgrade the review to `SINGLE`.
+
+All prisms receive the same frozen `OBJECTIVE`, `DONE-WHEN`, anchor/amendments, HEAD SHA or diff identity, and scope. They review concurrently, do not review one another, and do not mutate code.
+
+Finding classification has one precedence rule: when a finding contains the canonical Council `impact` object, recompute it with `objective_control.assess_impact()` and honor `CRITICAL_BLOCK`, `HIGH_FIX_NOW`, or `DEFER_RUN`. Lightweight `severity`/`reachable_in_current_task` is only for DIRECT/LIGHT findings that do not carry canonical impact. Never downgrade canonical impact to a lightweight default.
+
+```text
+CRITICAL_BLOCK / reachable CRITICAL -> FIX_NOW
+HIGH_FIX_NOW / reachable HIGH       -> FIX_NOW
+DEFER_RUN / Medium/Low/unreachable  -> BACKLOG
+```
+
+Independent prism findings are never deduplicated only because reviewers reused the same local ID. Preserve them and let the consolidator merge equivalent semantics without lowering severity.
+
+After a blocking fix, rerun only the prisms that produced reachable Critical/High findings, at most once by default. Do not automatically repeat the entire batch.
+
+Helper: `python3 .harness/lib/council_review_batch.py --input-json '<json>'`.
+It plans concurrency, validates prism receipts and classifies findings; it is not a new gate and does not replace model judgment.

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Record actual context-tool calls emitted by Claude Code or Codex hooks.
+"""Record context-tool calls only for an active Council run.
 
-Every evidence artifact must bind to successful runtime tool-use ids. The
-ledger stores both PreToolUse and terminal records, allowing the verifier to
-prove actual dependency ordering rather than trusting self-declared stages.
+The hook may be registered project-wide, but it becomes a no-op unless a
+persisted Council run is active (or a run_id is supplied explicitly by an
+adapter/test). Receipts are append-only and O(1): ordering uses the runtime
+nanosecond timestamp rather than rescanning the whole JSONL on every tool call.
 """
 from __future__ import annotations
 
@@ -100,11 +101,23 @@ def _identity(payload: dict[str, Any]) -> tuple[str, str, str]:
 
 
 def _active_run(root: Path, payload: dict[str, Any]) -> str:
-    explicit = str(payload.get("run_id") or "")
+    """Return the Council run id, never a generic marathon ACTIVE id."""
+    explicit = str(payload.get("run_id") or "").strip()
     if explicit:
         return explicit
-    active = root / ".harness/runs/ACTIVE"
-    return active.read_text(encoding="utf-8").strip() if active.is_file() else ""
+    pointer = root / ".harness/council-active"
+    if not pointer.is_file():
+        return ""
+    try:
+        state_path = Path(pointer.read_text(encoding="utf-8").strip())
+    except OSError:
+        return ""
+    if not state_path.is_absolute():
+        state_path = (root / state_path).resolve()
+    # council-active points to .../agent-swarm/<run_id>/council-state.json.
+    if state_path.name != "council-state.json":
+        return ""
+    return state_path.parent.name
 
 
 def _repository_binding(root: Path, run_id: str, payload: dict[str, Any]) -> str:
@@ -121,11 +134,7 @@ def _repository_binding(root: Path, run_id: str, payload: dict[str, Any]) -> str
 
 
 def record_event(payload: dict[str, Any], runtime: str, root: Path | None = None) -> Path | None:
-    """Append one canonical hook event and return the receipt path.
-
-    Runtime hooks call this through ``main``; unit tests call it directly to
-    avoid turning every evidence assertion into a slow subprocess benchmark.
-    """
+    """Append one canonical hook event, or no-op outside an active Council run."""
     if runtime not in {"claude", "codex"}:
         raise ValueError(f"unsupported runtime: {runtime}")
     if not isinstance(payload, dict):
@@ -133,6 +142,15 @@ def record_event(payload: dict[str, Any], runtime: str, root: Path | None = None
     event = str(payload.get("hook_event_name") or "")
     if event not in {"PreToolUse", "PostToolUse", "PostToolUseFailure"}:
         return None
+
+    resolved_root = (root or _root(payload)).resolve()
+    run_id = _active_run(resolved_root, payload)
+    if not run_id:
+        # Context Delivery is evidence for an explicit Council run. Outside it,
+        # avoid fingerprinting the repository, opening ledgers or retaining tool
+        # inputs/outputs.
+        return None
+
     tool_name = str(payload.get("tool_name") or payload.get("toolName") or "")
     tool_input = payload.get("tool_input") if "tool_input" in payload else payload.get("toolInput")
     methods = _methods(tool_name, tool_input)
@@ -143,13 +161,15 @@ def record_event(payload: dict[str, Any], runtime: str, root: Path | None = None
         raise ValueError("context tool receipt requires runtime tool_use_id")
     agent_id, agent_type, transcript = _identity(payload)
     response = payload.get("tool_response") if "tool_response" in payload else payload.get("toolResponse")
-    resolved_root = (root or _root(payload)).resolve()
     session = _slug(str(payload.get("session_id") or "unknown"))
-    run_id = _active_run(resolved_root, payload)
     repository_binding = _repository_binding(resolved_root, run_id, payload)
+    now_ns = time.time_ns()
     record = {
         "ts": dt.datetime.now(dt.UTC).isoformat().replace("+00:00", "Z"),
-        "time_ns": time.time_ns(),
+        "time_ns": now_ns,
+        # Existing verifiers use seq only for strict ordering. A nanosecond
+        # timestamp preserves that contract without an O(n) JSONL rescan.
+        "seq": now_ns,
         "runtime": runtime,
         "run_id": run_id,
         "repository_fingerprint": repository_binding,
@@ -174,15 +194,6 @@ def record_event(payload: dict[str, Any], runtime: str, root: Path | None = None
     with open_locked_text(
         resolved_root, (".harness", "runs", "context-tools", session), "tools.jsonl"
     ) as (path, stream):
-        stream.seek(0)
-        existing = [json.loads(line) for line in stream if line.strip()]
-        identity = (runtime, run_id, record["session_id"], tool_use_id, event)
-        if any(
-            (item.get("runtime"), item.get("run_id"), item.get("session_id"), item.get("tool_use_id"), item.get("event")) == identity
-            for item in existing
-        ):
-            return path
-        record["seq"] = len(existing) + 1
         stream.seek(0, 2)
         stream.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
         stream.flush()

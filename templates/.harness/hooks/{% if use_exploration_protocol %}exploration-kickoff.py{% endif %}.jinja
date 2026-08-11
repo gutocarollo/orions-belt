@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Inject the repository's adaptive exploration order at task start.
-
-This remains a prompt injection, not evidence that exploration executed. When
-Context Delivery is enabled, the executable Council transition is the proof.
-"""
+"""Inject compact exploration guidance for substantive task starts."""
 from __future__ import annotations
 
 import json
@@ -21,31 +17,21 @@ KICKOFF_RE = re.compile(
 MIN_LEN = 25
 
 ROUTING = """<exploration-protocol-kickoff>
-EXPLORATION STANDARD — prompt guidance only; executable proof comes from `context-delivery` when enabled.
-- F0: anchor the ORIGINAL request from `.harness/requests/`; do not substitute a derived plan.
+EXPLORATION STANDARD — use the smallest route that can answer the task.
+- F0: preserve the ORIGINAL request and observable DONE-WHEN.
 {%- if harness_entry_docs %}
-- F1 canonical docs, in order: {{ harness_entry_docs.split(',') | map('trim') | select | join(' -> ') }}.
+- F1 docs, in order: {{ harness_entry_docs.split(',') | map('trim') | select | join(' -> ') }}.
 {%- endif %}
 {%- if harness_reference_index %}
-- F1-bis: read the living subsystem page routed by `{{ harness_reference_index }}` before treating its code as authority.
+- F1-bis: route living subsystem docs through `{{ harness_reference_index }}`.
 {%- endif %}
-{% if use_context_delivery %}- F2/F4 adaptive route: classify the task and persist CONTEXT-PLAN.
-  - LEXICAL_ENUMERATION: non-overlapping `rg` shards -> classification -> graph/LSP reachability.
-  - KNOWN_SYMBOL_IMPACT: CodeGraph ∥ `rg` only for independently queryable high-radius/completeness work; resolve P4 after the join and use LSP when required.
-  - DYNAMIC_STATE_FLOW: prove event -> data/state -> behavior locally before outward graph reachability.
-  - DOCS_OR_CONFIG: canonical docs + textual search + focused reads.
-  - DIRECT_TARGETED: focused text/semantic route without ceremonial fan-out.
-{% else %}- F2: use `rg` and focused reads for lexical discovery. Use graph/LSP only when the question requires semantic identity or transitive reachability; do not launch all tools by default.
-{% endif %}{% if harness_understand_apps_root %}
-- Architecture provider: Understand Anything under `{{ harness_understand_apps_root }}/`; incremental paths are relative to that graph root. Freshness: `bash .harness/lib/understand-apps-changed-files.sh`.
-{% endif %}{% if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}
-- F3 LIVE_STATE: query the read-only database/runtime source in parallel with independent code discovery. Permission failure is not absence of data.
-{% endif %}
-- Provider capabilities are version-specific. A graph miss never proves documentation absence; use docs routing/search for Markdown.
-- F5: consult current official documentation for external libraries, SDKs and CLIs.
-- Clarification is legitimate only after applicable phases; load `clarification-plan` before asking.
-{% if use_context_delivery %}- New writable Council runs: ANCHOR -> CONTEXT-PLAN -> CONTEXT-DELIVERY -> PHASE-PLAN. A prose Context Brief is not proof.
-{% endif %}</exploration-protocol-kickoff>"""
+- F2/F4: lexical enumeration = `rg` first; known high-radius symbol = graph ∥ `rg`; dynamic flow = local state/data proof before graph/LSP.
+{%- if harness_mcp_db_dev_port and harness_mcp_db_dev_port > 0 %}
+- F3: use read-only live state when persisted behavior matters.
+{%- endif %}
+- F5: current official docs for external APIs/SDKs/CLIs.
+- Prefer DIRECT; use LIGHT for useful coordination; use FULL/context-delivery only for material high-assurance risk.
+</exploration-protocol-kickoff>"""
 
 
 def main() -> int:

@@ -1,0 +1,15 @@
+## Budgets de performance — tetos, não gates
+
+Os budgets orientam o orquestrador; sozinhos nunca bloqueiam uma entrega.
+
+| Perfil | Subagents | Subagents paralelos | Reviewers | Turnos de contexto |
+|---|---:|---:|---:|---:|
+| DIRECT | 0 | 0 | 0 | 0 |
+| LIGHT | até 2 | até 2 | 1 por default | 8 |
+| FULL | até 4 | até 4 | até 3 | 16 |
+
+Use menos recursos sempre que o objetivo já estiver alcançável. Worker que atingir o budget retorna findings parciais + unknowns; o parent decide se os unknowns são materiais em vez de iniciar outro loop automaticamente.
+
+Shards lexicais permanecem mínimos e não pré-carregam a skill completa de Context Delivery. O scout FULL pode usar o provider configurado, mas devolve saída compacta.
+
+Depois de um run, `python3 .harness/lib/council_cost_report.py --run-id <id> --profile <perfil>` resume modelos observados, tool calls, tokens e duração quando o runtime fornecer esses dados. Métrica ausente fica `UNAVAILABLE`; o relatório é observacional e nunca vira gate de conclusão.

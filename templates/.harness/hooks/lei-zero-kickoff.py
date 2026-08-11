@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""law-zero-kickoff — UserPromptSubmit hook.
-
-When the prompt looks like a feature/refactor kickoff and does NOT mention LAW
-ZERO, it injects the compact protocol as context (a UserPromptSubmit's stdout
-becomes model context). Automates what the donor-harness owner used to paste by
-hand every session. Origin: donor-harness friction audit, cluster 5.
-Fail-open: any error → exit 0 with no output.
-"""
+"""Inject compact reuse-first guidance for implementation kickoffs."""
 import json
 import re
 import sys
@@ -19,16 +12,13 @@ KICKOFF_RE = re.compile(
     r"|implement|build\s+a|add\s+(a\s+)?feature"
     r")\b"
 )
-# short prompts ("continue", "fix it", pasted audits) are not a kickoff
 MIN_LEN = 25
 
 PROTOCOL = """<law-zero-protocol>
-LAW ZERO (AGENTS.md/CLAUDE.md §0) — before implementing any non-trivial feature:
-1. SEARCH for existing mature solutions (GitHub/awesome-lists via the last30days plugin when available; official docs via Context7). Investigate each feature individually.
-2. Port/copy/reuse validated libs, code and patterns. Implement from scratch ONLY if nothing is reusable — and state why.
-3. Check what the REPO ALREADY HAS before creating (grep the code, the dependency lockfile/manifest, the ⭐ CANONICAL REFERENCE blocks of AGENTS.md/CLAUDE.md).
-4. Migrations/cross-cutting changes: SEQUENTIAL, one at a time, tested (§0.6, §14).
-If the final plan reinvents something that already exists, the plan is wrong.
+LAW ZERO — reuse before invention.
+- Check the repo and mature external solutions before adding a new abstraction/dependency.
+- Prefer existing local patterns or validated libraries; build from scratch only when reuse is materially worse or unavailable.
+- Keep migrations/cross-cutting changes sequential and validated.
 </law-zero-protocol>"""
 
 
@@ -42,10 +32,9 @@ def main():
         return 0
     low = prompt.lower()
     if "lei zero" in low or "lei-zero" in low or "law zero" in low or "law-zero" in low:
-        return 0  # the user already invoked the law explicitly
-    if not KICKOFF_RE.search(prompt):
         return 0
-    print(PROTOCOL)
+    if KICKOFF_RE.search(prompt):
+        print(PROTOCOL)
     return 0
 
 
