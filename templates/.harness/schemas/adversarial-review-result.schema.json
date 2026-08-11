@@ -4,10 +4,36 @@
   "type": "object",
   "additionalProperties": false,
   "x-orions-review-batch-consistency": true,
-  "required": ["status", "reviewer_id", "critical", "required"],
+  "required": [
+    "status",
+    "reviewer_id",
+    "critical",
+    "required"
+  ],
   "properties": {
-    "status": {"enum": ["SATISFEITO", "CORRIGIR", "BLOQUEADO"]},
-    "reviewer_id": {"type": "string", "minLength": 1},
+    "status": {
+      "enum": [
+        "SATISFEITO",
+        "CORRIGIR",
+        "BLOQUEADO"
+      ]
+    },
+    "reviewer_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "implementer_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "snapshot_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
     "review_batch": {
       "type": "array",
       "minItems": 2,
@@ -15,31 +41,95 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["prism", "reviewer_id", "status", "evidence", "finding_ids"],
+        "required": [
+          "prism",
+          "reviewer_id",
+          "status",
+          "evidence",
+          "finding_uids"
+        ],
         "properties": {
-          "prism": {"enum": ["correctness-security-data", "tests-acceptance-regression", "simplicity-maintainability"]},
-          "reviewer_id": {"type": "string", "minLength": 1, "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
-          "status": {"enum": ["SATISFEITO", "CORRIGIR", "BLOQUEADO"]},
-          "evidence": {"type": "string", "minLength": 1},
-          "finding_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}
+          "prism": {
+            "enum": [
+              "correctness-security-data",
+              "tests-acceptance-regression",
+              "simplicity-maintainability"
+            ]
+          },
+          "reviewer_id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "status": {
+            "enum": [
+              "SATISFEITO",
+              "CORRIGIR",
+              "BLOQUEADO"
+            ]
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "finding_uids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     },
-    "critical": {"type": "integer", "minimum": 0},
-    "required": {"type": "integer", "minimum": 0},
-    "round": {"type": "integer", "minimum": 1, "maximum": 3},
-    "external_blocker": {"type": "string", "minLength": 1},
+    "critical": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "required": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "round": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "external_blocker": {
+      "type": "string",
+      "minLength": 1
+    },
     "findings": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["gap", "evidence", "required_change", "impact"],
+        "required": [
+          "gap",
+          "evidence",
+          "required_change",
+          "impact"
+        ],
         "properties": {
-          "gap": {"type": "string", "minLength": 1},
-          "evidence": {"type": "string", "minLength": 1},
-          "required_change": {"type": "string", "minLength": 1},
-          "impact": {"type": "object"}
+          "finding_uid": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gap": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required_change": {
+            "type": "string",
+            "minLength": 1
+          },
+          "impact": {
+            "type": "object"
+          }
         }
       }
     },
@@ -48,14 +138,42 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["gap", "evidence", "required_change", "impact", "reason", "review_after"],
+        "required": [
+          "gap",
+          "evidence",
+          "required_change",
+          "impact",
+          "reason",
+          "review_after"
+        ],
         "properties": {
-          "gap": {"type": "string", "minLength": 1},
-          "evidence": {"type": "string", "minLength": 1},
-          "required_change": {"type": "string", "minLength": 1},
-          "impact": {"type": "object"},
-          "reason": {"type": "string", "minLength": 1},
-          "review_after": {"type": "string", "minLength": 1}
+          "finding_uid": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gap": {
+            "type": "string",
+            "minLength": 1
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required_change": {
+            "type": "string",
+            "minLength": 1
+          },
+          "impact": {
+            "type": "object"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "review_after": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }

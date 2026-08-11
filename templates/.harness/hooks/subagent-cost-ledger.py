@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Append lightweight, non-blocking cost receipts for every completed subagent.
+"""Append lightweight, non-blocking cost/lifecycle receipts for every completed subagent.
 
-This ledger is observational only. It never stores prompts, responses or tool
-payload excerpts, and any telemetry error fails open so cost accounting cannot
-block delivery.
+This ledger is observational for cost reporting and also provides the minimal
+runtime identity receipt consumed by FULL review batches. It never stores
+prompts, responses or tool payload excerpts. Telemetry failures remain
+fail-open; a FULL batch that requires an identity receipt must simply choose
+SINGLE or obtain a valid receipt instead of fabricating one.
 """
 from __future__ import annotations
 
@@ -12,6 +14,7 @@ import datetime as dt
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -23,6 +26,7 @@ if str(LIB) not in sys.path:
 from secure_runtime_io import open_locked_text  # noqa: E402
 
 AGENT_TOOLS = {"Agent", "Task", "spawn_agent"}
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def _root(payload: dict[str, Any]) -> Path:
@@ -77,6 +81,26 @@ def _duration(payload: dict[str, Any], response: dict[str, Any]) -> Any:
     return None
 
 
+def _snapshot_sha(root: Path, payload: dict[str, Any], response: dict[str, Any]) -> str | None:
+    for source in (response, payload):
+        value = str(source.get("snapshot_sha") or source.get("head_sha") or "").strip().lower()
+        if SHA_RE.fullmatch(value):
+            return value
+    try:
+        process = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    value = process.stdout.strip().lower()
+    return value if process.returncode == 0 and SHA_RE.fullmatch(value) else None
+
+
 def record_event(payload: dict[str, Any], requested_runtime: str = "auto", root: Path | None = None) -> Path | None:
     if not isinstance(payload, dict):
         return None
@@ -120,6 +144,7 @@ def record_event(payload: dict[str, Any], requested_runtime: str = "auto", root:
         "agent_id_source": agent_id_source,
         "agent_type": agent_type,
         "model": model or None,
+        "snapshot_sha": _snapshot_sha(resolved_root, payload, response),
         "usage": _usage(payload, response),
         "duration_ms": _duration(payload, response),
     }

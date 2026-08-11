@@ -17,13 +17,19 @@ from council_review_batch import (  # noqa: E402
 )
 
 
-def receipt(prism: str, reviewer_id: str, *, status: str = "SATISFEITO", finding_ids: list[str] | None = None) -> dict:
+def receipt(
+    prism: str,
+    reviewer_id: str,
+    *,
+    status: str = "SATISFEITO",
+    finding_uids: list[str] | None = None,
+) -> dict:
     return {
         "prism": prism,
         "reviewer_id": reviewer_id,
         "status": status,
         "evidence": f"{prism}.json",
-        "finding_ids": list(finding_ids or []),
+        "finding_uids": list(finding_uids or []),
     }
 
 
@@ -76,29 +82,32 @@ class CouncilReviewBatchTest(unittest.TestCase):
         self.assertEqual(["H1"], [item["id"] for item in result["fix_now"]])
         self.assertEqual(["M1", "H2"], [item["id"] for item in result["backlog"]])
 
-    def test_same_local_id_from_different_prisms_is_not_deduplicated(self):
-        result = consolidate_findings([
-            {"id": "H1", "severity": "MEDIUM", "reachable_in_current_task": True, "prism": "simplicity-maintainability"},
-            {"id": "H1", "severity": "CRITICAL", "reachable_in_current_task": True, "prism": "correctness-security-data"},
-        ])
-        self.assertEqual(1, len(result["fix_now"]))
-        self.assertEqual(1, len(result["backlog"]))
-
-    def test_recheck_uses_persisted_finding_ids_mapping(self):
+    def test_same_local_id_can_have_distinct_global_finding_uids(self):
         result = consolidate_findings(
-            [{"id": "H1", "severity": "HIGH", "reachable_in_current_task": True}],
             [
-                receipt("correctness-security-data", "11111111-1111-4111-8111-111111111111", status="CORRIGIR", finding_ids=["H1"]),
-                receipt("tests-acceptance-regression", "22222222-2222-4222-8222-222222222222"),
+                {"finding_uid": "uid-a", "id": "H1", "severity": "HIGH", "reachable_in_current_task": True},
+                {"finding_uid": "uid-b", "id": "H1", "severity": "HIGH", "reachable_in_current_task": True},
+            ],
+            [
+                receipt("correctness-security-data", "11111111-1111-4111-8111-111111111111", status="CORRIGIR", finding_uids=["uid-a"]),
+                receipt("tests-acceptance-regression", "22222222-2222-4222-8222-222222222222", status="CORRIGIR", finding_uids=["uid-b"]),
             ],
         )
-        self.assertEqual(["correctness-security-data"], result["targeted_recheck_prisms"])
+        self.assertEqual(
+            ["correctness-security-data", "tests-acceptance-regression"],
+            result["targeted_recheck_prisms"],
+        )
 
-    def test_batch_receipts_require_finding_ids_even_when_empty(self):
-        with self.assertRaisesRegex(ReviewBatchError, "finding_ids array"):
+    def test_batch_receipts_require_finding_uids_even_when_empty(self):
+        with self.assertRaisesRegex(ReviewBatchError, "finding_uids array"):
             normalize_review_batch([
-                {"prism": "correctness-security-data", "reviewer_id": "11111111-1111-4111-8111-111111111111", "status": "SATISFEITO", "evidence": "one.json"},
-                {"prism": "tests-acceptance-regression", "reviewer_id": "22222222-2222-4222-8222-222222222222", "status": "SATISFEITO", "evidence": "two.json", "finding_ids": []},
+                {
+                    "prism": "correctness-security-data",
+                    "reviewer_id": "11111111-1111-4111-8111-111111111111",
+                    "status": "SATISFEITO",
+                    "evidence": "one.json",
+                },
+                receipt("tests-acceptance-regression", "22222222-2222-4222-8222-222222222222"),
             ])
 
 
