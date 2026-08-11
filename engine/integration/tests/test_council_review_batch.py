@@ -9,7 +9,22 @@ LIB = ROOT / "templates/.harness/lib"
 if str(LIB) not in sys.path:
     sys.path.insert(0, str(LIB))
 
-from council_review_batch import consolidate_findings, plan_review_batch  # noqa: E402
+from council_review_batch import (  # noqa: E402
+    ReviewBatchError,
+    consolidate_findings,
+    normalize_review_batch,
+    plan_review_batch,
+)
+
+
+def receipt(prism: str, reviewer_id: str, *, status: str = "SATISFEITO", finding_ids: list[str] | None = None) -> dict:
+    return {
+        "prism": prism,
+        "reviewer_id": reviewer_id,
+        "status": status,
+        "evidence": f"{prism}.json",
+        "finding_ids": list(finding_ids or []),
+    }
 
 
 class CouncilReviewBatchTest(unittest.TestCase):
@@ -69,12 +84,22 @@ class CouncilReviewBatchTest(unittest.TestCase):
         self.assertEqual(1, len(result["fix_now"]))
         self.assertEqual(1, len(result["backlog"]))
 
-    def test_recheck_is_limited_to_prisms_that_found_blockers(self):
-        result = consolidate_findings([
-            {"id": "H1", "severity": "HIGH", "reachable_in_current_task": True, "prism": "tests-acceptance-regression"},
-            {"id": "L1", "severity": "LOW", "reachable_in_current_task": True, "prism": "simplicity-maintainability"},
-        ])
-        self.assertEqual(["tests-acceptance-regression"], result["targeted_recheck_prisms"])
+    def test_recheck_uses_persisted_finding_ids_mapping(self):
+        result = consolidate_findings(
+            [{"id": "H1", "severity": "HIGH", "reachable_in_current_task": True}],
+            [
+                receipt("correctness-security-data", "11111111-1111-4111-8111-111111111111", status="CORRIGIR", finding_ids=["H1"]),
+                receipt("tests-acceptance-regression", "22222222-2222-4222-8222-222222222222"),
+            ],
+        )
+        self.assertEqual(["correctness-security-data"], result["targeted_recheck_prisms"])
+
+    def test_batch_receipts_require_finding_ids_even_when_empty(self):
+        with self.assertRaisesRegex(ReviewBatchError, "finding_ids array"):
+            normalize_review_batch([
+                {"prism": "correctness-security-data", "reviewer_id": "11111111-1111-4111-8111-111111111111", "status": "SATISFEITO", "evidence": "one.json"},
+                {"prism": "tests-acceptance-regression", "reviewer_id": "22222222-2222-4222-8222-222222222222", "status": "SATISFEITO", "evidence": "two.json", "finding_ids": []},
+            ])
 
 
 if __name__ == "__main__":

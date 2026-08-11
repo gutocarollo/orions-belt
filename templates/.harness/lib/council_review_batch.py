@@ -70,6 +70,13 @@ def plan_review_batch(*, execution_profile: str, review_mode: str = "AUTO", pris
     return {"execution_profile": profile, "requested_mode": review_mode.upper(), "effective_mode": "BATCH", "parallel": True, "prisms": selected, "max_reviewers": len(selected), "max_batches": 1, "requires_profile_escalation": None}
 
 
+def _finding_id(item: dict[str, Any]) -> str:
+    impact = item.get("impact")
+    if isinstance(impact, dict) and impact.get("id"):
+        return str(impact["id"]).strip()
+    return str(item.get("id") or "").strip()
+
+
 def normalize_review_batch(receipts: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     raw_receipts = list(receipts or [])
     if raw_receipts and not 2 <= len(raw_receipts) <= 3:
@@ -83,6 +90,12 @@ def normalize_review_batch(receipts: list[dict[str, Any]] | None) -> list[dict[s
         reviewer_id = str(item.get("reviewer_id") or "")
         status = str(item.get("status") or "").upper()
         evidence = str(item.get("evidence") or "").strip()
+        raw_finding_ids = item.get("finding_ids")
+        if not isinstance(raw_finding_ids, list):
+            raise ReviewBatchError(f"review prism {prism or '<unknown>'} requires finding_ids array")
+        finding_ids = [str(value).strip() for value in raw_finding_ids]
+        if any(not value for value in finding_ids) or len(finding_ids) != len(set(finding_ids)):
+            raise ReviewBatchError(f"review prism {prism or '<unknown>'} finding_ids must be unique non-empty strings")
         if prism not in PRISMS:
             raise ReviewBatchError(f"unknown review prism: {prism!r}")
         if not REVIEWER_ID_RE.fullmatch(reviewer_id):
@@ -95,17 +108,69 @@ def normalize_review_batch(receipts: list[dict[str, Any]] | None) -> list[dict[s
             raise ReviewBatchError("review_batch requires unique prisms and reviewer identities")
         seen_prisms.add(prism)
         seen_reviewers.add(reviewer_id)
-        normalized.append({"prism": prism, "reviewer_id": reviewer_id, "status": status, "evidence": evidence})
+        normalized.append({"prism": prism, "reviewer_id": reviewer_id, "status": status, "evidence": evidence, "finding_ids": finding_ids})
     return normalized
+
+
+def review_batch_consistency_errors(payload: dict[str, Any]) -> list[str]:
+    """Cross-field checks consumed by the installed schema validator/runtime path."""
+    raw_batch = payload.get("review_batch")
+    if raw_batch is None:
+        return []
+    try:
+        batch = normalize_review_batch(raw_batch)
+    except ReviewBatchError as exc:
+        return [str(exc)]
+
+    errors: list[str] = []
+    root_reviewer = str(payload.get("reviewer_id") or "")
+    batch_reviewers = {item["reviewer_id"] for item in batch}
+    if root_reviewer and root_reviewer in batch_reviewers:
+        errors.append("ADVERSARIAL consolidator reviewer_id must be distinct from batch reviewers")
+
+    immediate_ids = {_finding_id(item) for item in payload.get("findings", [])}
+    deferred_ids = {_finding_id(item) for item in payload.get("deferred_findings", [])}
+    immediate_ids.discard("")
+    deferred_ids.discard("")
+    known_ids = immediate_ids | deferred_ids
+    mapped_ids = {finding_id for item in batch for finding_id in item["finding_ids"]}
+    unknown_ids = sorted(mapped_ids - known_ids)
+    if unknown_ids:
+        errors.append(f"review_batch finding_ids reference unknown findings: {unknown_ids}")
+    missing_blocking = sorted(immediate_ids - mapped_ids)
+    if missing_blocking:
+        errors.append(f"every blocking finding must be attributed to a review prism: {missing_blocking}")
+
+    for item in batch:
+        if item["status"] in {"CORRIGIR", "BLOQUEADO"} and not (set(item["finding_ids"]) & immediate_ids):
+            errors.append(f"review prism {item['prism']} with status {item['status']} must reference at least one blocking finding")
+
+    statuses = {item["status"] for item in batch}
+    root_status = str(payload.get("status") or "")
+    if "BLOQUEADO" in statuses and root_status != "BLOQUEADO":
+        errors.append("ADVERSARIAL cannot downgrade a BLOQUEADO review prism")
+    elif "CORRIGIR" in statuses and root_status == "SATISFEITO":
+        errors.append("ADVERSARIAL cannot be SATISFEITO while a review prism requires correction")
+    return errors
 
 
 def consolidate_findings(findings: list[dict[str, Any]], review_batch: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     fix_now, backlog = partition_findings(findings)
-    affected_prisms = sorted({str(item.get("prism") or "") for item in fix_now if str(item.get("prism") or "") in PRISMS})
+    normalized_batch = normalize_review_batch(review_batch)
+    fix_ids = {_finding_id(item) for item in fix_now}
+    fix_ids.discard("")
+    if normalized_batch:
+        affected_prisms = sorted({
+            item["prism"]
+            for item in normalized_batch
+            if fix_ids & set(item["finding_ids"])
+        })
+    else:
+        affected_prisms = sorted({str(item.get("prism") or "") for item in fix_now if str(item.get("prism") or "") in PRISMS})
     return {
         "fix_now": fix_now,
         "backlog": backlog,
-        "review_batch": normalize_review_batch(review_batch),
+        "review_batch": normalized_batch,
         "targeted_recheck_prisms": affected_prisms,
         "requires_recheck": bool(fix_now),
     }

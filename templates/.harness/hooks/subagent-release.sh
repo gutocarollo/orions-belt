@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# subagent-release — PostToolUse/PostToolUseFailure (Task|Agent). Releases 1
-# throttle slot and records 1 line in the tasks journal.
+# subagent-release — PostToolUse/PostToolUseFailure (Task|Agent) or
+# SubagentStop (Codex). Records lightweight cost telemetry, releases 1 throttle
+# slot and records 1 line in the tasks journal.
 #
-# MATERIALIZATION (M-HIGH/H4, adversarial audit): $HARNESS_RUNS_DIR
-# (default ".harness/runs") instead of hardcoded ".claude/runs" — it must
-# point at the SAME directory that subagent-throttle.sh uses (the
-# throttle/release pair shares the slots), and this hook also runs on Codex
-# via .codex/hooks.json.
+# Cost telemetry is deliberately fail-open and runs before the slot-directory
+# early return, so completed agents remain observable even when throttling was
+# inactive. No prompts/responses are persisted.
 set -uo pipefail
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -n "$ROOT" ] || exit 0
+
+PAYLOAD="$(cat 2>/dev/null || true)"
+COST_LEDGER="$ROOT/.harness/hooks/subagent-cost-ledger.py"
+if [ -n "$PAYLOAD" ] && command -v python3 >/dev/null 2>&1 && [ -f "$COST_LEDGER" ]; then
+  printf '%s' "$PAYLOAD" | python3 "$COST_LEDGER" --runtime auto >/dev/null 2>&1 || true
+fi
 
 CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
 _conf_get() {

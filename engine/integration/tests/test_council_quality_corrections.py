@@ -14,7 +14,7 @@ for path in (LIB, RUNTIME_TESTS):
 
 from council_findings import partition_findings  # noqa: E402
 from council_review_batch import consolidate_findings, normalize_review_batch  # noqa: E402
-from council_runtime import apply_transition  # noqa: E402
+from council_runtime import TransitionError, apply_transition  # noqa: E402
 from mini_schema_validate import validate_instance  # noqa: E402
 from test_council_runtime import CouncilRuntimeTest  # noqa: E402
 
@@ -38,6 +38,30 @@ def canonical_impact(finding_id: str) -> dict:
     }
 
 
+def receipt(prism: str, reviewer_id: str, *, status: str = "SATISFEITO", finding_ids: list[str] | None = None) -> dict:
+    return {
+        "prism": prism,
+        "reviewer_id": reviewer_id,
+        "status": status,
+        "evidence": f"{prism}.json",
+        "finding_ids": list(finding_ids or []),
+    }
+
+
+def schema_payload(*, status: str = "SATISFEITO", findings: list[dict] | None = None, batch: list[dict] | None = None) -> dict:
+    findings = list(findings or [])
+    critical = sum(item.get("impact", {}).get("disposition") == "CRITICAL_BLOCK" for item in findings)
+    required = sum(item.get("impact", {}).get("disposition") == "HIGH_FIX_NOW" for item in findings)
+    return {
+        "status": status,
+        "reviewer_id": "33333333-3333-4333-8333-333333333333",
+        "critical": critical,
+        "required": required,
+        "findings": findings,
+        "review_batch": list(batch or []),
+    }
+
+
 class CouncilQualityCorrectionsTest(unittest.TestCase):
     def test_canonical_high_fix_now_cannot_be_demoted_by_missing_lightweight_severity(self):
         fix_now, backlog = partition_findings([{"id": "H1", "impact": canonical_impact("H1")}])
@@ -54,28 +78,50 @@ class CouncilQualityCorrectionsTest(unittest.TestCase):
         self.assertEqual(2, len(result["fix_now"] + result["backlog"]))
         self.assertEqual("CRITICAL", result["fix_now"][0]["severity"])
 
-    def test_review_batch_receipts_require_unique_prisms_and_reviewers(self):
+    def test_review_batch_receipts_require_unique_prisms_reviewers_and_finding_ids(self):
         receipts = normalize_review_batch([
-            {"prism": "correctness-security-data", "reviewer_id": "11111111-1111-4111-8111-111111111111", "status": "SATISFEITO", "evidence": "correctness.json"},
-            {"prism": "tests-acceptance-regression", "reviewer_id": "22222222-2222-4222-8222-222222222222", "status": "SATISFEITO", "evidence": "tests.json"},
+            receipt("correctness-security-data", "11111111-1111-4111-8111-111111111111", finding_ids=["H1"]),
+            receipt("tests-acceptance-regression", "22222222-2222-4222-8222-222222222222"),
         ])
         self.assertEqual(2, len(receipts))
+        self.assertEqual(["H1"], receipts[0]["finding_ids"])
 
     def test_adversarial_schema_persists_batch_provenance(self):
         schema = json.loads((ROOT / "templates/.harness/schemas/adversarial-review-result.schema.json").read_text())
-        payload = {
-            "status": "SATISFEITO",
-            "reviewer_id": "33333333-3333-4333-8333-333333333333",
-            "critical": 0,
-            "required": 0,
-            "review_batch": [
-                {"prism": "correctness-security-data", "reviewer_id": "11111111-1111-4111-8111-111111111111", "status": "SATISFEITO", "evidence": "correctness.json"},
-                {"prism": "tests-acceptance-regression", "reviewer_id": "22222222-2222-4222-8222-222222222222", "status": "SATISFEITO", "evidence": "tests.json"},
-            ],
-        }
+        payload = schema_payload(batch=[
+            receipt("correctness-security-data", "11111111-1111-4111-8111-111111111111"),
+            receipt("tests-acceptance-regression", "22222222-2222-4222-8222-222222222222"),
+        ])
         self.assertEqual([], validate_instance(payload, schema))
 
-    def test_existing_adversarial_state_keeps_review_batch_without_new_state(self):
+    def test_schema_rejects_satisfied_root_when_a_prism_requests_correction(self):
+        schema = json.loads((ROOT / "templates/.harness/schemas/adversarial-review-result.schema.json").read_text())
+        high = {"gap": "required", "evidence": "test", "required_change": "fix", "impact": canonical_impact("H1")}
+        payload = schema_payload(status="SATISFEITO", findings=[high], batch=[
+            receipt("correctness-security-data", "11111111-1111-4111-8111-111111111111", status="CORRIGIR", finding_ids=["H1"]),
+            receipt("tests-acceptance-regression", "22222222-2222-4222-8222-222222222222"),
+        ])
+        errors = validate_instance(payload, schema)
+        self.assertTrue(any("cannot be SATISFEITO" in error for error in errors), errors)
+
+    def test_schema_rejects_duplicate_prism_or_reviewer_even_if_json_shape_is_valid(self):
+        schema = json.loads((ROOT / "templates/.harness/schemas/adversarial-review-result.schema.json").read_text())
+        duplicate = receipt("correctness-security-data", "11111111-1111-4111-8111-111111111111")
+        payload = schema_payload(batch=[duplicate, dict(duplicate)])
+        errors = validate_instance(payload, schema)
+        self.assertTrue(any("unique prisms" in error for error in errors), errors)
+
+    def test_schema_requires_every_blocking_finding_to_be_attributed_to_a_prism(self):
+        schema = json.loads((ROOT / "templates/.harness/schemas/adversarial-review-result.schema.json").read_text())
+        high = {"gap": "required", "evidence": "test", "required_change": "fix", "impact": canonical_impact("H1")}
+        payload = schema_payload(status="CORRIGIR", findings=[high], batch=[
+            receipt("correctness-security-data", "11111111-1111-4111-8111-111111111111"),
+            receipt("tests-acceptance-regression", "22222222-2222-4222-8222-222222222222"),
+        ])
+        errors = validate_instance(payload, schema)
+        self.assertTrue(any("every blocking finding" in error for error in errors), errors)
+
+    def test_runtime_authoritative_path_consumes_cross_field_schema_validation(self):
         state = CouncilRuntimeTest().walk_to_commit()
         payload = {
             "status": "SATISFEITO",
@@ -84,13 +130,12 @@ class CouncilQualityCorrectionsTest(unittest.TestCase):
             "reviewer_id": "33333333-3333-4333-8333-333333333333",
             "round": 1,
             "review_batch": [
-                {"prism": "correctness-security-data", "reviewer_id": "11111111-1111-4111-8111-111111111111", "status": "SATISFEITO", "evidence": "correctness.json"},
-                {"prism": "tests-acceptance-regression", "reviewer_id": "22222222-2222-4222-8222-222222222222", "status": "SATISFEITO", "evidence": "tests.json"},
+                receipt("correctness-security-data", "11111111-1111-4111-8111-111111111111", status="CORRIGIR", finding_ids=["H1"]),
+                receipt("tests-acceptance-regression", "22222222-2222-4222-8222-222222222222"),
             ],
         }
-        state = apply_transition(state, "ADVERSARIAL", payload)
-        self.assertEqual("ADVERSARIAL", state["stage"])
-        self.assertEqual(payload["review_batch"], state["history"][-1]["payload"]["review_batch"])
+        with self.assertRaisesRegex(TransitionError, "review prism|unknown findings|SATISFEITO"):
+            apply_transition(state, "ADVERSARIAL", payload)
 
 
 if __name__ == "__main__":
