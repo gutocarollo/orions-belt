@@ -119,6 +119,7 @@
       }{% endif %}
     ],
     "PreToolUse": [
+      {%- if use_delivery_council %}
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
@@ -129,7 +130,9 @@
             "statusMessage": "council: checking item-plan readiness"
           }
         ]
-      }{% if harness_understand_apps_root %},
+      },
+      {%- endif %}
+      {%- if harness_understand_apps_root %}
       {
         "matcher": "Bash",
         "hooks": [
@@ -187,6 +190,7 @@
       }{% endif %}
     ],
     "PostToolUse": [
+      {%- if use_delivery_council %}
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
@@ -197,7 +201,9 @@
             "statusMessage": "council: requiring validation after edit"
           }
         ]
-      }{% if use_ds_gate %},
+      },
+      {%- endif %}
+      {%- if use_ds_gate %}
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
@@ -306,12 +312,14 @@
     "Stop": [
       {
         "hooks": [
+          {%- if use_delivery_council %}
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" stop",
             "timeout": 10,
             "statusMessage": "council: checking delivery evidence"
           },
+          {%- endif %}
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate.py\"",

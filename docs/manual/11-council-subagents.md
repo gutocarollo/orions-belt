@@ -1,4 +1,17 @@
-# 11. O council e os subagents — revisão adversarial por outros robôs
+# 11. Gauntlet padrão, Council opt-in e subagents
+
+O perfil padrão do Orion é `use_gauntlet_loop=true` e `use_delivery_council=false`. Ele preserva
+âncora/reinjeção, Clarification Plan, Marathon, wiki e gates de evidência, mas substitui o grafo
+fixo do Council por três ciclos: (1) refinar o pedido até um MetaPrompt; (2) gerar o plano em
+contexto novo, passar por `planning-and-task-breakdown` e uma única revisão independente; (3)
+executar/verificar, chamando critic apenas por trigger material. Achados `CRITICAL`, `BLOCKING`,
+`HIGH` ou `REQUIRED` voltam para reparo direcionado; os demais entram no backlog.
+
+O Delivery Council descrito abaixo continua disponível apenas com
+`use_gauntlet_loop=false --data use_delivery_council=true`. Isso é compatibilidade deliberada,
+não o caminho padrão, e os dois perfis são mutuamente exclusivos no questionário do Copier.
+
+## Perfil legado: Delivery Council
 
 O princípio: **quem escreveu o código não é revisor adversarial dele**. Self-review de quem produziu o diff tende à complacência, e as leituras de review estouram o contexto principal. O harness resolve com **subagents** — agentes auxiliares descartáveis, com contexto próprio — e com o **delivery council**: a skill orquestradora que define quando planejar, quando executar e quantas rodadas de verificação adversarial rodar.
 

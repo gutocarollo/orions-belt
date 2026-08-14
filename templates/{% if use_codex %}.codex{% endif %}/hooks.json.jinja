@@ -30,12 +30,15 @@
       {"hooks": [{"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/understand-context-inject.py\"", "timeout": 10}]}{% endif %}
     ],
     "PreToolUse": [
+      {%- if use_delivery_council %}
       {
         "matcher": "apply_patch|Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" pre", "timeout": 10}
         ]
-      }{% if harness_understand_apps_root %},
+      },
+      {%- endif %}
+      {%- if harness_understand_apps_root %}
       {
         "matcher": "^Bash$",
         "hooks": [
@@ -62,12 +65,15 @@
       }{% endif %}{% endif %}
     ],
     "PostToolUse": [
+      {%- if use_delivery_council %}
       {
         "matcher": "apply_patch|Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" post", "timeout": 10}
         ]
-      }{% if use_ds_gate %},
+      },
+      {%- endif %}
+      {%- if use_ds_gate %}
       {
         "matcher": "Edit|Write",
         "hooks": [
@@ -119,12 +125,42 @@
     "Stop": [
       {
         "hooks": [
-          {"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" stop", "timeout": 10},
-          {"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/completion-gate.py\"", "timeout": 15}{% if use_clarification_gate %},
-          {"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/clarification-stop-gate.py\"", "timeout": 10}{% endif %}{% if use_ui_evidence %},
-          {"type": "command", "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/ui-evidence-gate.sh\"", "timeout": 15}{% endif %},
-          {"type": "command", "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/marathon-stop-gate.sh\"", "timeout": 10},
-          {"type": "command", "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/reap-leaks.sh\"", "timeout": 10}
+          {%- if use_delivery_council %}
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" stop",
+            "timeout": 10
+          },
+          {%- endif %}
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/completion-gate.py\"",
+            "timeout": 15
+          },
+          {%- if use_clarification_gate %}
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/clarification-stop-gate.py\"",
+            "timeout": 10
+          },
+          {%- endif %}
+          {%- if use_ui_evidence %}
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/ui-evidence-gate.sh\"",
+            "timeout": 15
+          },
+          {%- endif %}
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/marathon-stop-gate.sh\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/reap-leaks.sh\"",
+            "timeout": 10
+          }
         ]
       }
     ]

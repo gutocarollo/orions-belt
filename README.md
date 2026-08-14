@@ -12,8 +12,9 @@
 </p>
 
 **A portable, self-configuring discipline harness for AI coding agents.**
-One `copier` install drops hooks, skills, an adversarial council, verification gates and a
-temporal wiki into *any* repo — so an agent stays aligned, verifiable and anti-drift.
+One `copier` install drops hooks, skills, an adaptive Gauntlet workflow, verification gates and a
+temporal wiki into *any* repo — so an agent stays aligned, verifiable and anti-drift. The former
+Delivery Council remains available only as an explicit compatibility profile.
 
 [Full manual — 17 chapters](docs/manual/README.md) · [Install](docs/manual/14-instalacao-e-update.md) · [How it works](#how-it-works) · [Why](docs/planning/)
 
@@ -26,14 +27,13 @@ temporal wiki into *any* repo — so an agent stays aligned, verifiable and anti
 Coding agents are strong but drift: they overclaim "done", report UI from a diff instead of a
 pixel, invent facts, and skip verification. Orion's Belt is the **operating discipline** that
 keeps them honest — extracted and generalized from a private production harness run for months
-on a live software project, then made installable into any codebase. It is built under its own
-rules: one agent executes a round, another audits the next, and the council runs of this very
-repository materialize control-graph events whose deterministic replay must reproduce the final
-state.
+on a live software project, then made installable into any codebase. Its default profile now uses
+direct/solo execution, one independent plan review and conditional critics; it does not impose a
+fixed Council graph on ordinary work.
 
 It is **not** a wiki (despite its origins) and **not** a prompt pack. It is a parametrized
 [Copier](https://copier.readthedocs.io/) template that installs a coherent system of
-**deterministic hooks + agent skills + an adversarial delivery council + evidence gates**, all
+**deterministic hooks + agent skills + an adaptive Gauntlet loop + evidence gates**, all
 driven by one central config and serving **Claude Code and Codex through shared core contracts**.
 Runtime-specific capabilities remain explicit rather than being presented as full parity.
 
@@ -79,7 +79,8 @@ and applicability classification belong to the separate, agent-guided `harness-i
 
 | | Component | What it does |
 |---|---|---|
-| 🧭 | **Delivery council** | Orchestrates a task from `EXECUTION` / `PLANNING` / `PLAN_REVIEW` / `AUTO` with automatic trade-off decisions and adversarial loops. |
+| 🧭 | **Gauntlet loop (default)** | Three explicit cycles: refine a MetaPrompt, derive and review one plan, then execute with deterministic proof and a critic only when severity/risk warrants it. |
+| 🧰 | **Delivery Council (opt-in)** | Preserved for compatibility and exceptional workflows that deliberately accept its fixed orchestration cost; never selected together with Gauntlet. |
 | 🔬 | **Adversarial review** | Evidence-based verifier that must confirm or refute each gap with proof — runs in a subagent, never self-review. |
 | 🎯 | **Grill-me** | Interviews you on a plan one decision at a time (behavior, ≥2 real good/bad examples, Option C) — before code is written. |
 | ✅ | **Completion claim gate** | Blocks plan-level "done" claims unless the sentinel points to a fresh manifest bound to HEAD and the worktree, produced by executed proof commands. Local evidence is not a cryptographic trust boundary; an independent executor is optional and provider-specific. |
@@ -91,26 +92,25 @@ and applicability classification belong to the separate, agent-guided `harness-i
 | 🗺️ | **[Exploration protocol](docs/manual/17-protocolo-exploracao.md)** | The task-start counterpart to the decision graph: a phase order — anchor, canonical docs, living per-subsystem reference, graph‖grep, database, LSP — materialised in four surfaces at once (skill, instruction block, prompt hook, both context scouts). Born from a measured case where 23 fresh reference pages were reachable from zero of the six entry points. Ships with the rule that no code graph indexes Markdown, so a graph miss never proves a doc is absent. |
 | 🙋 | **[Clarification precondition](docs/manual/17-protocolo-exploracao.md)** | A `PreToolUse` gate that refuses `AskUserQuestion` until the decision contract is actually loaded — because the rule banning bare questions existed as prose and was still violated by an agent that had the skill listed and never opened it. |
 | 🛡️ | **Deterministic hooks** | 27 hook scripts shipped (20 install by default, 7 are stack-conditional): completion/UI/design-system gates, clarification precondition + Stop sibling, exploration kickoff, request-anchor persistence, context evidence, subagent lifecycle/throttle, leak reaper, git-doctor. |
-| 🌐 | **Dual runtime core** | The council and core operational skills share one source across Claude Code and Codex; optional and runtime-native capabilities are tracked as an explicit compatibility matrix. |
+| 🌐 | **Dual runtime core** | Gauntlet, the optional Council and core operational skills share sources across Claude Code and Codex; optional and runtime-native capabilities are tracked explicitly. |
 
 ## How it works
 
-The core is a **plan → review → execute → verify** pipeline where every stage is gated and every
-adversarial review runs in an isolated subagent (self-review isn't adversarial):
+The default is a **MetaPrompt → plan → one plan review → execute → verify → conditional critic**
+pipeline. Direct/solo is the fast path; independent fan-out and critic work require a material trigger:
 
 ```mermaid
 flowchart LR
-    A["task"] --> B{"START_AT"}
-    B -- "PLANNING" --> P["plan + trade-offs"]
-    P --> PR["subagent: adversarial plan review"]
-    PR -- "replan" --> P
-    PR -- "grill" --> G["grill-me: resolve open decision"]
-    G --> P
-    PR -- "approved" --> E["execute (sequential)"]
-    B -- "EXECUTION" --> E
-    E --> V["subagent: adversarial verification"]
-    V -- "fix" --> E
-    V -- "approved" --> D["done — only with proof-of-completion evidence"]
+    A["initial request"] --> M["idea-refine + clarification → MetaPrompt"]
+    M --> P["fresh planner → task breakdown"]
+    P --> PR["one independent plan review"]
+    PR -- "blocking gap" --> P
+    PR -- "approved hash" --> E["direct/solo execution"]
+    E --> V["deterministic verification"]
+    V -- "material trigger" --> C["blind/bounded critic"]
+    C -- "critical/high/required" --> E
+    V -- "green" --> D["finish with evidence"]
+    C -- "nonblocking" --> B["explicit backlog"]
 ```
 
 The diagram uses plain verbs, but the **actual status tokens** the gates and tests match are a

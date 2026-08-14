@@ -164,6 +164,19 @@ flowchart TD
     Codex-specific: the framing sentence, the `.agents/skills/` path of the council, the
     `.codex/agents/*.toml` custom agents and the `.codex/config.toml` knobs. Those are gated; the rest
     stays, with the council path rendered per runtime so each project reads its own. -#}
+{% if use_gauntlet_loop %}
+## ⭐ REFERÊNCIA CANÔNICA — Gauntlet Loop adaptativo
+
+A orquestração default é `$gauntlet-loop`, não um Council obrigatório. Ela possui três artefatos explícitos:
+
+1. **MetaPrompt:** `context-engineering` → `idea-refine` → `interview-me`/`clarification-plan` condicional; persistir Goal, Real Bar, Rules, Boundaries e emendas aceitas.
+2. **Plano:** uma identidade fresca executa o MetaPrompt, usa `planning-and-task-breakdown` e recebe exatamente uma revisão final independente. A aprovação humana cita o hash atual exato.
+3. **Execução:** depois da aprovação, executar o menor pacote coerente, rodar prova determinística primeiro e chamar critic blind/bounded apenas por trigger material. Findings `CRITICAL`/`BLOCKING`/`HIGH`/`REQUIRED` causam reparo direcionado e reverificação afetada; severidades menores entram no backlog explícito.
+
+Direct/solo é o default. Paralelizar apenas trabalho julgável independentemente com writes/estado/decisões disjuntos. Nunca spawnar porque há slot livre, nunca aninhar subagents e nunca impor contagem fixa de reviews. Preservar reinjeção do pedido, Marathon, wiki, gates de evidência e proteções destrutivas.
+{% endif %}
+
+{% if use_delivery_council %}
 ## ⭐ REFERÊNCIA CANÔNICA — {{ project_name }} Delivery Council
 
 **Ativação opt-in:** não invoque o Council automaticamente por tamanho, risco, número de arquivos ou tipo da tarefa. Ele só entra quando (a) o usuário pedir expressamente “Council”/`${{ project_name }}-delivery-council`, ou (b) `.harness/council-active` já existir, caso em que os hooks apenas continuam/enforçam o run explicitamente iniciado. Sem esses sinais, use diretamente as skills táticas proporcionais à tarefa.
@@ -236,6 +249,7 @@ TASK:
 - O revisor deve terminar com `PLAN-ADVERSARIAL-VERIFICATION: SATISFEITO | REPLANEJAR | BLOQUEADO`.
 - Se vier `REPLANEJAR` com gap crítico corrigível, revisar o plano e rodar a rodada seguinte.
 - Ao final, reportar `PLAN-ADVERSARIAL-LOOP: <n>/{{ harness_plan_review_max }} rodadas, status: <SATISFEITO|PENDENTE|BLOQUEADO>`.
+{% endif %}
 
 ## 0. LEI ZERO — NÃO REINVENTAR A RODA
 

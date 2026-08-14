@@ -1,0 +1,94 @@
+---
+name: gauntlet-loop
+description: >-
+  Adaptive three-cycle orchestration for turning a raw request into a reviewed
+  MetaPrompt, an approved execution plan, and autonomous evidence-driven work
+  without a mandatory Council or fixed review rounds.
+---
+
+# Gauntlet Loop
+
+Use this skill for non-trivial work that the owner wants to define carefully
+and then run autonomously. It is the relaxed orchestration profile. It must
+never invoke `{{ project_name }}-delivery-council`; that profile is a separate
+opt-in choice.
+
+## Invariants inherited from Orion's Belt
+
+- Start from the verbatim request anchor and its accepted amendments. Never
+  replace it with a summary that silently weakens scope.
+- Preserve `repo-wiki-curator`, the temporal indexes, request reinjection,
+  `marathon`, deterministic hooks, and `prova-de-conclusao`. This skill routes
+  work; it does not bypass those capabilities.
+- Reuse one existing specialist or critic thread when it has the required
+  expertise. Do not respawn an equivalent agent merely to obtain a fresh turn.
+- A question is allowed only after factual exploration and only through
+  `clarification-plan` when the answer materially changes the goal, bar,
+  boundary, or plan.
+
+## Cycle 1 — compile the MetaPrompt
+
+The initial agent performs `context-engineering`, then `idea-refine`, and uses
+`interview-me` plus `clarification-plan` only for unresolved material choices.
+Research continues until the execution request is unambiguous enough to be
+handed to a fresh agent.
+
+Write `.harness/runs/<slug>/METAPROMPT.md` with:
+
+1. the original goal and accepted amendments;
+2. the Real Bar: observable outcomes and acceptance criteria;
+3. rules, boundaries, non-goals, available evidence, and unresolved blockers;
+4. the final prompt that a fresh planning agent can execute without this chat.
+
+Cycle 1 ends at `METAPROMPT-READY`. Do not implement or manufacture a plan in
+this cycle.
+
+## Cycle 2 — compile and approve the plan
+
+A fresh agent executes `METAPROMPT.md`, explores the repository, resolves any
+remaining material decision through `clarification-plan`, and runs
+`planning-and-task-breakdown`. Write the ordered, dependency-aware result to
+`.harness/runs/<slug>/PLAN.md`.
+
+Run exactly one independent plan review after the plan is internally coherent.
+The independent reviewer reads the request anchor, `METAPROMPT.md`, `PLAN.md`,
+the relevant repository evidence, and nothing from a Council transcript. Store
+its verdict and evidence in `.harness/runs/<slug>/PLAN-REVIEW.md`. Incorporate
+blocking corrections once; ordinary suggestions go to `BACKLOG.md`.
+
+Hash the reviewed plan into `.harness/runs/<slug>/APPROVAL.sha256`. Execution
+starts only after the owner approves that exact hash. Any material plan change
+invalidates the approval and requires a new hash, not another automatic review
+loop.
+
+## Cycle 3 — autonomous execution
+
+After approval, repeat the smallest useful control cycle:
+
+1. execute the next ready task or cohesive slice;
+2. run deterministic verification against the affected acceptance criteria;
+3. invoke a conditional critic only when a trigger below is present;
+4. persist evidence, state, findings, and the next action before continuing.
+
+Conditional critic triggers are: a security or data boundary changed; a
+cross-cutting contract changed; deterministic evidence is ambiguous; a high-
+risk migration or destructive action is proposed; or final closure needs an
+independent challenge. Absence of a trigger means no critic call.
+
+Finding disposition is mechanical:
+
+- `BLOCKING`, `CRITICAL`, `HIGH`, or `REQUIRED`: perform targeted rework, rerun
+  only affected deterministic checks, then ask the same critic to recheck the
+  same finding when a critic was involved.
+- `MEDIUM`, `LOW`, `OPTIONAL`, `NIT`, or `FYI`: append a traceable item to
+  `.harness/runs/<slug>/BACKLOG.md`; do not reopen already accepted work.
+
+Convergence has no fixed round count. Continue while a blocking finding is
+changing and repair is making evidence-backed progress. If the same blocker
+repeats without new evidence, persist the blocker and stop for the missing
+authority or external condition instead of burning more turns.
+
+The run ends only when every approved criterion has deterministic evidence,
+there are zero blocking findings, and the existing completion gate accepts the
+fresh `prova-de-conclusao` manifest. Report deferred backlog separately; it is
+not a hidden failure and does not trigger rework.
