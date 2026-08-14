@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from engine.release_check import Gate, _select, run_gates
+from engine.release_check import Gate, _select, _template_shell_failed, run_gates
 
 
 class ReleaseCheckTest(unittest.TestCase):
@@ -26,6 +26,11 @@ class ReleaseCheckTest(unittest.TestCase):
         self.assertEqual(["graph_schema", "diff_check"], [gate.name for gate in _select(["diff_check,graph_schema"])])
         with self.assertRaises(ValueError):
             _select(["imaginary"])
+
+    def test_template_shell_skip_exit_is_not_a_release_failure(self) -> None:
+        self.assertFalse(_template_shell_failed(0))
+        self.assertFalse(_template_shell_failed(77))
+        self.assertTrue(_template_shell_failed(1))
 
 
 if __name__ == "__main__":

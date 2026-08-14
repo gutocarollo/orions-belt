@@ -47,6 +47,7 @@ CLAUDE_ONLY="$WORK/claude-only"
 if ! uvx copier copy "$REPO_ROOT" "$CLAUDE_ONLY" --vcs-ref HEAD \
     --data project_name="$PROJECT_NAME" --data owner_name=Tester \
     --data use_claude=true --data use_codex=false --data harness_language=pt \
+    --data use_gauntlet_loop=false --data use_delivery_council=true \
     --defaults --trust -q > "$WORK/copy-claude.log" 2>&1; then
   echo "FAIL: copier copy --vcs-ref HEAD (claude-only) failed -- $(tail -20 "$WORK/copy-claude.log")"
   exit 1
@@ -75,6 +76,7 @@ CODEX_ONLY="$WORK/codex-only"
 if ! uvx copier copy "$REPO_ROOT" "$CODEX_ONLY" --vcs-ref HEAD \
     --data project_name="$PROJECT_NAME" --data owner_name=Tester \
     --data use_claude=false --data use_codex=true \
+    --data use_gauntlet_loop=false --data use_delivery_council=true \
     --defaults --trust -q > "$WORK/copy-codex.log" 2>&1; then
   echo "FAIL: copier copy --vcs-ref HEAD (codex-only) failed -- $(tail -20 "$WORK/copy-codex.log")"
   exit 1
@@ -131,6 +133,7 @@ assert "codex-only: no CODE line (outside a # comment) hardcodes .claude/runs" \
 BOTH="$WORK/both"
 if ! uvx copier copy "$REPO_ROOT" "$BOTH" --vcs-ref HEAD \
     --data project_name="$PROJECT_NAME" --data owner_name=Tester \
+    --data use_gauntlet_loop=false --data use_delivery_council=true \
     --defaults --trust -q > "$WORK/copy-both.log" 2>&1; then
   echo "FAIL: copier copy --vcs-ref HEAD (both runtimes) failed -- $(tail -20 "$WORK/copy-both.log")"
   exit 1

@@ -15,6 +15,8 @@ uvx copier copy "$REPO_ROOT" "$WORK/project" --vcs-ref HEAD \
   --data owner_name=Tester \
   --data use_claude=true \
   --data use_codex=true \
+  --data use_gauntlet_loop=false \
+  --data use_delivery_council=true \
   --data use_context_graph=true \
   --data harness_core_paths=src/core/ \
   --data use_exploration_protocol=true \

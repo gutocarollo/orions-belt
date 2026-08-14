@@ -20,7 +20,9 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/codev-shared.XXXXXX")"; trap 'rm -rf "$WORK"'
 F="$WORK/full"
 uvx copier copy "$REPO_ROOT" "$F" --vcs-ref HEAD --trust --defaults \
   --data project_name=codev --data owner_name=A \
-  --data use_claude=true --data use_codex=true -q > "$WORK/copier.log" 2>&1 \
+  --data use_claude=true --data use_codex=true \
+  --data use_gauntlet_loop=false --data use_delivery_council=true \
+  -q > "$WORK/copier.log" 2>&1 \
   || { echo "FAIL: full render failed -- $(tail -20 "$WORK/copier.log")"; exit 1; }
 
 # --- 1. Same instructions: CLAUDE.md (Claude) and AGENTS.md (Codex) are one source ---

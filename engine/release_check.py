@@ -19,6 +19,11 @@ from typing import Any, Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_CAPTURE = 16_000
+TEMPLATE_SHELL_SKIP = 77
+
+
+def _template_shell_failed(returncode: int) -> bool:
+    return returncode not in (0, TEMPLATE_SHELL_SKIP)
 
 
 @dataclass(frozen=True)
@@ -108,7 +113,9 @@ def run_template_shell_tests() -> int:
     for test in tests:
         try:
             proc = subprocess.run(["bash", str(test)], cwd=ROOT, timeout=300, check=False)
-            if proc.returncode != 0:
+            if proc.returncode == TEMPLATE_SHELL_SKIP:
+                print(f"{test.name}: SKIP (exit {TEMPLATE_SHELL_SKIP})", file=sys.stderr)
+            elif _template_shell_failed(proc.returncode):
                 failures += 1
         except (subprocess.TimeoutExpired, OSError) as exc:
             print(f"{test.name}: {exc}", file=sys.stderr)

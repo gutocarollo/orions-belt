@@ -797,6 +797,7 @@ class ToolLedgerHookCliTest(unittest.TestCase):
             payload = {
                 "hook_event_name": "PreToolUse", "session_id": "s", "agent_id": "a",
                 "agent_type": "sample-context-scout", "cwd": str(root), "model": "sonnet",
+                "run_id": "run-1",
                 "tool_use_id": "call-1", "tool_name": "Grep", "tool_input": {"pattern": "x"},
             }
             result = run([sys.executable, str(hook), "--runtime", "claude"], root, env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)}, stdin=payload)
@@ -817,6 +818,7 @@ class ToolLedgerHookCliTest(unittest.TestCase):
             payload = {
                 "hook_event_name": "PreToolUse", "session_id": "s", "agent_id": "a",
                 "agent_type": "sample-context-scout", "cwd": str(root), "model": "sonnet",
+                "run_id": "run-1",
                 "tool_use_id": "call-1", "tool_name": "Grep", "tool_input": {"pattern": "x"},
             }
             with self.assertRaises(OSError):
