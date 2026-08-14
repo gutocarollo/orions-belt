@@ -10,7 +10,7 @@ The default policy is proportional:
 - `FULL + AUTO`: prefer `BATCH`, using parallel prisms on the same frozen objective/diff.
 - `REVIEW_MODE=FULL`: compatibility escape hatch for the legacy sequential `QUALITY -> SIMPLIFICATION -> ADVERSARIAL` pipeline. It requires FULL execution and two independent reviewer identities; never select it automatically.
 
-`BATCH` does **not** add a state to `council_runtime.py`. Parallel reviewers return independent receipts and findings; the premium parent consolidates them into the existing single `ADVERSARIAL` transition. Persist every prism in `review_batch` (`prism`, reviewer UUID, verdict, evidence) while `reviewer_id` identifies the consolidator recorded by the existing state machine. If no stable consolidator identity is available, use `SINGLE` rather than fabricating one.
+`BATCH` does **not** add a state to `council_runtime.py`. Parallel reviewers return independent receipts and findings; the premium parent consolidates them into the existing single `ADVERSARIAL` transition. Persist every prism in `review_batch` with `prism`, reviewer UUID, verdict, evidence, and `finding_uids`; `reviewer_id` identifies the consolidator recorded by the existing state machine. If no stable consolidator identity is available, use `SINGLE` rather than fabricating one.
 
 Recommended independent prisms:
 1. `correctness-security-data`
@@ -29,9 +29,21 @@ HIGH_FIX_NOW / reachable HIGH       -> FIX_NOW
 DEFER_RUN / Medium/Low/unreachable  -> BACKLOG
 ```
 
-Independent prism findings are never deduplicated only because reviewers reused the same local ID. Preserve them and let the consolidator merge equivalent semantics without lowering severity.
+Batch consistency is mandatory on the persisted payload:
 
-After a blocking fix, rerun only the prisms that produced reachable Critical/High findings, at most once by default. Do not automatically repeat the entire batch.
+- every batch reviewer and prism is unique;
+- the consolidator is distinct from batch reviewers;
+- each reviewer must have a successful runtime lifecycle receipt in the same Council `run_id`, runtime session and frozen `snapshot_sha`;
+- no batch reviewer may equal the Council `implementer_id`;
+- every batched finding has a globally unique `finding_uid`;
+- `CORRIGIR`/`BLOQUEADO` prism receipts must reference at least one blocking finding through `finding_uids`;
+- every blocking finding must be attributed to at least one prism;
+- a root `SATISFEITO` can never hide a prism that returned `CORRIGIR` or `BLOQUEADO`;
+- `finding_uids` are the durable mapping used to rerun only affected prisms after a blocking fix.
+
+Local reviewer labels such as `H1` may repeat across independent prisms; global `finding_uid` values may not. This preserves every finding while still allowing the consolidator to merge semantically equivalent items without lowering severity.
+
+After a blocking fix, rerun only the prisms mapped to the blocking `finding_uids`, at most once by default. Do not automatically repeat the entire batch.
 
 Helper: `python3 .harness/lib/council_review_batch.py --input-json '<json>'`.
-It plans concurrency, validates prism receipts and classifies findings; it is not a new gate and does not replace model judgment.
+It plans concurrency, validates prism receipts and classifies findings; the same cross-field and lifecycle-binding rules are also enforced by the installed adversarial payload validator, so the helper is not an optional safety boundary.

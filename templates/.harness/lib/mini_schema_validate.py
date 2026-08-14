@@ -23,16 +23,13 @@ the gate's behavior DEPENDENT on the environment where it runs — the same
 target project would validate differently with/without the package
 installed, the opposite of what "self-contained" promises. That is why the
 choice here is: ALWAYS this minimal validator, never optional `jsonschema`.
-It covers exactly the subset of JSON Schema (draft 2020-12) used by the 3
-schemas of this package: `type`, `additionalProperties`, `required`,
-`properties.*` (`type`, `enum`, `minimum`, `minLength`, `pattern`, `items`),
-and `allOf` of `if`/`then` blocks (with `if.properties.*.const` +
-`if.required` and `then.required`/`then.properties.*.minItems`). It is not a
-generic JSON Schema validator — it does not implement `$ref`, `oneOf`,
-`patternProperties` etc., because no schema in this package uses those
-features; if a new schema needs something outside this subset, this module
-needs to grow (or the decision to adopt a real lib needs to be revisited
-with new data).
+It covers exactly the subset of JSON Schema (draft 2020-12) used by this
+package: `type`, `additionalProperties`, `required`, `properties.*`
+(`type`, `enum`, `minimum`, `maximum`, `minLength`, `pattern`, `items`,
+`minItems`, `maxItems`), and `allOf` of `if`/`then` blocks. Orion-specific
+cross-field contracts that JSON Schema cannot express without custom code
+are opt-in via explicit `x-orions-*` schema markers and remain stdlib-only.
+It is not a generic JSON Schema validator.
 """
 
 from __future__ import annotations
@@ -62,7 +59,7 @@ def _type_ok(value: Any, expected: str) -> bool:
         return isinstance(value, (int, float)) and not isinstance(value, bool)
     if expected == "boolean":
         return isinstance(value, bool)
-    return True  # type not covered by the subset -- does not block
+    return True
 
 
 def _validate_property(path: str, value: Any, subschema: dict, errors: list[str]) -> None:
@@ -103,6 +100,8 @@ def _validate_property(path: str, value: Any, subschema: dict, errors: list[str]
 
     if "minItems" in subschema and isinstance(value, list) and len(value) < subschema["minItems"]:
         errors.append(f"{path}: array shorter than minItems {subschema['minItems']}")
+    if "maxItems" in subschema and isinstance(value, list) and len(value) > subschema["maxItems"]:
+        errors.append(f"{path}: array longer than maxItems {subschema['maxItems']}")
 
 
 def _validate_object(path: str, instance: Any, schema: dict, errors: list[str]) -> None:
@@ -138,12 +137,20 @@ def _if_condition_matches(instance: dict, if_clause: dict) -> bool:
     return True
 
 
-def validate_instance(instance: Any, schema: dict) -> list[str]:
-    """Validate `instance` against `schema` (subset documented in the module).
+def _validate_orions_extensions(instance: Any, schema: dict, errors: list[str]) -> None:
+    if not isinstance(instance, dict):
+        return
+    if schema.get("x-orions-review-batch-consistency") is True:
+        try:
+            from council_review_batch import review_batch_consistency_errors
+        except (ImportError, ModuleNotFoundError) as exc:
+            errors.append(f"$: Orion review-batch validator unavailable: {exc}")
+        else:
+            errors.extend(f"$: {message}" for message in review_batch_consistency_errors(instance))
 
-    Returns a list of errors (empty = valid). Never raises -- the caller
-    decides what to do (raise SchemaValidationError, count, etc.).
-    """
+
+def validate_instance(instance: Any, schema: dict) -> list[str]:
+    """Validate `instance` against `schema` (subset documented above)."""
     errors: list[str] = []
     _validate_object("$", instance, schema, errors)
 
@@ -154,6 +161,7 @@ def validate_instance(instance: Any, schema: dict) -> list[str]:
             if _if_condition_matches(instance, if_clause):
                 _validate_object("$ (allOf/then)", instance, then_clause, errors)
 
+    _validate_orions_extensions(instance, schema, errors)
     return errors
 
 
@@ -164,8 +172,7 @@ def assert_valid(instance: Any, schema: dict, label: str) -> None:
 
 
 def assert_invalid(instance: Any, schema: dict, label: str) -> None:
-    """Negative control: the instance MUST fail. If it passes, it is the
-    schema (or the validator) that lost enforcement power -- raises an error."""
+    """Negative control: the instance MUST fail."""
     errors = validate_instance(instance, schema)
     if not errors:
         raise SchemaValidationError(
