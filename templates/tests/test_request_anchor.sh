@@ -36,13 +36,15 @@ assert "Codex SessionStart runs request-reinject" \
 export CLAUDE_PROJECT_DIR="$F"
 echo '{"prompt":"implemente o takeover que acumula contexto e solta na mao do agente","session_id":"t1"}' | python3 "$F/.harness/hooks/request-ledger.py"
 echo '{"prompt":"os sinteticos injetados devem ser considerados reais","session_id":"t1"}' | python3 "$F/.harness/hooks/request-ledger.py"
+echo '{"prompt":"D24 - A.","session_id":"t1"}' | python3 "$F/.harness/hooks/request-ledger.py"
 echo '{"prompt":"continue","session_id":"t1"}' | python3 "$F/.harness/hooks/request-ledger.py"
 L="$F/.harness/requests/session-t1.md"
 assert "ledger created" '[ -f "$L" ]'
 assert "first prompt recorded as ANCHOR" 'grep -qE "^## \[.*\] ANCHOR" "$L"'
 assert "second prompt recorded as amendment" 'grep -qE "^## \[.*\] amendment" "$L"'
 assert "verbatim objective preserved" 'grep -q "solta na mao do agente" "$L"'
-assert "trivial ack (continue) NOT recorded" '[ "$(grep -cE "^## \[.*\] amendment" "$L")" -eq 1 ] && ! grep -qxF "continue" "$L"'
+assert "short D[n] decision is recorded" 'grep -qF "D24 - A." "$L" && grep -qF '"'"'"id":"D24"'"'"' "$F/.harness/requests/session-t1-decisions.jsonl"'
+assert "trivial ack (continue) NOT recorded" '[ "$(grep -cE "^## \[.*\] amendment" "$L")" -eq 2 ] && ! grep -qxF "continue" "$L"'
 
 # --- 3. Re-injection surfaces the ANCHOR + the blocking directive ---
 OUT="$(python3 "$F/.harness/hooks/request-reinject.py")"
@@ -52,6 +54,8 @@ assert "reinject states silent substitution is BLOCKING" 'printf "%s" "$OUT" | g
 # G1: the ledger-path reinjection carries the amendments too, not only the ANCHOR
 assert "reinject (ledger path) also carries the amendment (G1)" \
   'printf "%s" "$OUT" | grep -q "sinteticos injetados"'
+assert "reinject carries compact adopted decisions" \
+  'printf "%s" "$OUT" | grep -q "D24: A. \[request:3\]"'
 # N2: a prompt containing a literal "## [" line must NOT truncate the reinjected anchor
 printf '{"prompt":"paste this: ## [fake heading] blah then END-FENCE-TAIL","session_id":"n2"}' \
   | python3 "$F/.harness/hooks/request-ledger.py"
@@ -60,27 +64,30 @@ assert "reinjected anchor is fence-safe against an embedded '## [' (N2)" \
 # G2: a CURRENT-TASK.md older than newer ledger activity is flagged stale
 printf "# old\n\nfinished task X\n" > "$F/.harness/requests/CURRENT-TASK.md"
 touch -d "2 hours ago" "$F/.harness/requests/CURRENT-TASK.md"
-assert "stale CURRENT-TASK.md (older than ledger) emits a STALENESS warning (G2)" \
-  'python3 "$F/.harness/hooks/request-reinject.py" | grep -qi "STALENESS"'
+STALE_OUT="$(python3 "$F/.harness/hooks/request-reinject.py")"
+assert "stale CURRENT-TASK.md is ignored, not merely warned (G2)" \
+  'printf "%s" "$STALE_OUT" | grep -q "UNBOUND OR STALE CURRENT-TASK.md was ignored" && ! printf "%s" "$STALE_OUT" | grep -q "finished task X"'
 # CURRENT-TASK.md takes priority over the ledger
-printf "# obj\n\nprovar resposta no cutoff\n" > "$F/.harness/requests/CURRENT-TASK.md"
+printf "# obj\n\nsource-ledger: session-n2.md\n\nprovar resposta no cutoff\n" > "$F/.harness/requests/CURRENT-TASK.md"
 assert "CURRENT-TASK.md overrides the ledger anchor" \
   'python3 "$F/.harness/hooks/request-reinject.py" | grep -q "provar resposta no cutoff"'
+printf "# wrong\n\nsource-ledger: session-other.md\n\nwrong fresh task\n" > "$F/.harness/requests/CURRENT-TASK.md"
+assert "fresh but cross-session CURRENT-TASK.md is ignored" \
+  '! python3 "$F/.harness/hooks/request-reinject.py" | grep -q "wrong fresh task"'
 unset CLAUDE_PROJECT_DIR
 
 # --- 4. Contract enforcement across ALL objective-claiming surfaces ---
 REV="$F/.agents/skills/adversarial-review/SKILL.md"
-COU="$F/.agents/skills/anchor-delivery-council/SKILL.md"
+ORCH="$F/.agents/skills/gauntlet-loop/SKILL.md"
 assert "adversarial-review has the §1.0 estimand-fidelity axis" \
   'grep -qi "estimand fidelity" "$REV"'
 assert "adversarial-review reads the request anchor file" \
   'grep -q "requests/CURRENT-TASK.md" "$REV" || grep -q "requests/session-" "$REV"'
 assert "adversarial-review calls silent substitution BLOQUEANTE" \
   'grep -qi "silently drift\|silently substituted\|substitution" "$REV" && grep -q "BLOQUEANTE" "$REV"'
-assert "council writes/hands CURRENT-TASK.md to the reviewer" 'grep -q "CURRENT-TASK.md" "$COU"'
-# G2: the council clears the anchor on a terminal status
-assert "council has an anchor CLOSURE step (G2)" \
-  'grep -qi "closure\|clear\|archive" "$COU" && grep -q "CURRENT-TASK.md" "$COU"'
+assert "default Gauntlet begins from the request anchor" 'grep -qi "request anchor" "$ORCH"'
+assert "default Gauntlet does not register the Council gate" \
+  '! grep -q "council-gate.py" "$F/.codex/hooks.json" && ! grep -q "council-gate.py" "$F/.claude/settings.json"'
 # G3: the reviewer AGENT definitions (fallback path) name the anchor, both runtimes
 assert "Codex reviewer agent-def references the request anchor (G3)" \
   'grep -q "requests/CURRENT-TASK.md\|requests/session-" "$F/.codex/agents/anchor-adversarial-reviewer.toml"'

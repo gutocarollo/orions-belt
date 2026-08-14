@@ -17,6 +17,7 @@ never blocks. Fail-open: any error -> exit 0 with no output.
 from __future__ import annotations
 
 import os
+import json
 import re
 import subprocess
 import sys
@@ -28,7 +29,15 @@ from pathlib import Path
 HEADING_RE = re.compile(r"(?m)^## \[\d{4}-\d{2}-\d{2} [\d:]+Z\] (ANCHOR|amendment)\s*$")
 # Bound the re-injected amendment text so a long session does not dump dozens of
 # blocks into every SessionStart (N1). The ANCHOR is always included in full.
-AMENDMENT_BUDGET = 4000
+AMENDMENT_BUDGET = 1200
+DECISION_BUDGET = 2400
+MAX_DECISION_CHARS = 320
+DECISION_RE = re.compile(
+    r"(?im)^\s*(D\d+)\s*(?:[-—:]\s*|\s+)(\S.*)$"
+)
+CURRENT_SOURCE_RE = re.compile(
+    r"(?im)^source-ledger:\s*(session-[A-Za-z0-9_.-]+\.md)\s*$"
+)
 
 
 def resolve_root() -> Path:
@@ -46,13 +55,29 @@ def resolve_root() -> Path:
     return Path.cwd()
 
 
-def anchor_from_ledger(reqdir: Path) -> str | None:
-    ledgers = sorted(
-        reqdir.glob("session-*.md"), key=lambda p: p.stat().st_mtime, reverse=True
-    )
-    if not ledgers:
+def event_session_id() -> str | None:
+    try:
+        raw = sys.stdin.read()
+        value = json.loads(raw) if raw.strip() else {}
+        session = str(value.get("session_id") or "").strip()
+        return session.replace("/", "_")[:64] or None
+    except Exception:
         return None
-    text = ledgers[0].read_text(encoding="utf-8", errors="replace")
+
+
+def select_ledger(reqdir: Path, session_id: str | None) -> Path | None:
+    if session_id:
+        exact = reqdir / f"session-{session_id}.md"
+        if exact.is_file():
+            return exact
+    ledgers = sorted(reqdir.glob("session-*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return ledgers[0] if ledgers else None
+
+
+def anchor_from_ledger(ledger: Path | None) -> str | None:
+    if ledger is None:
+        return None
+    text = ledger.read_text(encoding="utf-8", errors="replace")
     # Slice blocks at REAL headings (fence-safe, N2). Carry the ANCHOR in full plus
     # the user's later `amendment` entries newest-first within a char budget (N1),
     # so the reviewer sees the objective + recent changes without an unbounded dump.
@@ -67,7 +92,8 @@ def anchor_from_ledger(reqdir: Path) -> str | None:
         if m.group(1) == "ANCHOR" and anchor_block is None:
             anchor_block = block
         else:
-            amendments.append(block)
+            if not DECISION_RE.search(block):
+                amendments.append(block)
     if anchor_block is None:
         return None
     kept: list[str] = []
@@ -85,35 +111,89 @@ def anchor_from_ledger(reqdir: Path) -> str | None:
     return "\n\n".join(parts)
 
 
+def decisions_from_ledger(ledger: Path | None) -> str:
+    if ledger is None:
+        return ""
+    decision_path = ledger.with_name(ledger.stem + "-decisions.jsonl")
+    latest: dict[str, dict[str, object]] = {}
+    if decision_path.is_file():
+        for line in decision_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                value = json.loads(line)
+                latest[str(value["id"]).upper()] = value
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+    else:
+        # Backward-compatible deterministic view for ledgers created before the
+        # structured sidecar existed.
+        text = ledger.read_text(encoding="utf-8", errors="replace")
+        for seq, match in enumerate(DECISION_RE.finditer(text), start=1):
+            latest[match.group(1).upper()] = {
+                "id": match.group(1).upper(),
+                "choice": match.group(2).strip(),
+                "source_seq": seq,
+            }
+    kept: list[str] = []
+    budget = DECISION_BUDGET
+    ordered = sorted(latest.values(), key=lambda item: int(item.get("source_seq", 0)))
+    for item in ordered[-24:]:
+        choice = str(item.get("choice", "")).strip()
+        if len(choice) > MAX_DECISION_CHARS:
+            choice = choice[: MAX_DECISION_CHARS - 1].rstrip() + "…"
+        line = f"- {item.get('id')}: {choice} [request:{item.get('source_seq')}]"
+        if len(line) <= budget:
+            kept.append(line)
+            budget -= len(line)
+    return "\n".join(kept)
+
+
 def newest_ledger_mtime(reqdir: Path) -> float:
     return max(
         (p.stat().st_mtime for p in reqdir.glob("session-*.md")), default=0.0
     )
 
 
+def current_matches_ledger(body: str, ledger: Path | None) -> bool:
+    if ledger is None:
+        return False
+    match = CURRENT_SOURCE_RE.search(body)
+    return bool(match and match.group(1) == ledger.name)
+
+
 def main() -> int:
     try:
         reqdir = resolve_root() / ".harness" / "requests"
+        ledger = select_ledger(reqdir, event_session_id()) if reqdir.is_dir() else None
         current = reqdir / "CURRENT-TASK.md"
         stale_note = ""
         if current.is_file():
-            body = current.read_text(encoding="utf-8", errors="replace").strip()
-            source = "CURRENT-TASK.md (agent-curated)"
+            current_body = current.read_text(encoding="utf-8", errors="replace").strip()
+            current_is_stale = newest_ledger_mtime(reqdir) - current.stat().st_mtime > 3600
+            current_is_bound = current_matches_ledger(current_body, ledger)
             # G2: a CURRENT-TASK.md left over from a finished task would re-inject a
             # DEAD objective with blocking authority — the very drift this fights.
             # If the ledger has materially newer activity, flag it as maybe-stale.
-            if newest_ledger_mtime(reqdir) - current.stat().st_mtime > 3600:
+            if current_is_stale or not current_is_bound:
                 stale_note = (
-                    "\nSTALENESS WARNING: the request ledger has newer activity than this "
-                    "CURRENT-TASK.md — it may describe a PREVIOUS task. Re-confirm against "
-                    ".harness/requests/session-*.md, or let the Delivery Council rewrite it "
-                    "at Flow step 0. A finished task's anchor must be cleared, not re-injected.\n"
+                    "\nUNBOUND OR STALE CURRENT-TASK.md was ignored; only a task naming "
+                    "the selected source-ledger may become session context.\n"
                 )
+                body = anchor_from_ledger(ledger)
+                source = "request ledger ANCHOR + compact decisions"
+            else:
+                body = current_body
+                source = "CURRENT-TASK.md (agent-curated)"
         else:
-            body = anchor_from_ledger(reqdir) if reqdir.is_dir() else None
-            source = "request ledger ANCHOR + amendments"
+            body = anchor_from_ledger(ledger)
+            source = "request ledger ANCHOR + compact decisions"
         if not body:
             return 0
+        decisions = decisions_from_ledger(ledger)
+        decision_block = (
+            "\n<adopted-decisions>\n" + decisions + "\n</adopted-decisions>\n"
+            if decisions
+            else ""
+        )
         print(
             "<original-request-anchor source=\"" + source + "\">\n"
             "Re-anchor to the user's ORIGINAL objective below. Context compaction may have\n"
@@ -125,6 +205,7 @@ def main() -> int:
             + stale_note
             + "\n"
             + body
+            + decision_block
             + "\n</original-request-anchor>"
         )
     except Exception:

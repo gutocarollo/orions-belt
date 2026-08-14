@@ -119,31 +119,6 @@
       }{% endif %}
     ],
     "PreToolUse": [
-      {%- if use_delivery_council %}
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" pre",
-            "timeout": 10,
-            "statusMessage": "council: checking item-plan readiness"
-          }
-        ]
-      },
-      {%- endif %}
-      {%- if harness_understand_apps_root %}
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-apps-diff-guard.sh\"",
-            "timeout": 10,
-            "statusMessage": "understand: checking relative diff for {{ harness_understand_apps_root }}"
-          }
-        ]
-      }{% endif %},
       {
         "matcher": "Task|Agent",
         "hooks": [
@@ -154,7 +129,29 @@
             "statusMessage": "throttle: checking subagent slots (cap {{ harness_subagent_max_concurrent }})"
           }
         ]
-      }{% if use_context_delivery %},
+      }{% if use_delivery_council %},
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" pre",
+            "timeout": 10,
+            "statusMessage": "council: checking item-plan readiness"
+          }
+        ]
+      }{% endif %}{% if harness_understand_apps_root %},
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/understand-apps-diff-guard.sh\"",
+            "timeout": 10,
+            "statusMessage": "understand: checking relative diff for {{ harness_understand_apps_root }}"
+          }
+        ]
+      }{% endif %}{% if use_context_delivery %},
       {
         "matcher": "Read|read_file|Grep|grep_files|Glob|list_files|Bash|exec_command|mcp__.*",
         "hooks": [
@@ -190,7 +187,17 @@
       }{% endif %}
     ],
     "PostToolUse": [
-      {%- if use_delivery_council %}
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/deliverable-scrub-gate.sh\"",
+            "timeout": 15,
+            "statusMessage": "scrub: checking deliverables for secrets and machine paths"
+          }
+        ]
+      }{% if use_delivery_council %},
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
@@ -201,9 +208,7 @@
             "statusMessage": "council: requiring validation after edit"
           }
         ]
-      },
-      {%- endif %}
-      {%- if use_ds_gate %}
+      }{% endif %}{% if use_ds_gate %},
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
@@ -237,17 +242,6 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/subagent-release.sh\"",
             "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/deliverable-scrub-gate.sh\"",
-            "timeout": 15,
-            "statusMessage": "scrub: checking internal jargon in client doc"
           }
         ]
       }

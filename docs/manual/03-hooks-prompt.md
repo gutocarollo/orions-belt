@@ -31,9 +31,9 @@ flowchart TD
 
 **O que é** — [templates/.harness/hooks/request-ledger.py](../../templates/.harness/hooks/request-ledger.py). Metade "gravar" do mecanismo de Original Request Anchor (a metade "restaurar" é o `request-reinject` do capítulo 02). Resolve a deriva mais recorrente: numa conversa longa, o objetivo original vai sendo lossy-comprimido pela compactação de contexto, e um subagent de review começa com contexto ZERADO — nunca viu o pedido real, só o plano derivado. A review acaba validando o plano intermediário, não o pedido — "revisou a coisa errada, corretamente".
 
-**Quando dispara** — Todo prompt não-trivial (acks como "continue"/"ok"/"sim"/"beleza" são ignorados — não são pedido novo, são confirmação).
+**Quando dispara** — Todo prompt não-trivial (acks como "continue"/"ok"/"sim"/"beleza" são ignorados). Respostas explícitas `D[n]`, inclusive curtas como `D24 - A.`, nunca são descartadas.
 
-**O que faz** — Anexa o prompt VERBATIM + timestamp UTC em `.harness/requests/session-<id>.md`, append-only. A primeira entrada da sessão é a ÂNCORA; entradas seguintes são emendas (mudanças explicitamente acordadas pelo usuário). O hook nunca classifica intenção — só grava; o custo de um objetivo perdido é catastrófico, o de uma linha extra não é. As skills `delivery-council` e `adversarial-review` leem esse ledger para que toda review confronte o objetivo ORIGINAL, não o plano que foi mudando pelo caminho.
+**O que faz** — Anexa o prompt VERBATIM + timestamp UTC em `.harness/requests/session-<id>.md`, append-only. A primeira entrada da sessão é a ÂNCORA; entradas seguintes são emendas candidatas. Respostas no formato `D[n]` também alimentam um sidecar compacto e rastreável por hash; o ledger verbatim continua sendo a fonte de verdade. A reinjeção usa essa visão curta, em vez de despejar toda a conversa.
 
 **Como configurar** — Sem variáveis. Fail-open: qualquer erro ⇒ exit 0 sem output, nunca bloqueia o turno.
 

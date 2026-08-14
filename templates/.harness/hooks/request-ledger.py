@@ -20,6 +20,7 @@ Fail-open: any error -> exit 0 with no output. Never blocks the turn.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import subprocess
@@ -35,6 +36,9 @@ TRIVIAL = re.compile(
     re.IGNORECASE,
 )
 MIN_LEN = 12
+DECISION_RE = re.compile(
+    r"(?im)^\s*(D\d+)\s*(?:[-—:]\s*|\s+)(\S.*)$"
+)
 
 
 def resolve_root() -> Path:
@@ -66,7 +70,8 @@ def main() -> int:
     except Exception:
         return 0
     prompt = (data.get("prompt") or data.get("user_prompt") or data.get("input") or "").strip()
-    if not prompt or len(prompt) < MIN_LEN or TRIVIAL.match(prompt):
+    decisions = list(DECISION_RE.finditer(prompt))
+    if not prompt or (not decisions and (len(prompt) < MIN_LEN or TRIVIAL.match(prompt))):
         return 0
     # Session id keys the ledger. If the runtime omits it (unverified for Codex's
     # UserPromptSubmit payload), fall back to a DATE-rotated id so the anchor does
@@ -94,6 +99,29 @@ def main() -> int:
         parts.append(f"\n## [{ts}] {kind}\n\n{fence(prompt)}\n")
         with ledger.open("a", encoding="utf-8") as fh:
             fh.write("".join(parts))
+        # Keep the verbatim ledger authoritative and emit a compact, rebuildable
+        # decision view for context injection. A later D[n] supersedes the same id.
+        if decisions:
+            seq = len(re.findall(r"(?m)^## \[", ledger.read_text(encoding="utf-8")))
+            decision_path = reqdir / f"session-{session}-decisions.jsonl"
+            source_sha256 = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+            with decision_path.open("a", encoding="utf-8") as fh:
+                for match in decisions:
+                    fh.write(
+                        json.dumps(
+                            {
+                                "id": match.group(1).upper(),
+                                "choice": match.group(2).strip(),
+                                "source_seq": seq,
+                                "source_sha256": source_sha256,
+                                "recorded_at": ts,
+                            },
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                        )
+                        + "\n"
+                    )
     except Exception:
         return 0
     return 0

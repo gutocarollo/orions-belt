@@ -17,6 +17,9 @@ opt-in choice.
 
 - Start from the verbatim request anchor and its accepted amendments. Never
   replace it with a summary that silently weakens scope.
+- Use the compact `D[n]` decision view during recovery; read the complete
+  verbatim ledger only for MetaPrompt compilation, plan review, audit, or
+  suspected drift. A stale `CURRENT-TASK.md` never outranks newer ledger activity.
 - Preserve `repo-wiki-curator`, the temporal indexes, request reinjection,
   `marathon`, deterministic hooks, and `prova-de-conclusao`. This skill routes
   work; it does not bypass those capabilities.
@@ -39,6 +42,11 @@ Write `.harness/runs/<slug>/METAPROMPT.md` with:
 2. the Real Bar: observable outcomes and acceptance criteria;
 3. rules, boundaries, non-goals, available evidence, and unresolved blockers;
 4. the final prompt that a fresh planning agent can execute without this chat.
+
+Also write `.harness/requests/CURRENT-TASK.md` with a
+`source-ledger: session-<id>.md` line naming the exact ledger used and a compact
+curation of the objective plus adopted decisions. Without that binding, the
+SessionStart hook ignores the file to prevent cross-task leakage.
 
 Cycle 1 ends at `METAPROMPT-READY`. Do not implement or manufacture a plan in
 this cycle.

@@ -17,6 +17,9 @@ opt-in separada.
 
 - Comece pela request anchor verbatim e pelas emendas aceitas. Nunca a
   substitua por resumo que enfraqueça o escopo silenciosamente.
+- Use a visão compacta de decisões `D[n]` na retomada; leia o ledger verbatim
+  completo somente no MetaPrompt, plan review, auditoria ou suspeita de drift.
+  `CURRENT-TASK.md` stale nunca prevalece sobre atividade nova do ledger.
 - Preserve `repo-wiki-curator`, índices temporais, reinjeção de pedidos,
   `marathon`, hooks determinísticos e `prova-de-conclusao`. Esta skill roteia o
   trabalho; ela não contorna essas capacidades.
@@ -40,6 +43,11 @@ Escreva `.harness/runs/<slug>/METAPROMPT.md` com:
 2. Real Bar: resultados observáveis e critérios de aceitação;
 3. regras, fronteiras, não-objetivos, evidências disponíveis e bloqueios;
 4. prompt final executável por um agente de planejamento que não viu este chat.
+
+Escreva também `.harness/requests/CURRENT-TASK.md` com uma linha
+`source-ledger: session-<id>.md` apontando para o ledger exato usado e uma
+curadoria curta do objetivo + decisões adotadas. Sem esse binding, o hook de
+SessionStart ignora o arquivo para impedir vazamento entre tarefas.
 
 O Ciclo 1 termina em `METAPROMPT-READY`. Não implemente nem fabrique plano
 neste ciclo.

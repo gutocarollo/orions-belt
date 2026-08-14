@@ -95,7 +95,7 @@ Antes do primeiro slice executável, inicie o run com `python3 .harness/lib/coun
 
 ## Fluxo Obrigatorio
 
-0. **Ancore o pedido original (fidelidade ao estimand).** Em `WORKSPACE_WRITE`, escreva/atualize `.harness/requests/CURRENT-TASK.md` com o objetivo ORIGINAL do usuario VERBATIM + emendas acordadas, preferindo o ledger append-only `.harness/requests/session-*.md`. Em `READ_ONLY`, e proibido criar, atualizar, arquivar ou apagar arquivos: use como `ANCHOR_SOURCE` o ledger existente ou um bloco inline verbatim no prompt dos reviewers. Toda review recebe `ANCHOR_SOURCE` e julga contra ele, nunca apenas contra o plano derivado.
+0. **Ancore o pedido original (fidelidade ao estimand).** Em `WORKSPACE_WRITE`, escreva/atualize `.harness/requests/CURRENT-TASK.md` com `source-ledger: session-<id>.md`, apontando para o ledger exato usado, seguido do objetivo ORIGINAL do usuario VERBATIM + emendas acordadas. Sem esse binding o reinject ignora o arquivo. Em `READ_ONLY`, e proibido criar, atualizar, arquivar ou apagar arquivos: use como `ANCHOR_SOURCE` o ledger existente ou um bloco inline verbatim no prompt dos reviewers. Toda review recebe `ANCHOR_SOURCE` e julga contra ele, nunca apenas contra o plano derivado.
 1. Resolva o ponto de entrada (`START_AT`).
 2. Produza um Context Brief proporcional ao ponto de entrada:
    - pedido real e objetivo verdadeiro (cite a ANCORA verbatim);

@@ -30,27 +30,24 @@
       {"hooks": [{"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/understand-context-inject.py\"", "timeout": 10}]}{% endif %}
     ],
     "PreToolUse": [
-      {%- if use_delivery_council %}
-      {
-        "matcher": "apply_patch|Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          {"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" pre", "timeout": 10}
-        ]
-      },
-      {%- endif %}
-      {%- if harness_understand_apps_root %}
-      {
-        "matcher": "^Bash$",
-        "hooks": [
-          {"type": "command", "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/understand-apps-diff-guard.sh\"", "timeout": 10}
-        ]
-      }{% endif %},
       {
         "matcher": "spawn_agent",
         "hooks": [
           {"type": "command", "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/subagent-throttle.sh\"", "timeout": 10}
         ]
-      }{% if use_context_delivery %},
+      }{% if use_delivery_council %},
+      {
+        "matcher": "apply_patch|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" pre", "timeout": 10}
+        ]
+      }{% endif %}{% if harness_understand_apps_root %},
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {"type": "command", "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/understand-apps-diff-guard.sh\"", "timeout": 10}
+        ]
+      }{% endif %}{% if use_context_delivery %},
       {
         "matcher": "Read|read_file|Grep|grep_files|Glob|list_files|Bash|exec_command|mcp__.*",
         "hooks": [
@@ -65,15 +62,18 @@
       }{% endif %}{% endif %}
     ],
     "PostToolUse": [
-      {%- if use_delivery_council %}
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {"type": "command", "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/deliverable-scrub-gate.sh\"", "timeout": 15}
+        ]
+      }{% if use_delivery_council %},
       {
         "matcher": "apply_patch|Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/council-gate.py\" post", "timeout": 10}
         ]
-      },
-      {%- endif %}
-      {%- if use_ds_gate %}
+      }{% endif %}{% if use_ds_gate %},
       {
         "matcher": "Edit|Write",
         "hooks": [
@@ -85,13 +85,7 @@
         "hooks": [
           {"type": "command", "command": "python3 \"$(git rev-parse --show-toplevel)/.harness/hooks/context-tool-ledger.py\" --runtime codex", "timeout": 10}
         ]
-      }{% endif %},
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {"type": "command", "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/deliverable-scrub-gate.sh\"", "timeout": 15}
-        ]
-      }
+      }{% endif %}
     ]{% if use_context_delivery %},
     "SubagentStart": [
       {

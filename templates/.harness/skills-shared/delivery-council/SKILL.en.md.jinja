@@ -198,7 +198,7 @@ Do not delegate raw ambiguity to the user. Explore code, docs and real data firs
 
 ## Mandatory Flow
 
-0. **Anchor the original request (estimand fidelity).** In `WORKSPACE_WRITE`, write/update `.harness/requests/CURRENT-TASK.md` with the user's ORIGINAL objective VERBATIM + explicitly agreed amendments, preferring the append-only `.harness/requests/session-*.md` ledger. In `READ_ONLY`, never create, update, archive or delete files: use the existing ledger or an inline verbatim block as `ANCHOR_SOURCE`. Every review receives `ANCHOR_SOURCE` and judges against it, never only against the derived plan.
+0. **Anchor the original request (estimand fidelity).** In `WORKSPACE_WRITE`, write/update `.harness/requests/CURRENT-TASK.md` with `source-ledger: session-<id>.md` naming the exact ledger used, followed by the user's ORIGINAL objective VERBATIM + explicitly agreed amendments. Without that binding the reinject ignores the file. In `READ_ONLY`, never create, update, archive or delete files: use the existing ledger or an inline verbatim block as `ANCHOR_SOURCE`. Every review receives `ANCHOR_SOURCE` and judges against it, never only against the derived plan.
 1. Resolve the entry point (`START_AT`).
 2. Produce a Context Brief proportional to the entry point:
    - real request and true objective (quote the ANCHOR verbatim);

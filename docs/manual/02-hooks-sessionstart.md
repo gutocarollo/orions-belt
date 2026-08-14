@@ -98,7 +98,7 @@ Duas exceções, quando a run está **pausada** (capítulo 08): com a janela vá
 
 **O que é** — [templates/.harness/hooks/request-reinject.py](../../templates/.harness/hooks/request-reinject.py), metade "restaurar" do mecanismo de Original Request Anchor (ver README, "What is Orion's Belt?"). Complementa o `request-ledger` (capítulo 03, que escreve a âncora): este hook lê de volta.
 
-**O que faz** — Se `.harness/requests/CURRENT-TASK.md` existe, reinjeta o pedido original VERBATIM no início da sessão — contramedida para a deriva mais comum em conversa longa: o objetivo é parafraseado pela compactação, e a próxima review acaba validando um plano intermediário que silenciosamente substituiu o pedido real. Sem tarefa ativa, silêncio.
+**O que faz** — Reinjeta a âncora, uma faixa curta de emendas não classificadas e as decisões `D[n]` adotadas em formato compacto. Prefere o ledger da sessão informada pelo runtime. `CURRENT-TASK.md` só fornece a curadoria quando contém `source-ledger: session-<id>.md` igual ao ledger selecionado e não está mais de uma hora atrás de atividade nova; sem binding ou stale, ele é ignorado. O texto completo permanece no disco para MetaPrompt, plan review, auditoria e detecção de drift.
 
 ## O que fica de lição
 

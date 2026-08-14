@@ -80,6 +80,7 @@ and applicability classification belong to the separate, agent-guided `harness-i
 | | Component | What it does |
 |---|---|---|
 | 🧭 | **Gauntlet loop (default)** | Three explicit cycles: refine a MetaPrompt, derive and review one plan, then execute with deterministic proof and a critic only when severity/risk warrants it. |
+| 🧷 | **Request + decision reinjection** | Keeps the full request ledger off-context, reinjects a bounded anchor/amendment slice plus compact latest `D[n]` choices, and ignores stale `CURRENT-TASK.md` instead of giving an old task blocking authority. |
 | 🧰 | **Delivery Council (opt-in)** | Preserved for compatibility and exceptional workflows that deliberately accept its fixed orchestration cost; never selected together with Gauntlet. |
 | 🔬 | **Adversarial review** | Evidence-based verifier that must confirm or refute each gap with proof — runs in a subagent, never self-review. |
 | 🎯 | **Grill-me** | Interviews you on a plan one decision at a time (behavior, ≥2 real good/bad examples, Option C) — before code is written. |
