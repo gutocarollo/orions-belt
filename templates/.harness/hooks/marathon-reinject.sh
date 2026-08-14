@@ -20,6 +20,7 @@
 # reinject that silently finds nothing hands the next turn to an agent with
 # no checklist, which then stops, exactly as reported from the field.
 set -uo pipefail
+IN=$(cat)
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 
 CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
@@ -31,6 +32,11 @@ fi
 
 . "$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
 marathon_locate "$ROOT" "$RUNS_DIR" || exit 0
+HOOK_SESSION_ID="$(python3 -c 'import json,sys
+try: print(str(json.load(sys.stdin).get("session_id", "")))
+except Exception: print("")' <<<"$IN" 2>/dev/null || true)"
+SESSION_ID="$(marathon_session_id "$HOOK_SESSION_ID")" || SESSION_ID=""
+[ -n "$SESSION_ID" ] && marathon_session_is_ignored "$SESSION_ID" "$MARATHON_RUN_DIR" && exit 0
 HOOKS_DIR="$(dirname "${BASH_SOURCE[0]}")"
 marathon_pause_state
 

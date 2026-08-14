@@ -72,6 +72,24 @@ Enquanto a pausa vale, dois comportamentos mudam:
 
 **Expirar não é retomar.** Quando a janela fecha, o estado vira `pause-expired`: o stop-gate continua sem bloquear e avisa o dono de que a janela acabou; o reinject injeta o estado com a instrução explícita de PERGUNTAR antes de qualquer trabalho — retomar, adiar para uma data nova, ou encerrar. Re-armar o gate na expiração colocaria o agente de volta a executar sozinho, que é exatamente o comportamento que este mecanismo existe para impedir. Data ilegível ou ausente também mantém pausado: o fail-safe aponta para perguntar, nunca para executar.
 
+## Ignorar uma run apenas na sessão atual
+
+`pause` muda o estado da run para todas as sessões. Quando a run deve continuar
+ativa em outra conversa, mas não pertence à sessão atual, use a blocklist por
+sessão:
+
+```bash
+bash .harness/hooks/marathon-locate.sh ignore-here
+bash .harness/hooks/marathon-locate.sh session-status
+bash .harness/hooks/marathon-locate.sh allow-here
+```
+
+`ignore-here` grava o par exato `session_id + caminho canônico da run` em
+`$HOME/.harness/marathon-session-blocklist/`. Os três consumidores consultam a
+mesma exceção: `SessionStart` não reinjeta, `PreCompact` não escreve no journal
+e `Stop` não bloqueia. Outra sessão continua enxergando a run. Não há inferência
+por assunto nem pausa implícita; `allow-here` remove somente a exceção corrente.
+
 Prova executável: [engine/hooks/tests/test_marathon_pause.sh](../../engine/hooks/tests/test_marathon_pause.sh) (13 cenários dirigindo os hooks reais como subprocessos).
 
 ## Como configurar

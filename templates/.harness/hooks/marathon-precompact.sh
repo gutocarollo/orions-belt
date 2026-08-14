@@ -9,6 +9,7 @@
 # mechanism as marathon-stop-gate.sh — see that file for the field failure
 # this fixes.
 set -uo pipefail
+IN=$(cat)
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 
 CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
@@ -20,6 +21,11 @@ fi
 
 . "$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
 marathon_locate "$ROOT" "$RUNS_DIR" || exit 0
+HOOK_SESSION_ID="$(python3 -c 'import json,sys
+try: print(str(json.load(sys.stdin).get("session_id", "")))
+except Exception: print("")' <<<"$IN" 2>/dev/null || true)"
+SESSION_ID="$(marathon_session_id "$HOOK_SESSION_ID")" || SESSION_ID=""
+[ -n "$SESSION_ID" ] && marathon_session_is_ignored "$SESSION_ID" "$MARATHON_RUN_DIR" && exit 0
 # The pause state is stamped too: reading the journal later, "compacted while
 # paused" is the difference between a run that stalled and one that was parked
 # on purpose.

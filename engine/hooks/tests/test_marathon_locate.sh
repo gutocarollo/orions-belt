@@ -122,6 +122,36 @@ MARATHON_REGISTRY="$REG7" bash "$LOCATE" register "$TMP/not-a-marathon" >/tmp/ma
 RC=$?
 assert "register without RUN.md fails" "$RC" "1"
 
+echo
+echo "=== Scenario 8: ignore-here is exact to one session and one run ==="
+BLOCKS="$TMP/session-blocklist"
+CODEX_THREAD_ID="session-a" MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" \
+  MARATHON_REGISTRY="$REG6" bash "$LOCATE" register "$RUN_REG" >/dev/null
+CODEX_THREAD_ID="session-a" MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" \
+  MARATHON_REGISTRY="$REG6" bash "$LOCATE" ignore-here "$RUN_REG" >/dev/null
+. "$LOCATE"
+if MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" marathon_session_is_ignored "session-a" "$RUN_REG"; then
+  echo "PASS: ignored session matches its exact run"
+else
+  echo "FAIL: ignored session was not recorded"; FAIL=1
+fi
+if MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" marathon_session_is_ignored "session-b" "$RUN_REG"; then
+  echo "FAIL: a different session inherited the ignore"; FAIL=1
+else
+  echo "PASS: a different session remains allowed"
+fi
+STATUS="$(CODEX_THREAD_ID="session-a" MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" \
+  MARATHON_REGISTRY="$REG6" bash "$LOCATE" session-status)"
+assert "session-status reports ignored" "$STATUS" \
+  "marathon: idempotent | session=session-a | ignored | dir=$RUN_REG"
+CODEX_THREAD_ID="session-a" MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" \
+  MARATHON_REGISTRY="$REG6" bash "$LOCATE" allow-here "$RUN_REG" >/dev/null
+if MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" marathon_session_is_ignored "session-a" "$RUN_REG"; then
+  echo "FAIL: allow-here did not remove the exact exception"; FAIL=1
+else
+  echo "PASS: allow-here restores the session"
+fi
+
 rm -f /tmp/marathon-locate-out-$$
 
 echo

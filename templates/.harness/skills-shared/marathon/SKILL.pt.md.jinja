@@ -127,7 +127,7 @@ para ela em TODO turno. Para isso existe a pausa:
 ```bash
 bash .harness/hooks/marathon-locate.sh pause 2026-08-20 "aguardando resposta do cliente"
 bash .harness/hooks/marathon-locate.sh pause +3d "esperando o build de sexta"
-bash .harness/hooks/marathon-locate.sh pause            # sem data = pausada até você retomar
+bash .harness/hooks/marathon-locate.sh pause            # sem data = 24 horas
 bash .harness/hooks/marathon-locate.sh status           # slug, itens abertos, estado da pausa
 bash .harness/hooks/marathon-locate.sh resume           # levanta a pausa (NÃO executa nada)
 ```
@@ -154,6 +154,24 @@ fechou; o reinject injeta o estado com a instrução explícita de **PERGUNTAR
 antes de qualquer trabalho** — retomar, adiar para uma data nova, ou encerrar.
 Nada volta a executar sozinho. Se você quer que volte, responda "retoma" (ou
 rode `resume`); se quer mais prazo, `pause <nova-data>`.
+
+### Ignorar apenas nesta sessão
+
+Se a maratona deve continuar ativa para outras sessões, mas não pertence à
+conversa atual, não pause nem encerre a run. Crie uma exceção exata para a
+sessão corrente:
+
+```bash
+bash .harness/hooks/marathon-locate.sh ignore-here      # esta sessão ignora esta run
+bash .harness/hooks/marathon-locate.sh session-status   # confirma ignored/allowed
+bash .harness/hooks/marathon-locate.sh allow-here       # desfaz a exceção
+```
+
+A exceção é o par `session_id + caminho canônico da run`, persistido fora do
+repositório em `$HOME/.harness/marathon-session-blocklist/`. Ela silencia
+reinject, precompact e stop-gate somente nessa sessão. Outra sessão continua
+recebendo a run normalmente. `pause` continua sendo global para a run;
+`ignore-here` é local à conversa.
 
 ## 6. Hooks que este estado alimenta
 

@@ -104,6 +104,9 @@
 #   #           YYYY-MM-DDTHH:MM | +Nd | +Nh | manual (DEFAULT: +24h)
 #   bash marathon-locate.sh resume                 # lifts the pause (does NOT execute)
 #   bash marathon-locate.sh status                 # one line: slug, open items, pause state
+#   bash marathon-locate.sh ignore-here            # this session ignores the located run
+#   bash marathon-locate.sh allow-here             # undo ignore-here for this session
+#   bash marathon-locate.sh session-status         # allowed|ignored for this session/run
 
 MARATHON_RUN_DIR=""
 MARATHON_RUN_MD=""
@@ -124,6 +127,86 @@ MARATHON_LOCATE_SELF="${BASH_SOURCE[0]}"
 
 marathon_registry_path() {
   echo "${MARATHON_REGISTRY:-$HOME/.harness/marathon-active}"
+}
+
+marathon_session_id() { # [$1 hook-payload session_id]
+  local id="${1:-${CODEX_THREAD_ID:-${CLAUDE_SESSION_ID:-}}}" clean
+  [ -n "$id" ] || return 1
+  clean="$(printf '%s' "$id" | tr -cd 'A-Za-z0-9._:-')"
+  [ "$clean" = "$id" ] || return 1
+  printf '%s\n' "$id"
+}
+
+marathon_session_blocklist_dir() {
+  echo "${MARATHON_SESSION_BLOCKLIST_DIR:-$HOME/.harness/marathon-session-blocklist}"
+}
+
+_marathon_canonical_run_dir() { # [$1 run-dir]
+  (cd "${1:-$MARATHON_RUN_DIR}" 2>/dev/null && pwd -P)
+}
+
+marathon_session_is_ignored() { # $1 session-id, [$2 run-dir]
+  local session file run
+  session="$(marathon_session_id "${1:-}")" || return 1
+  file="$(marathon_session_blocklist_dir)/$session"
+  [ -f "$file" ] || return 1
+  run="$(_marathon_canonical_run_dir "${2:-$MARATHON_RUN_DIR}")" || return 1
+  grep -qxF "$run" "$file" 2>/dev/null
+}
+
+marathon_ignore_here() { # [$1 run-dir]
+  local session run dir file
+  session="$(marathon_session_id)" || {
+    echo "marathon-locate: no session identity (CODEX_THREAD_ID/CLAUDE_SESSION_ID)" >&2
+    return 2
+  }
+  if [ -n "${1:-}" ]; then
+    run="$(_marathon_canonical_run_dir "$1")" || return 1
+    [ -f "$run/RUN.md" ] || { echo "marathon-locate: $run has no RUN.md" >&2; return 1; }
+  else
+    _marathon_cli_locate || { echo "marathon-locate: no active marathon found" >&2; return 1; }
+    run="$(_marathon_canonical_run_dir "$MARATHON_RUN_DIR")" || return 1
+  fi
+  dir="$(marathon_session_blocklist_dir)"; file="$dir/$session"
+  mkdir -p "$dir" || return 1
+  touch "$file" || return 1
+  grep -qxF "$run" "$file" 2>/dev/null || printf '%s\n' "$run" >> "$file"
+  echo "ignored here: $(basename "$run") | session=$session | dir=$run"
+}
+
+marathon_allow_here() { # [$1 run-dir]
+  local session run dir file tmp
+  session="$(marathon_session_id)" || {
+    echo "marathon-locate: no session identity (CODEX_THREAD_ID/CLAUDE_SESSION_ID)" >&2
+    return 2
+  }
+  if [ -n "${1:-}" ]; then
+    run="$(_marathon_canonical_run_dir "$1")" || return 1
+  else
+    _marathon_cli_locate || { echo "marathon-locate: no active marathon found" >&2; return 1; }
+    run="$(_marathon_canonical_run_dir "$MARATHON_RUN_DIR")" || return 1
+  fi
+  dir="$(marathon_session_blocklist_dir)"; file="$dir/$session"
+  [ -f "$file" ] || { echo "allowed here: $(basename "$run") | session=$session | dir=$run"; return 0; }
+  tmp="$file.tmp.$$"
+  grep -vxF "$run" "$file" > "$tmp" 2>/dev/null || : > "$tmp"
+  mv -f "$tmp" "$file" || { rm -f "$tmp"; return 1; }
+  [ -s "$file" ] || rm -f "$file"
+  echo "allowed here: $(basename "$run") | session=$session | dir=$run"
+}
+
+marathon_session_status() {
+  local session
+  session="$(marathon_session_id)" || {
+    echo "marathon-locate: no session identity (CODEX_THREAD_ID/CLAUDE_SESSION_ID)" >&2
+    return 2
+  }
+  _marathon_cli_locate || { echo "marathon: none active"; return 1; }
+  if marathon_session_is_ignored "$session" "$MARATHON_RUN_DIR"; then
+    echo "marathon: $MARATHON_SLUG | session=$session | ignored | dir=$MARATHON_RUN_DIR"
+  else
+    echo "marathon: $MARATHON_SLUG | session=$session | allowed | dir=$MARATHON_RUN_DIR"
+  fi
 }
 
 # Accept a candidate run directory. A directory without RUN.md is NOT a
@@ -400,8 +483,11 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     pause) shift; marathon_pause "$@" ;;
     resume) marathon_resume ;;
     status) marathon_status ;;
+    ignore-here) marathon_ignore_here "${2:-}" ;;
+    allow-here) marathon_allow_here "${2:-}" ;;
+    session-status) marathon_session_status ;;
     *)
-      echo "usage: $0 {register <run-dir>|unregister <run-dir>|locate [root] [runs-dir]|pause [<until>] [reason...]|resume|status}" >&2
+      echo "usage: $0 {register <run-dir>|unregister <run-dir>|locate [root] [runs-dir]|pause [<until>] [reason...]|resume|status|ignore-here [run-dir]|allow-here [run-dir]|session-status}" >&2
       exit 64
       ;;
   esac

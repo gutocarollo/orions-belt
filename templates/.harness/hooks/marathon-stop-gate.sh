@@ -44,6 +44,9 @@ STOP_ACTIVE="$(python3 -c 'import json,sys
 try: print(str(bool(json.load(sys.stdin).get("stop_hook_active", False))).lower())
 except Exception: print("false")' <<<"$IN")"
 [ "$STOP_ACTIVE" = "true" ] && exit 0
+HOOK_SESSION_ID="$(python3 -c 'import json,sys
+try: print(str(json.load(sys.stdin).get("session_id", "")))
+except Exception: print("")' <<<"$IN")"
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 
 CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
@@ -69,6 +72,8 @@ export HARNESS_MARATHON_STALE_DAYS="$(_conf_int HARNESS_MARATHON_STALE_DAYS 7)"
 
 . "$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
 marathon_locate "$ROOT" "$RUNS_DIR" || exit 0
+SESSION_ID="$(marathon_session_id "$HOOK_SESSION_ID")" || SESSION_ID=""
+[ -n "$SESSION_ID" ] && marathon_session_is_ignored "$SESSION_ID" "$MARATHON_RUN_DIR" && exit 0
 SLUG="$MARATHON_SLUG"
 RUN="$MARATHON_RUN_MD"
 TEARDOWN="$(marathon_teardown_hint)"

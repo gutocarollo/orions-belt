@@ -97,6 +97,12 @@ run_gate() {
     bash "$GATE" <<< '{"stop_hook_active":false}' >"$OUT" 2>&1
 }
 
+run_gate_session() { # $1 session id
+  MARATHON_REGISTRY="$REG" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
+    CLAUDE_PROJECT_DIR="$PROJ" bash "$GATE" \
+    <<< "{\"session_id\":\"$1\",\"stop_hook_active\":false}" >"$OUT" 2>&1
+}
+
 echo "=== Scenario 1: no marathon anywhere → gate stays inert (the common case) ==="
 : > "$REG"
 run_gate; assert_exit "no marathon must not block" "$?" 0
@@ -269,6 +275,43 @@ MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" \
 AFTER=$(wc -l < "$RUNMD")
 [ "$AFTER" -gt "$BEFORE" ] && echo "PASS: precompact stamped the cross-repo journal" \
   || { echo "FAIL: precompact did not touch the RUN.md ($BEFORE -> $AFTER)"; FAIL=1; }
+
+echo
+echo "=== Scenario 10b: one session may ignore this run without pausing it globally ==="
+rm -rf "$TMP/session-blocklist"
+rm -f "$WORK/.harness/runs/my-run/.stop-strikes"
+write_run "keep going"
+run_gate_session "session-a"; assert_exit "session-a initially blocks" "$?" 2
+CODEX_THREAD_ID="session-a" MARATHON_REGISTRY="$REG" \
+  MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" CLAUDE_PROJECT_DIR="$PROJ" \
+  bash "$PROJ/.harness/hooks/marathon-locate.sh" ignore-here "$WORK/.harness/runs/my-run" >/dev/null
+run_gate_session "session-a"; assert_exit "ignored session no longer blocks" "$?" 0
+run_gate_session "session-b"; assert_exit "different session still blocks" "$?" 2
+
+MARATHON_REGISTRY="$REG" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
+  CLAUDE_PROJECT_DIR="$PROJ" bash "$PROJ/.harness/hooks/marathon-reinject.sh" \
+  <<< '{"session_id":"session-a"}' >"$OUT" 2>&1
+[ ! -s "$OUT" ] && echo "PASS: ignored session receives no reinjection" \
+  || { echo "FAIL: ignored session received: $(cat "$OUT")"; FAIL=1; }
+
+BEFORE=$(wc -l < "$RUNMD")
+MARATHON_REGISTRY="$REG" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
+  CLAUDE_PROJECT_DIR="$PROJ" bash "$PROJ/.harness/hooks/marathon-precompact.sh" \
+  <<< '{"session_id":"session-a"}' >/dev/null 2>&1
+AFTER=$(wc -l < "$RUNMD")
+[ "$AFTER" -eq "$BEFORE" ] && echo "PASS: ignored session does not stamp the run journal" \
+  || { echo "FAIL: ignored precompact changed RUN.md ($BEFORE -> $AFTER)"; FAIL=1; }
+
+MARATHON_REGISTRY="$REG" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
+  CLAUDE_PROJECT_DIR="$PROJ" bash "$PROJ/.harness/hooks/marathon-reinject.sh" \
+  <<< '{"session_id":"session-b"}' >"$OUT" 2>&1
+assert_grep "different session still receives reinjection" "<marathon-run-state" "$OUT"
+
+CODEX_THREAD_ID="session-a" MARATHON_REGISTRY="$REG" \
+  MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" CLAUDE_PROJECT_DIR="$PROJ" \
+  bash "$PROJ/.harness/hooks/marathon-locate.sh" allow-here "$WORK/.harness/runs/my-run" >/dev/null
+rm -f "$WORK/.harness/runs/my-run/.stop-strikes"
+run_gate_session "session-a"; assert_exit "allow-here restores blocking" "$?" 2
 
 echo
 echo "=== Scenario 11: stop_hook_active=true → never re-block (no infinite loop) ==="
