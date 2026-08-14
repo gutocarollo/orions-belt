@@ -18,8 +18,15 @@ O subsistema é sustentado por três hooks já registrados (capítulos 02 e 06),
 | Momento | Hook | Papel |
 |---|---|---|
 | Contexto vai compactar | [marathon-precompact.sh](../../templates/.harness/hooks/marathon-precompact.sh) (`PreCompact`) | Registra a compactação no journal do RUN.md — o estado já está em disco, o hook só marca o evento |
-| Sessão reabre (`compact`/`resume`) | [marathon-reinject.sh](../../templates/.harness/hooks/marathon-reinject.sh) (`SessionStart`) | Reinjeta as primeiras 150 linhas do RUN.md no contexto: "execute a Próxima ação, não re-planeje" |
-| Agente tenta parar | [marathon-stop-gate.sh](../../templates/.harness/hooks/marathon-stop-gate.sh) (`Stop`) | Bloqueia a parada com itens abertos, devolvendo a "Próxima ação"; anti-prisão de 3 strikes sem progresso |
+| Sessão abre (qualquer origem: `startup`, `compact`, `resume`) | [marathon-reinject.sh](../../templates/.harness/hooks/marathon-reinject.sh) (`SessionStart`) | Reinjeta as primeiras 150 linhas do RUN.md no contexto: "execute a Próxima ação, não re-planeje" — ou, se a run está pausada, só o aviso de pausa |
+| Agente tenta parar | [marathon-stop-gate.sh](../../templates/.harness/hooks/marathon-stop-gate.sh) (`Stop`) | Bloqueia a parada com itens abertos, devolvendo a "Próxima ação"; anti-prisão de 3 strikes sem progresso; inerte se a run está pausada |
+
+O reinject era registrado só com matcher `compact|resume`. Uma sessão NOVA
+(`source=startup`) portanto abria sem saber que existia maratona — o estado
+durável só voltava depois de uma compactação, então fechar o terminal e reabrir
+perdia a run até algo compactar. Como o hook é inerte quando não há maratona
+localizada, registrá-lo em toda `SessionStart` não custa nada no caso comum e é
+o que dá à pergunta de pausa-expirada (abaixo) um lugar confiável para acontecer.
 
 ```mermaid
 flowchart TD
@@ -31,14 +38,41 @@ flowchart TD
     C -- "nao" --> F{"agente tenta encerrar o turno"}
     F --> G{"checklist com itens abertos?"}
     G -- "nao" --> H["parada legitima"]
-    G -- "sim" --> I{"Proxima acao = AGUARDANDO: decisao do usuario?"}
+    G -- "sim" --> P{"existe PAUSED e a janela ainda vale?"}
+    P -- "sim" --> H
+    P -- "expirou" --> Q["libera e AVISA: retomar, adiar ou encerrar? decisao do dono"]
+    P -- "nao ha pausa" --> I{"Proxima acao = AGUARDANDO: decisao do usuario?"}
     I -- "sim" --> H
     I -- "nao" --> J["stop-gate bloqueia e devolve a Proxima acao"]
     J --> B
     J -. "3 bloqueios sem o RUN.md mudar" .-> K["anti-prisao: libera com aviso; maratona segue ATIVA"]
 ```
 
-As paradas legítimas são explícitas: checklist zerado, ou "Próxima ação" começando com `AGUARDANDO: <pergunta>` (bloqueado em decisão humana). O anti-prisão usa o mtime do RUN.md como detector de progresso: bloqueios consecutivos sem o arquivo mudar até o limite `HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS` (default 3) liberam com aviso — cobrar progresso, não manter refém.
+As paradas legítimas são explícitas: checklist zerado, "Próxima ação" começando com `AGUARDANDO: <pergunta>` (bloqueado em decisão humana), ou a run pausada (abaixo). O anti-prisão usa um **checksum do conteúdo** do RUN.md como detector de progresso — mtime era errado nas duas direções (granularidade de 1s fazia duas edições reais no mesmo segundo lerem como "sem progresso", e um `touch` seco zerava o contador sem nada ter mudado): bloqueios consecutivos sem o conteúdo mudar até o limite `HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS` (default 3) liberam com aviso — cobrar progresso, não manter refém.
+
+## Pausar sem perder o estado (e sem voltar a executar sozinho)
+
+Uma maratona que depende de algo externo — decisão de terceiro, janela de deploy, viagem — tinha só dois caminhos, os dois ruins: **encerrar** (`rm ACTIVE` + `unregister`), que joga o estado durável fora, ou **deixar armada**, e aí o stop-gate empurra o agente de volta para ela em todo turno. A pausa é o terceiro caminho: um arquivo `PAUSED` ao lado do RUN.md.
+
+```bash
+bash .harness/hooks/marathon-locate.sh pause                       # default: 24 horas
+bash .harness/hooks/marathon-locate.sh pause 2026-08-20 "cliente"   # data explícita
+bash .harness/hooks/marathon-locate.sh pause +3d "build de sexta"   # relativa
+bash .harness/hooks/marathon-locate.sh pause manual "sem prazo"     # aberta, só com pedido explícito
+bash .harness/hooks/marathon-locate.sh status                       # slug, itens abertos, estado
+bash .harness/hooks/marathon-locate.sh resume                       # levanta a pausa, executa NADA
+```
+
+O default de **24 horas** é deliberado: `pause` seco é o comando de quem está saindo, não uma declaração de que a run morreu — então a janela fecha sozinha no dia seguinte e volta como PERGUNTA. A forma relativa é gravada **já resolvida** em instante absoluto; guardar `+3d` literal seria reavaliado a cada checagem e nunca expiraria. O arquivo é texto (`until:` / `reason:` / `paused_at:`) e pode ser editado à mão para empurrar a data.
+
+Enquanto a pausa vale, dois comportamentos mudam:
+
+1. **O stop-gate fica inerte** — a parada não é bloqueada, e a sessão fica livre para outro assunto.
+2. **O reinject não injeta o checklist**, só um aviso curto de que a run existe e está dormindo. Esse é o ponto central: injetar o checklist é justamente o que faz um modelo retomar o trabalho por conta própria. Silêncio total seria pior — o agente acharia `ACTIVE`/`PAUSED` no disco sem moldura nenhuma e poderia decidir sozinho que retomar é o comportamento prestativo.
+
+**Expirar não é retomar.** Quando a janela fecha, o estado vira `pause-expired`: o stop-gate continua sem bloquear e avisa o dono de que a janela acabou; o reinject injeta o estado com a instrução explícita de PERGUNTAR antes de qualquer trabalho — retomar, adiar para uma data nova, ou encerrar. Re-armar o gate na expiração colocaria o agente de volta a executar sozinho, que é exatamente o comportamento que este mecanismo existe para impedir. Data ilegível ou ausente também mantém pausado: o fail-safe aponta para perguntar, nunca para executar.
+
+Prova executável: [engine/hooks/tests/test_marathon_pause.sh](../../engine/hooks/tests/test_marathon_pause.sh) (13 cenários dirigindo os hooks reais como subprocessos).
 
 ## Como configurar
 

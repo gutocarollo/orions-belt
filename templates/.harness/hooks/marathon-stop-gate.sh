@@ -3,6 +3,9 @@
 # With the marathon located + open items in RUN.md: blocks the stop and
 # returns the "Próxima ação". Anti-lockup: N consecutive blocks WITHOUT RUN.md
 # changing → releases with a warning (real progress resets the strikes).
+# Inert as well while the run is PAUSED; an expired pause also releases the stop
+# and reports the expiry instead of resuming (see the PAUSE section of
+# marathon-locate.sh).
 #
 # MATERIALIZATION (F9-fixes): the runs directory (HARNESS_RUNS_DIR, default
 # .harness/runs), the strike cap (HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS,
@@ -74,8 +77,41 @@ TEARDOWN="$(marathon_teardown_hint)"
 # anchor was '^- \[ \]', which silently ignored every NESTED item — a RUN.md
 # whose remaining work sat under a parent bullet counted zero open and the
 # gate released the stop with real work still pending.
+#
+# Counted BEFORE the pause branch on purpose: a finished run that was left
+# paused has nothing to decide, so it must stay silent instead of nagging about
+# an expired window forever.
 OPEN=$(grep -c '^[[:space:]]*- \[[ ~]\]' "$RUN" || true)
 [ "$OPEN" -eq 0 ] && exit 0   # checklist empty — legitimate stop
+
+# PAUSE (2026-08-12). A paused marathon must never force the turn to continue:
+# the owner suspended THIS run on purpose and is working on something else. The
+# gate going inert is what makes the pause real — the checklist still has open
+# items, so without this branch the gate would keep pushing the agent back into
+# a run that is supposed to be asleep.
+#
+# `expired` is deliberately NOT treated as "resume". Re-arming the gate on
+# expiry would put the agent straight back to executing on its own, which is
+# precisely the behaviour this mechanism exists to prevent. Instead the stop is
+# released and the owner is TOLD the window closed; the decision to resume,
+# postpone or end is a human one (the reinject hook asks it explicitly at the
+# next session start).
+marathon_pause_state
+case "$MARATHON_PAUSE_STATUS" in
+  paused)
+    exit 0 ;;
+  expired)
+    MP_SLUG="$SLUG" MP_UNTIL="$MARATHON_PAUSE_UNTIL" MP_DIR="$MARATHON_RUN_DIR" \
+    MP_TEARDOWN="$TEARDOWN" MP_HOOKS="$(dirname "${BASH_SOURCE[0]}")" python3 -c '
+import json, os
+msg = ("marathon %s: the pause window ended (%s) and NOTHING was resumed automatically. "
+       "Decide before any work on this run — resume: bash %s/marathon-locate.sh resume | "
+       "postpone: bash %s/marathon-locate.sh pause <YYYY-MM-DD|+Nd> <reason> | end it: %s"
+       ) % (os.environ["MP_SLUG"], os.environ["MP_UNTIL"], os.environ["MP_HOOKS"],
+            os.environ["MP_HOOKS"], os.environ["MP_TEARDOWN"])
+print(json.dumps({"systemMessage": msg}))'
+    exit 0 ;;
+esac
 
 # WAITING/AGUARDANDO (user decision) = legitimate stop.
 # Bilingual: the marathon skill emits "## Next action" (en) or "## Próxima ação" (pt),

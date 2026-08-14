@@ -13,7 +13,6 @@
         ]
       },
       {
-        "matcher": "^(resume|compact)$",
         "hooks": [
           {"type": "command", "command": "bash \"$(git rev-parse --show-toplevel)/.harness/hooks/marathon-reinject.sh\"", "timeout": 10}
         ]

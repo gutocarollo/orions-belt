@@ -27,7 +27,10 @@ description: >
   pipelines com subagents, checklists E2E, qualquer execução estimada >1h ou
   >3 fases. Use SEMPRE que o usuário disser "execute todas as ondas", "termine
   tudo", "vá até o fim", "sem parar", "/goal ...", ou ao RETOMAR trabalho
-  quando {{ harness_runs_dir }}/ACTIVE existir. Cria estado durável em
+  quando {{ harness_runs_dir }}/ACTIVE existir. Use TAMBÉM quando o usuário
+  disser "pausa a maratona", "suspende isso até dia X", "para por enquanto",
+  "retoma a maratona" ou quando um bloco injetado vier com status="paused"/
+  "pause-expired" (§5). Cria estado durável em
   {{ harness_runs_dir }}/ que sobrevive a compactação e alimenta os hooks
   marathon-stop-gate e marathon-reinject. NÃO usar para tarefas curtas de
   sessão única.
@@ -94,9 +97,12 @@ started: <YYYY-MM-DD HH:MM>
 
 ## 3. Retomada (pós-compactação, nova sessão, "continue")
 
-O hook `marathon-reinject` injeta o RUN.md automaticamente em resume/compact.
+O hook `marathon-reinject` injeta o RUN.md automaticamente em toda SessionStart.
 Protocolo: ler Checklist + Próxima ação → executar a Próxima ação. Sem
 re-planejar do zero, sem re-perguntar decisões registradas.
+
+Exceção: se o bloco injetado vier com `status="paused"` ou
+`status="pause-expired"`, este protocolo NÃO se aplica — vale a §5.
 
 ## 4. Fim de maratona
 
@@ -111,16 +117,58 @@ o RUN.md some ou fica `HARNESS_MARATHON_STALE_DAYS`
 ({{ harness_marathon_stale_days }}) dias sem ser tocado. Antes disso,
 checklist zerado já libera a parada.
 
-## 5. Hooks que este estado alimenta
+## 5. Pausar e retomar (sem perder o estado)
+
+Uma maratona que depende de algo externo — decisão de terceiro, janela de
+deploy, viagem — não deve ser encerrada nem deixada armada. Encerrar joga o
+estado durável fora; deixar armada faz o stop-gate empurrar o agente de volta
+para ela em TODO turno. Para isso existe a pausa:
+
+```bash
+bash .harness/hooks/marathon-locate.sh pause 2026-08-20 "aguardando resposta do cliente"
+bash .harness/hooks/marathon-locate.sh pause +3d "esperando o build de sexta"
+bash .harness/hooks/marathon-locate.sh pause            # sem data = pausada até você retomar
+bash .harness/hooks/marathon-locate.sh status           # slug, itens abertos, estado da pausa
+bash .harness/hooks/marathon-locate.sh resume           # levanta a pausa (NÃO executa nada)
+```
+
+`until` aceita `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM`, `+Nd`, `+Nh` ou `manual`. A
+data relativa é gravada JÁ RESOLVIDA em `{{ harness_runs_dir }}/$SLUG/PAUSED` —
+guardar `+3d` literal seria reavaliado a cada checagem e nunca expiraria. O
+arquivo é texto (`until:` / `reason:` / `paused_at:`) e pode ser editado à mão
+para empurrar a data.
+
+**O que a pausa muda, enquanto vale:**
+
+1. `marathon-stop-gate` fica inerte — a parada não é bloqueada, e você fica
+   livre para trabalhar em outra coisa na mesma sessão.
+2. `marathon-reinject` **não injeta o checklist**, só um aviso curto de que a
+   run existe e está dormindo. Injetar o checklist é justamente o que faz um
+   modelo retomar o trabalho por conta própria.
+3. Data ilegível ou ausente = pausada para sempre. O fail-safe aponta para
+   perguntar, nunca para executar.
+
+**Quando a janela expira, expirar NÃO é retomar.** O estado vira
+`pause-expired`: o stop-gate continua sem bloquear e avisa o dono que a janela
+fechou; o reinject injeta o estado com a instrução explícita de **PERGUNTAR
+antes de qualquer trabalho** — retomar, adiar para uma data nova, ou encerrar.
+Nada volta a executar sozinho. Se você quer que volte, responda "retoma" (ou
+rode `resume`); se quer mais prazo, `pause <nova-data>`.
+
+## 6. Hooks que este estado alimenta
 
 - `marathon-stop-gate` (Stop): com a maratona localizada + itens abertos,
   bloqueia a parada e devolve a Próxima ação
   ({{ harness_marathon_max_blocks_without_progress }} strikes sem progresso →
   libera com aviso, não prende para sempre). Item aberto conta `[ ]` e `[~]`,
   em QUALQUER indentação. Encerrar na marra: o próprio bloqueio imprime o
-  comando.
-- `marathon-reinject` (SessionStart resume/compact): injeta o RUN.md.
-- `marathon-precompact` (PreCompact): marca a compactação no Journal.
+  comando. Inerte enquanto a run está pausada (§5).
+- `marathon-reinject` (SessionStart, qualquer origem): injeta o RUN.md — ou o
+  aviso de pausa/expiração, conforme §5. Registrado para TODA SessionStart, não
+  só `resume|compact`: sessão nova começava sem saber que existia maratona, e a
+  run só reaparecia depois de uma compactação.
+- `marathon-precompact` (PreCompact): marca a compactação no Journal (e se
+  estava pausada, marca isso também).
 - `marathon-locate` (biblioteca dos três acima): resolve ONDE mora a
   maratona — `ACTIVE` local (slug OU caminho absoluto), senão o registro do
   usuário em `$HOME/.harness/marathon-active`, podando entrada morta. Sem ele

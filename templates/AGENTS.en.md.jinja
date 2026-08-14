@@ -479,6 +479,7 @@ For implementations (code, configuration, pipeline):
 - Only proceed after confirmation of success.
 - If it fails: stop, diagnose, fix, re-test.
 - Long run (>1h or >3 phases, "execute everything", "/goal"): use the `marathon` skill (durable state in `{{ harness_runs_dir }}/`). If `{{ harness_runs_dir }}/ACTIVE` exists, invoke the `marathon` skill and execute the RUN.md "Next action" BEFORE anything else.
+  **Exception — paused run:** if a `PAUSED` file exists in the run directory (or the injected `<marathon-run-state>` block carries `status="paused"`), do NOT resume it, do NOT execute the "Next action" and do NOT list the run as pending work; the pause is deliberate. With `status="pause-expired"`, ASK the owner before any work on the run — resume, postpone to a new date, or end it — never start executing. Pause/resume: `bash .harness/hooks/marathon-locate.sh pause [<YYYY-MM-DD|+Nd|manual>] [reason]` (no date = 24h) / `... resume` / `... status`.
 - Subagents: maximum {{ harness_subagent_max_concurrent }} concurrent (hook subagent-throttle blocks the excess).
 
 ## 12. Response Structure

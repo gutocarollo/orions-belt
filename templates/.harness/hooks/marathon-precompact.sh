@@ -20,5 +20,14 @@ fi
 
 . "$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
 marathon_locate "$ROOT" "$RUNS_DIR" || exit 0
-echo "- $(date +%H:%M) context compaction (state preserved here)" >> "$MARATHON_RUN_MD"
+# The pause state is stamped too: reading the journal later, "compacted while
+# paused" is the difference between a run that stalled and one that was parked
+# on purpose.
+marathon_pause_state
+case "$MARATHON_PAUSE_STATUS" in
+  paused)  NOTE="context compaction (state preserved here; run PAUSED until $MARATHON_PAUSE_UNTIL)" ;;
+  expired) NOTE="context compaction (state preserved here; pause EXPIRED at $MARATHON_PAUSE_UNTIL, awaiting the owner's decision)" ;;
+  *)       NOTE="context compaction (state preserved here)" ;;
+esac
+echo "- $(date +%H:%M) $NOTE" >> "$MARATHON_RUN_MD"
 exit 0

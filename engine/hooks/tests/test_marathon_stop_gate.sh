@@ -43,7 +43,10 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
-HOOKS_SRC="$REPO/templates/.harness/hooks"
+# Overridable so the SAME suite can be pointed at a real installed project
+# (MARATHON_HOOKS_SRC=/path/to/project/.harness/hooks) — proving the copy that
+# actually runs there behaves, not only the template it came from.
+HOOKS_SRC="${MARATHON_HOOKS_SRC:-$REPO/templates/.harness/hooks}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -144,7 +147,12 @@ write_run "keep going"
 
 echo
 echo "=== Scenario 6: checklist with zero open items → legitimate stop ==="
-sed -i 's/^- \[ \] open item$/- [x] open item/' "$RUNMD"
+# NOT `sed -i` (measured on macOS 2026-08-12): BSD sed reads the argument after
+# -i as the backup suffix, so `sed -i 's/…/…/' file` silently edited nothing,
+# the item stayed open, the gate correctly blocked and the scenario reported a
+# FAIL that had nothing to do with the gate. Rewriting through a temp file is
+# the portable form.
+awk '{ sub(/^- \[ \] open item$/, "- [x] open item"); print }' "$RUNMD" > "$RUNMD.tmp" && mv "$RUNMD.tmp" "$RUNMD"
 run_gate; assert_exit "closed checklist must not block" "$?" 0
 write_run "keep going"
 

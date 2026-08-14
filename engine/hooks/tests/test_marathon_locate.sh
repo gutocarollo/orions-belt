@@ -11,7 +11,10 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOOKS_DIR="$(cd "$HERE/.." && pwd)"
+# Overridable so the SAME suite can be pointed at a real installed project
+# (MARATHON_HOOKS_SRC=/path/to/project/.harness/hooks) — proving the copy that
+# actually runs there behaves, not only the engine source it came from.
+HOOKS_DIR="${MARATHON_HOOKS_SRC:-$(cd "$HERE/.." && pwd)}"
 LOCATE="$HOOKS_DIR/marathon-locate.sh"
 
 FAIL=0

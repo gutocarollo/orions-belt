@@ -481,6 +481,7 @@ Para implementações (código, configuração, pipeline):
 - Só prosseguir após confirmação de sucesso.
 - Se falhar: parar, diagnosticar, corrigir, re-testar.
 - Execução longa (>1h ou >3 fases, "execute tudo", "/goal"): usar a skill `marathon` (estado durável em `{{ harness_runs_dir }}/`). Se `{{ harness_runs_dir }}/ACTIVE` existir, invocar a skill `marathon` e executar a "Próxima ação" do RUN.md ANTES de qualquer outra coisa.
+  **Exceção — run pausada:** se existir `PAUSED` no diretório da run (ou se o bloco `<marathon-run-state>` injetado vier com `status="paused"`), NÃO retomar, NÃO executar a "Próxima ação" e NÃO listar a run como pendência; a pausa é deliberada. Com `status="pause-expired"`, PERGUNTAR ao dono antes de qualquer trabalho na run — retomar, adiar para nova data, ou encerrar — nunca sair executando. Pausar/retomar: `bash .harness/hooks/marathon-locate.sh pause [<YYYY-MM-DD|+Nd|manual>] [motivo]` (sem data = 24h) / `... resume` / `... status`.
 - Subagents: máximo {{ harness_subagent_max_concurrent }} simultâneos (hook subagent-throttle bloqueia o excedente).
 
 ## 12. Estrutura de Resposta

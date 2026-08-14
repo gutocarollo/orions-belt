@@ -19,12 +19,12 @@
         ]
       },
       {
-        "matcher": "compact|resume",
         "hooks": [
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.harness/hooks/marathon-reinject.sh\"",
-            "timeout": 10
+            "timeout": 10,
+            "statusMessage": "marathon: checking for an active run"
           }
         ]
       },
