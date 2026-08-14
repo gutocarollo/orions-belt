@@ -107,6 +107,7 @@ _exclude:
   - "/tests/test_gitignore_runtime_state.sh"
   - "/tests/test_exploration_protocol.sh"
   - "/tests/test_git_doctor_hookspath.sh"
+  - "/tests/test_gauntlet_profile.py"
   - "/verification/council-witness.json"
   # H3/A1 (fonte única de skills dual-runtime — grill-me,
   # prova-de-conclusao, marathon, repo-wiki-curator, ui-evidence, verify):
@@ -138,6 +139,7 @@ _exclude:
   - "/.harness/skills-shared/clarification-plan/SKILL.md"
   - "/.harness/skills-shared/exploration-protocol/SKILL.md"
   - "/.harness/skills-shared/master-plan/SKILL.md"
+  - "/.harness/skills-shared/gauntlet-loop/SKILL.md"
   # i18n (harness_language): variantes .pt/.en das skills são FONTE dos selectors
   # SKILL.md.jinja ({% raw %}{% include "..." ~ harness_language ~ "..." %}{% endraw %});
   # só o selector renderiza (SKILL.md, já excluído acima). AGENTS.pt/.en idem
@@ -302,6 +304,28 @@ use_antigravity:
     validator: >-
         {% if not use_codex and not use_claude and not use_antigravity %}
         Ao menos um runtime deve estar ativo: use_claude=true, use_codex=true ou use_antigravity=true.
+        {% endif %}
+
+# Perfil de orquestração. Gauntlet é o default leve: o Council permanece
+# disponível para adoção explícita, mas nunca é imposto a toda tarefa.
+use_gauntlet_loop:
+    type: bool
+    help: >-
+        Instalar o perfil adaptativo Gauntlet (MetaPrompt -> plano com uma
+        revisão independente -> execução/verificação/crítica condicional)?
+        É o default recomendado para evitar loops fixos e fan-out obrigatório.
+    default: true
+
+use_delivery_council:
+    type: bool
+    help: >-
+        Instalar o Delivery Council legado e torná-lo o orquestrador do
+        projeto? É opt-in: use apenas quando o custo de múltiplos especialistas
+        e loops limitados for explicitamente desejado.
+    default: false
+    validator: >-
+        {% if use_delivery_council and use_gauntlet_loop %}
+        Escolha um único perfil: para ativar o Council, defina use_gauntlet_loop=false.
         {% endif %}
 
 # As regras hookify eram geradas INCONDICIONALMENTE junto com `use_claude`,
@@ -784,7 +808,7 @@ harness_required_skills:
         frontmatter `name`/`description`). Vazio = nenhuma skill obrigatória
         por padrão — cada projeto declara as suas (ex.: a skill do council,
         "{{ project_name }}-delivery-council").
-    default: "{% if use_codex %}{{ project_name }}-delivery-council,adversarial-review,grill-me{% endif %}"
+    default: "{% if use_codex and use_gauntlet_loop %}gauntlet-loop,planning-and-task-breakdown,clarification-plan{% elif use_codex and use_delivery_council %}{{ project_name }}-delivery-council,adversarial-review,grill-me{% endif %}"
 
 harness_codex_agents_dir:
     type: str
@@ -804,7 +828,7 @@ harness_council_skill_name:
         Nome da skill do delivery council, SE este projeto tiver uma
         variante OpenAI/companion (agents/openai.yaml dentro da skill) a
         validar. Vazio = validação pulada (fail-open).
-    default: "{% if use_codex %}{{ project_name }}-delivery-council{% endif %}"
+    default: "{% if use_codex and use_delivery_council %}{{ project_name }}-delivery-council{% endif %}"
 
 # =========================================================================
 # --- e2e (opcional) ---

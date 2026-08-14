@@ -1,0 +1,95 @@
+---
+name: gauntlet-loop
+description: >-
+  Orquestração adaptativa em três ciclos que transforma pedido bruto em
+  MetaPrompt revisado, plano aprovado e execução autônoma orientada por
+  evidência, sem Council obrigatório nem rodadas fixas de revisão.
+---
+
+# Gauntlet Loop
+
+Use esta skill em trabalho não trivial que o dono quer definir com precisão e
+depois executar de forma autônoma. É o perfil relaxado de orquestração. Ela deve
+never invoke `{{ project_name }}-delivery-council`; esse perfil é uma escolha
+opt-in separada.
+
+## Invariantes herdadas do Orion's Belt
+
+- Comece pela request anchor verbatim e pelas emendas aceitas. Nunca a
+  substitua por resumo que enfraqueça o escopo silenciosamente.
+- Preserve `repo-wiki-curator`, índices temporais, reinjeção de pedidos,
+  `marathon`, hooks determinísticos e `prova-de-conclusao`. Esta skill roteia o
+  trabalho; ela não contorna essas capacidades.
+- Reaproveite o mesmo especialista ou critic existente quando ele tiver a
+  competência necessária. Não respawne agente equivalente apenas para obter
+  um turno novo.
+- Uma pergunta só é permitida depois da exploração factual e via
+  `clarification-plan` quando a resposta muda materialmente objetivo, barra,
+  fronteira ou plano.
+
+## Ciclo 1 — compilar o MetaPrompt
+
+O agente inicial executa `context-engineering`, depois `idea-refine`, e usa
+`interview-me` mais `clarification-plan` somente para escolhas materiais ainda
+abertas. A pesquisa continua até o pedido de execução poder ser entregue sem
+ambiguidade a um agente novo.
+
+Escreva `.harness/runs/<slug>/METAPROMPT.md` com:
+
+1. objetivo original e emendas aceitas;
+2. Real Bar: resultados observáveis e critérios de aceitação;
+3. regras, fronteiras, não-objetivos, evidências disponíveis e bloqueios;
+4. prompt final executável por um agente de planejamento que não viu este chat.
+
+O Ciclo 1 termina em `METAPROMPT-READY`. Não implemente nem fabrique plano
+neste ciclo.
+
+## Ciclo 2 — compilar e aprovar o plano
+
+Um agente novo executa `METAPROMPT.md`, explora o repositório, resolve qualquer
+decisão material restante via `clarification-plan` e roda
+`planning-and-task-breakdown`. Grave o resultado ordenado por dependências em
+`.harness/runs/<slug>/PLAN.md`.
+
+Rode exactly one independent plan review quando o plano estiver coerente. O
+revisor independente lê request anchor, `METAPROMPT.md`, `PLAN.md`, evidências
+relevantes do repositório e nenhum transcript de Council. Grave veredito e
+evidências em `.harness/runs/<slug>/PLAN-REVIEW.md`. Incorpore uma vez as
+correções bloqueantes; sugestões comuns entram em `BACKLOG.md`.
+
+Calcule o hash do plano revisado em
+`.harness/runs/<slug>/APPROVAL.sha256`. A execução começa somente após o dono
+aprovar esse hash exato. Mudança material no plano invalida a aprovação e exige
+novo hash, não outro loop automático de revisão.
+
+## Ciclo 3 — execução autônoma
+
+Depois da aprovação, repita o menor ciclo de controle útil:
+
+1. execute a próxima tarefa pronta ou slice coeso;
+2. rode deterministic verification contra os critérios afetados;
+3. invoque um conditional critic somente quando existir um gatilho abaixo;
+4. persista evidência, estado, findings e próxima ação antes de continuar.
+
+Gatilhos do conditional critic: mudança em fronteira de segurança ou dados;
+mudança cross-cutting de contrato; evidência determinística ambígua; migração de
+alto risco ou ação destrutiva proposta; ou fechamento final que precise de
+desafio independente. Sem gatilho, não há chamada de critic.
+
+A disposição do finding é mecânica:
+
+- `BLOCKING`, `CRITICAL`, `HIGH` ou `REQUIRED`: faça rework direcionado, rode
+  novamente apenas os checks determinísticos afetados e peça ao same critic
+  para rever o mesmo finding quando houve critic.
+- `MEDIUM`, `LOW`, `OPTIONAL`, `NIT` ou `FYI`: acrescente item rastreável em
+  `.harness/runs/<slug>/BACKLOG.md`; não reabra trabalho já aceito.
+
+A convergência usa no fixed round count. Continue enquanto o finding
+bloqueante mudar e o reparo produzir progresso comprovado. Se o mesmo bloqueio
+se repetir sem evidência nova, persista-o e pare pela autoridade ou condição
+externa ausente em vez de queimar mais turnos.
+
+A run termina somente quando todo critério aprovado tiver evidência
+determinística, houver zero findings bloqueantes e o completion gate existente
+aceitar o manifesto fresco de `prova-de-conclusao`. Reporte o backlog adiado em
+separado; ele não é falha oculta e não dispara rework.

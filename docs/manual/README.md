@@ -18,7 +18,7 @@ Convenções: capítulos são classe **sequenced** (`NN-slug.md`, ordem de leitu
 | 08 | [Execuções longas: marathon, estado durável e o loop de manutenção](08-marathon-e-loops.md) | Execução multi-fase que sobrevive a compactação e não é abandonada |
 | 09 | [Skills operacionais: os manuais de procedimento](09-skills-operacionais.md) | Entender o que é uma skill, os pares gate+skill e as skills do núcleo |
 | 10 | [A wiki Karpathy: documentação com indexação temporal e lint](10-wiki-karpathy.md) | Organizar docs; naming por classe temporal; docs-wiki-lint e ref-integrity |
-| 11 | [O council e os subagents: revisão adversarial](11-council-subagents.md) | Orquestrar subagents; os loops adversariais; witness e ledger |
+| 11 | [Gauntlet padrão, Council opt-in e subagents](11-council-subagents.md) | Entender os três ciclos adaptativos, os triggers de critic e o perfil legado |
 | 12 | [O ciclo de auto-melhoria: lessons.md e promoção a regra](12-auto-melhoria.md) | Fazer o agente aprender com erros entre sessões |
 | 13 | [Understand Anything: grafo de código em monorepo e o diff relativo](13-understand-anything.md) | Projetos com grafo de código cuja raiz é subdiretório do monorepo |
 | 14 | [Instalação e atualização: copier copy, harness-init e copier update](14-instalacao-e-update.md) | Instalar o framework num projeto; adaptar à stack; atualizar sem perder edições |

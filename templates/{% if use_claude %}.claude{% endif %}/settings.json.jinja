@@ -114,6 +114,7 @@
       {%- endif %}
     ],
     "PreToolUse": [
+      {%- if use_delivery_council %}
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
@@ -125,6 +126,7 @@
           }
         ]
       },
+      {%- endif %}
       {%- if harness_understand_apps_root %}
       {
         "matcher": "Bash",
@@ -163,6 +165,7 @@
       {%- endif %}
     ],
     "PostToolUse": [
+      {%- if use_delivery_council %}
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
@@ -174,6 +177,7 @@
           }
         ]
       },
+      {%- endif %}
       {%- if use_ds_gate %}
       {
         "matcher": "Edit|Write|MultiEdit",
@@ -235,12 +239,14 @@
     "Stop": [
       {
         "hooks": [
+          {%- if use_delivery_council %}
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/council-gate.py\" stop",
             "timeout": 10,
             "statusMessage": "council: checking delivery evidence"
           },
+          {%- endif %}
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.harness/hooks/completion-gate.py\"",
