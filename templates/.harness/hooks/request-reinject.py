@@ -70,6 +70,10 @@ def select_ledger(reqdir: Path, session_id: str | None) -> Path | None:
         exact = reqdir / f"session-{session_id}.md"
         if exact.is_file():
             return exact
+        # A runtime-provided session id is an ownership boundary. Falling back
+        # to the newest ledger here can inject another chat's objective into
+        # this session before its own UserPromptSubmit ledger exists.
+        return None
     ledgers = sorted(reqdir.glob("session-*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
     return ledgers[0] if ledgers else None
 

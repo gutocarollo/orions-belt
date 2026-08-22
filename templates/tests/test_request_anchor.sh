@@ -56,6 +56,17 @@ assert "reinject (ledger path) also carries the amendment (G1)" \
   'printf "%s" "$OUT" | grep -q "sinteticos injetados"'
 assert "reinject carries compact adopted decisions" \
   'printf "%s" "$OUT" | grep -q "D24: A. \[request:3\]"'
+# A session id is a strict ownership boundary: if that session has no ledger,
+# reinjection must stay inert instead of borrowing the newest unrelated chat.
+MISSING_SESSION_OUT="$(printf '{"session_id":"missing-session"}' | python3 "$F/.harness/hooks/request-reinject.py")"
+assert "missing exact session ledger does not fall back cross-session" \
+  '[ -z "$MISSING_SESSION_OUT" ]'
+# Once the exact ledger exists, the same session receives only its own anchor.
+printf '{"prompt":"objetivo exclusivo da sessao exata","session_id":"exact-session"}' \
+  | python3 "$F/.harness/hooks/request-ledger.py"
+EXACT_SESSION_OUT="$(printf '{"session_id":"exact-session"}' | python3 "$F/.harness/hooks/request-reinject.py")"
+assert "exact session receives only its own ledger" \
+  'printf "%s" "$EXACT_SESSION_OUT" | grep -q "objetivo exclusivo da sessao exata" && ! printf "%s" "$EXACT_SESSION_OUT" | grep -q "solta na mao do agente"'
 # N2: a prompt containing a literal "## [" line must NOT truncate the reinjected anchor
 printf '{"prompt":"paste this: ## [fake heading] blah then END-FENCE-TAIL","session_id":"n2"}' \
   | python3 "$F/.harness/hooks/request-ledger.py"
