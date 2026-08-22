@@ -12,6 +12,16 @@ set -uo pipefail
 IN=$(cat)
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 
+LOCATOR="$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
+if [ ! -r "$LOCATOR" ]; then
+  echo "marathon-precompact: required dependency missing: $LOCATOR" >&2
+  exit 1
+fi
+if ! . "$LOCATOR" || ! declare -F marathon_locate >/dev/null 2>&1; then
+  echo "marathon-precompact: required dependency invalid: $LOCATOR" >&2
+  exit 1
+fi
+
 CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
 RUNS_DIR=".harness/runs"
 if command -v python3 >/dev/null 2>&1 && [ -f "$CONF_PY" ]; then
@@ -19,12 +29,18 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$CONF_PY" ]; then
   [ -n "$v" ] && RUNS_DIR="$v"
 fi
 
-. "$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
-marathon_locate "$ROOT" "$RUNS_DIR" || exit 0
 HOOK_SESSION_ID="$(python3 -c 'import json,sys
 try: print(str(json.load(sys.stdin).get("session_id", "")))
 except Exception: print("")' <<<"$IN" 2>/dev/null || true)"
 SESSION_ID="$(marathon_session_id "$HOOK_SESSION_ID")" || SESSION_ID=""
+[ -n "$SESSION_ID" ] || {
+  echo "marathon-precompact: missing valid session_id; refusing to select a global marathon" >&2
+  exit 1
+}
+marathon_locate_for_session "$ROOT" "$RUNS_DIR" "$SESSION_ID"
+LOCATE_RC=$?
+[ "$LOCATE_RC" -eq 1 ] && exit 0
+[ "$LOCATE_RC" -eq 0 ] || exit 1
 [ -n "$SESSION_ID" ] && marathon_session_is_ignored "$SESSION_ID" "$MARATHON_RUN_DIR" && exit 0
 # The pause state is stamped too: reading the journal later, "compacted while
 # paused" is the difference between a run that stalled and one that was parked

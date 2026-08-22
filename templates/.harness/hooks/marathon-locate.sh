@@ -109,6 +109,7 @@
 MARATHON_RUN_DIR=""
 MARATHON_RUN_MD=""
 MARATHON_SLUG=""
+MARATHON_RUN_ID=""
 MARATHON_SOURCE_KIND=""
 MARATHON_ACTIVE_FILE=""
 MARATHON_PAUSE_FILE=""
@@ -135,8 +136,112 @@ marathon_session_id() { # [$1 hook-payload session_id]
   printf '%s\n' "$id"
 }
 
+marathon_runtime_id() {
+  local runtime="${HARNESS_AGENT_RUNTIME:-}"
+  if [ -z "$runtime" ]; then
+    if [ -n "${CODEX_THREAD_ID:-}" ]; then runtime="codex"
+    elif [ -n "${CLAUDE_SESSION_ID:-}" ]; then runtime="claude"
+    elif [ -n "${ANTIGRAVITY_SESSION_ID:-}" ]; then runtime="antigravity"
+    else runtime="generic"
+    fi
+  fi
+  case "$runtime" in codex|claude|antigravity|generic) printf '%s\n' "$runtime" ;; *) return 1 ;; esac
+}
+
 marathon_session_blocklist_dir() {
   echo "${MARATHON_SESSION_BLOCKLIST_DIR:-$HOME/.harness/marathon-session-blocklist}"
+}
+
+marathon_session_bindings_dir() {
+  echo "${MARATHON_SESSION_BINDINGS_DIR:-$HOME/.harness/marathon-session-bindings}"
+}
+
+marathon_run_index_dir() {
+  echo "${MARATHON_RUN_INDEX_DIR:-$HOME/.harness/marathon-runs}"
+}
+
+_marathon_blocklist_file() { # $1 session-id
+  local session runtime
+  session="$(marathon_session_id "${1:-}")" || return 1
+  runtime="$(marathon_runtime_id)" || return 1
+  printf '%s/%s/%s\n' "$(marathon_session_blocklist_dir)" "$runtime" "$session"
+}
+
+_marathon_legacy_blocklist_file() { # $1 session-id
+  local session
+  session="$(marathon_session_id "${1:-}")" || return 1
+  printf '%s/%s\n' "$(marathon_session_blocklist_dir)" "$session"
+}
+
+_marathon_binding_file() { # $1 session-id
+  local session runtime
+  session="$(marathon_session_id "${1:-}")" || return 1
+  runtime="$(marathon_runtime_id)" || return 1
+  printf '%s/%s/%s\n' "$(marathon_session_bindings_dir)" "$runtime" "$session"
+}
+
+_marathon_legacy_binding_file() { # $1 session-id
+  local session
+  session="$(marathon_session_id "${1:-}")" || return 1
+  printf '%s/%s\n' "$(marathon_session_bindings_dir)" "$session"
+}
+
+_marathon_valid_run_id() {
+  case "${1:-}" in
+    ????????-????-4???-[89aAbB]???-????????????) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_marathon_run_id() { # $1 run-dir
+  local id
+  id="$(awk -F: '/^run_id:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print tolower($2); exit }' "$1/RUN.md" 2>/dev/null)"
+  _marathon_valid_run_id "$id" || return 1
+  printf '%s\n' "$id"
+}
+
+_marathon_ensure_run_id() { # $1 canonical run-dir
+  local run id tmp
+  run="$1"
+  if id="$(_marathon_run_id "$run")"; then printf '%s\n' "$id"; return 0; fi
+  if grep -q '^run_id:' "$run/RUN.md" 2>/dev/null; then
+    echo "marathon-locate: invalid run_id in $run/RUN.md" >&2
+    return 1
+  fi
+  id="$(python3 -c 'import uuid; print(uuid.uuid4())' 2>/dev/null)" || return 1
+  _marathon_valid_run_id "$id" || return 1
+  tmp="$run/RUN.md.tmp.$$"
+  awk -v id="$id" 'NR == 1 { print; print "run_id: " id; next } { print }' "$run/RUN.md" > "$tmp" || return 1
+  mv -f "$tmp" "$run/RUN.md" || { rm -f "$tmp"; return 1; }
+  printf '%s\n' "$id"
+}
+
+_marathon_index_run() { # $1 canonical run-dir
+  local run index lock
+  run="$1"; index="$(marathon_run_index_dir)"; lock="$index/.index-lock"
+  mkdir -p "$index" || return 1
+  (
+    local id file indexed tmp
+    exec 9>"$lock" || exit 1
+    flock -n 9 || {
+      echo "marathon-locate: run index update already in progress for $run" >&2
+      exit 1
+    }
+    id="$(_marathon_ensure_run_id "$run")" || exit 1
+    file="$index/$id"
+    if [ -f "$file" ]; then
+      indexed="$(head -1 "$file" 2>/dev/null)"
+      indexed="$(_marathon_canonical_run_dir "$indexed" 2>/dev/null || printf '%s' "$indexed")"
+      if [ "$indexed" != "$run" ] && [ -f "$indexed/RUN.md" ]; then
+        echo "marathon-locate: duplicate run_id $id in $run and $indexed" >&2
+        exit 1
+      fi
+    fi
+    tmp="$file.tmp.$$"
+    printf '%s\n' "$run" > "$tmp" || exit 1
+    mv -f "$tmp" "$file" || { rm -f "$tmp"; exit 1; }
+    printf '%s\n' "$id"
+  )
 }
 
 _marathon_canonical_run_dir() { # [$1 run-dir]
@@ -144,12 +249,12 @@ _marathon_canonical_run_dir() { # [$1 run-dir]
 }
 
 marathon_session_is_ignored() { # $1 session-id, [$2 run-dir]
-  local session file run
+  local session file legacy run
   session="$(marathon_session_id "${1:-}")" || return 1
-  file="$(marathon_session_blocklist_dir)/$session"
-  [ -f "$file" ] || return 1
+  file="$(_marathon_blocklist_file "$session")" || return 1
+  legacy="$(_marathon_legacy_blocklist_file "$session")" || return 1
   run="$(_marathon_canonical_run_dir "${2:-$MARATHON_RUN_DIR}")" || return 1
-  grep -qxF "$run" "$file" 2>/dev/null
+  grep -qxF "$run" "$file" 2>/dev/null || grep -qxF "$run" "$legacy" 2>/dev/null
 }
 
 marathon_ignore_here() { # [$1 run-dir]
@@ -165,15 +270,15 @@ marathon_ignore_here() { # [$1 run-dir]
     _marathon_cli_locate || { echo "marathon-locate: no active marathon found" >&2; return 1; }
     run="$(_marathon_canonical_run_dir "$MARATHON_RUN_DIR")" || return 1
   fi
-  dir="$(marathon_session_blocklist_dir)"; file="$dir/$session"
-  mkdir -p "$dir" || return 1
+  dir="$(marathon_session_blocklist_dir)"; file="$(_marathon_blocklist_file "$session")"
+  mkdir -p "$(dirname "$file")" || return 1
   touch "$file" || return 1
   grep -qxF "$run" "$file" 2>/dev/null || printf '%s\n' "$run" >> "$file"
   echo "ignored here: $(basename "$run") | session=$session | dir=$run"
 }
 
 marathon_allow_here() { # [$1 run-dir]
-  local session run dir file tmp
+  local session run dir file legacy tmp target
   session="$(marathon_session_id)" || {
     echo "marathon-locate: no session identity (CODEX_THREAD_ID/CLAUDE_SESSION_ID)" >&2
     return 2
@@ -184,12 +289,15 @@ marathon_allow_here() { # [$1 run-dir]
     _marathon_cli_locate || { echo "marathon-locate: no active marathon found" >&2; return 1; }
     run="$(_marathon_canonical_run_dir "$MARATHON_RUN_DIR")" || return 1
   fi
-  dir="$(marathon_session_blocklist_dir)"; file="$dir/$session"
-  [ -f "$file" ] || { echo "allowed here: $(basename "$run") | session=$session | dir=$run"; return 0; }
-  tmp="$file.tmp.$$"
-  grep -vxF "$run" "$file" > "$tmp" 2>/dev/null || : > "$tmp"
-  mv -f "$tmp" "$file" || { rm -f "$tmp"; return 1; }
-  [ -s "$file" ] || rm -f "$file"
+  dir="$(marathon_session_blocklist_dir)"; file="$(_marathon_blocklist_file "$session")"
+  legacy="$(_marathon_legacy_blocklist_file "$session")"
+  for target in "$file" "$legacy"; do
+    [ -f "$target" ] || continue
+    tmp="$target.tmp.$$"
+    grep -vxF "$run" "$target" > "$tmp" 2>/dev/null || : > "$tmp"
+    mv -f "$tmp" "$target" || { rm -f "$tmp"; return 1; }
+    [ -s "$target" ] || rm -f "$target"
+  done
   echo "allowed here: $(basename "$run") | session=$session | dir=$run"
 }
 
@@ -207,6 +315,124 @@ marathon_session_status() {
   fi
 }
 
+# Positive ownership is the isolation boundary. A registry entry only says
+# that a run exists; it does not say which conversation owns it. Hooks must
+# resolve through this exact session -> run binding and never guess by repo,
+# registry order or RUN.md freshness.
+marathon_locate_for_session() { # $1 root, $2 runs-dir, $3 hook session-id
+  local session file legacy value run_id index_file run stale_days now cutoff mtime
+  session="$(marathon_session_id "${3:-}")" || {
+    echo "marathon-locate: hook payload has no valid session identity; refusing global fallback" >&2
+    return 2
+  }
+  file="$(_marathon_binding_file "$session")" || return 2
+  legacy="$(_marathon_legacy_binding_file "$session")" || return 2
+  if [ ! -f "$file" ] && [ -f "$legacy" ]; then file="$legacy"; fi
+  [ -f "$file" ] || return 1
+  value="$(head -1 "$file" 2>/dev/null)"
+  if _marathon_valid_run_id "$value"; then
+    run_id="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+    index_file="$(marathon_run_index_dir)/$run_id"
+    run="$(head -1 "$index_file" 2>/dev/null)"
+  else
+    # One-time migration from the pre-run_id binding format (canonical path).
+    run="$value"
+    if run="$(_marathon_canonical_run_dir "$run")" && [ -f "$run/RUN.md" ]; then
+      stale_days="${HARNESS_MARATHON_STALE_DAYS:-7}"
+      case "$stale_days" in ''|*[!0-9]*) stale_days=7 ;; esac
+      now="$(date +%s)"; cutoff=$(( now - stale_days * 86400 ))
+      mtime="$(stat -c %Y "$run/RUN.md" 2>/dev/null || stat -f %m "$run/RUN.md" 2>/dev/null || echo 0)"
+      [ "$mtime" -ge "$cutoff" ] || { rm -f "$file"; return 1; }
+      run_id="$(_marathon_index_run "$run")" || { rm -f "$file"; return 1; }
+      mkdir -p "$(dirname "$(_marathon_binding_file "$session")")" || return 2
+      printf '%s\n' "$run_id" > "$(_marathon_binding_file "$session").tmp.$$" || return 2
+      mv -f "$(_marathon_binding_file "$session").tmp.$$" "$(_marathon_binding_file "$session")" || return 2
+      [ "$file" = "$legacy" ] && rm -f "$legacy"
+      file="$(_marathon_binding_file "$session")"
+    fi
+  fi
+  if ! run="$(_marathon_canonical_run_dir "$run")" || [ ! -f "$run/RUN.md" ]; then
+    rm -f "$file"
+    return 1
+  fi
+  [ "$(_marathon_run_id "$run" 2>/dev/null)" = "$run_id" ] || { rm -f "$file"; return 1; }
+  stale_days="${HARNESS_MARATHON_STALE_DAYS:-7}"
+  case "$stale_days" in ''|*[!0-9]*) stale_days=7 ;; esac
+  now="$(date +%s)"; cutoff=$(( now - stale_days * 86400 ))
+  mtime="$(stat -c %Y "$run/RUN.md" 2>/dev/null || stat -f %m "$run/RUN.md" 2>/dev/null || echo 0)"
+  if [ "$mtime" -lt "$cutoff" ]; then
+    rm -f "$file"
+    return 1
+  fi
+  _marathon_accept "$run" binding "$file"
+}
+
+marathon_bind_here() { # $1 explicit run-dir
+  local session run run_id dir file legacy lock
+  session="$(marathon_session_id)" || {
+    echo "marathon-locate: no session identity (CODEX_THREAD_ID/CLAUDE_SESSION_ID)" >&2
+    return 2
+  }
+  [ -n "${1:-}" ] || {
+    echo "marathon-locate: bind-here requires an explicit run directory" >&2
+    return 64
+  }
+  run="$(_marathon_canonical_run_dir "$1")" || return 1
+  [ -f "$run/RUN.md" ] || { echo "marathon-locate: $run has no RUN.md" >&2; return 1; }
+  dir="$(marathon_session_bindings_dir)"; file="$(_marathon_binding_file "$session")"
+  legacy="$(_marathon_legacy_binding_file "$session")"
+  mkdir -p "$dir/.locks" || return 1
+  mkdir -p "$(dirname "$file")" || return 1
+  lock="$dir/.locks/bind-global.lock"
+  (
+    local other bound
+    exec 9>"$lock" || exit 1
+    flock -n 9 || {
+      echo "marathon-locate: binding already in progress for $run" >&2
+      exit 1
+    }
+    run_id="$(_marathon_index_run "$run")" || exit 1
+    if [ -f "$file" ]; then
+      bound="$(head -1 "$file" 2>/dev/null)"
+      if [ "$bound" = "$run_id" ]; then
+        echo "bound: $(basename "$run") | run_id=$run_id | session=$(marathon_runtime_id):$session | dir=$run"
+        exit 0
+      fi
+      echo "marathon-locate: session $session already owns $bound; unbind-here before reassignment" >&2
+      exit 1
+    fi
+    if [ -f "$legacy" ]; then
+      echo "marathon-locate: legacy binding exists for session $session; unbind-here before reassignment" >&2
+      exit 1
+    fi
+    while IFS= read -r other; do
+      [ -f "$other" ] || continue
+      [ "$other" = "$file" ] && continue
+      bound="$(head -1 "$other" 2>/dev/null)"
+      if ! _marathon_valid_run_id "$bound" && [ "$bound" = "$run" ]; then bound="$run_id"; fi
+      [ "$bound" = "$run_id" ] || continue
+      echo "marathon-locate: run already bound to session $(basename "$other"): $run" >&2
+      exit 1
+    done < <(find "$dir" -type f ! -path '*/.locks/*' 2>/dev/null)
+    printf '%s\n' "$run_id" > "$file.tmp.$$" || exit 1
+    mv -f "$file.tmp.$$" "$file" || { rm -f "$file.tmp.$$"; exit 1; }
+    echo "bound: $(basename "$run") | run_id=$run_id | session=$(marathon_runtime_id):$session | dir=$run"
+  )
+}
+
+marathon_unbind_here() {
+  local session file legacy
+  session="$(marathon_session_id)" || {
+    echo "marathon-locate: no session identity (CODEX_THREAD_ID/CLAUDE_SESSION_ID)" >&2
+    return 2
+  }
+  file="$(_marathon_binding_file "$session")" || return 2
+  legacy="$(_marathon_legacy_binding_file "$session")" || return 2
+  rm -f "$file"
+  rm -f "$legacy"
+  echo "unbound: session=$(marathon_runtime_id):$session"
+}
+
 # Accept a candidate run directory. A directory without RUN.md is NOT a
 # marathon — refusing it here is what keeps a half-created or already-archived
 # directory from arming the gate.
@@ -216,6 +442,7 @@ _marathon_accept() {
   MARATHON_RUN_DIR="$1"
   MARATHON_RUN_MD="$1/RUN.md"
   MARATHON_SLUG="$(basename "$1")"
+  MARATHON_RUN_ID="$(_marathon_run_id "$1" 2>/dev/null || true)"
   MARATHON_SOURCE_KIND="${2:-}"
   MARATHON_ACTIVE_FILE="${3:-}"
   return 0
@@ -372,8 +599,14 @@ marathon_pause_state() { # [$1 run-dir]
 }
 
 _marathon_cli_locate() {
-  marathon_locate "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}" \
-                  "${HARNESS_RUNS_DIR:-.harness/runs}"
+  local root runs session
+  root="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+  runs="${HARNESS_RUNS_DIR:-.harness/runs}"
+  if session="$(marathon_session_id)"; then
+    marathon_locate_for_session "$root" "$runs" "$session"
+  else
+    marathon_locate "$root" "$runs"
+  fi
 }
 
 _marathon_journal() { # $1 line
@@ -438,6 +671,7 @@ marathon_status() {
 # without re-deriving where the pointer lives.
 marathon_teardown_hint() {
   case "$MARATHON_SOURCE_KIND" in
+    binding) echo "bash $MARATHON_LOCATE_SELF unbind-here" ;;
     local) echo "rm $MARATHON_ACTIVE_FILE" ;;
     registry) echo "bash $MARATHON_LOCATE_SELF unregister $MARATHON_RUN_DIR" ;;
     *) echo "rm <runs-dir>/ACTIVE" ;;
@@ -445,23 +679,59 @@ marathon_teardown_hint() {
 }
 
 marathon_register() {
-  local dir reg
-  dir="$(cd "${1:-.}" 2>/dev/null && pwd)" || { echo "marathon-locate: $1 does not exist" >&2; return 1; }
+  local dir reg run_id
+  dir="$(cd "${1:-.}" 2>/dev/null && pwd -P)" || { echo "marathon-locate: $1 does not exist" >&2; return 1; }
   [ -f "$dir/RUN.md" ] || { echo "marathon-locate: $dir has no RUN.md — not a marathon" >&2; return 1; }
+  run_id="$(_marathon_index_run "$dir")" || return 1
   reg="$(marathon_registry_path)"
   mkdir -p "$(dirname "$reg")"
   touch "$reg"
   grep -qxF "$dir" "$reg" 2>/dev/null || printf '%s\n' "$dir" >> "$reg"
-  echo "$dir"
+  echo "$dir | run_id=$run_id"
 }
 
 marathon_unregister() {
-  local dir reg
-  dir="$(cd "${1:-.}" 2>/dev/null && pwd || echo "${1:-}")"
+  local dir reg bindings file bound run_id index_file
+  dir="$(cd "${1:-.}" 2>/dev/null && pwd -P || echo "${1:-}")"
+  run_id="$(_marathon_run_id "$dir" 2>/dev/null || true)"
   reg="$(marathon_registry_path)"
-  [ -f "$reg" ] || return 0
-  grep -vxF "$dir" "$reg" > "$reg.tmp.$$" 2>/dev/null || : > "$reg.tmp.$$"
-  mv -f "$reg.tmp.$$" "$reg" 2>/dev/null || rm -f "$reg.tmp.$$" 2>/dev/null
+  if [ -f "$reg" ]; then
+    grep -vxF "$dir" "$reg" > "$reg.tmp.$$" 2>/dev/null || : > "$reg.tmp.$$"
+    mv -f "$reg.tmp.$$" "$reg" 2>/dev/null || rm -f "$reg.tmp.$$" 2>/dev/null
+  fi
+  bindings="$(marathon_session_bindings_dir)"
+  while IFS= read -r file; do
+    [ -f "$file" ] || continue
+    bound="$(head -1 "$file" 2>/dev/null)"
+    { [ -n "$run_id" ] && [ "$bound" = "$run_id" ]; } || [ "$bound" = "$dir" ] || continue
+    rm -f "$file"
+  done < <(find "$bindings" -type f ! -path '*/.locks/*' 2>/dev/null)
+  if [ -n "$run_id" ]; then
+    index_file="$(marathon_run_index_dir)/$run_id"
+    [ "$(head -1 "$index_file" 2>/dev/null)" = "$dir" ] && rm -f "$index_file"
+  fi
+}
+
+marathon_preflight() {
+  local hooks_dir authoring_hooks missing=0 file
+  hooks_dir="$(cd "$(dirname "$MARATHON_LOCATE_SELF")" 2>/dev/null && pwd -P)" || return 2
+  case "$hooks_dir" in
+    */engine/hooks)
+      authoring_hooks="$(cd "$hooks_dir/../../templates/.harness/hooks" 2>/dev/null && pwd -P)" || return 2
+      hooks_dir="$authoring_hooks"
+      ;;
+  esac
+  for file in marathon-stop-gate.sh marathon-reinject.sh marathon-precompact.sh; do
+    if [ ! -r "$hooks_dir/$file" ]; then
+      echo "marathon-preflight: required hook missing: $hooks_dir/$file" >&2
+      missing=$((missing + 1))
+    elif ! bash -n "$hooks_dir/$file"; then
+      echo "marathon-preflight: required hook invalid: $hooks_dir/$file" >&2
+      missing=$((missing + 1))
+    fi
+  done
+  [ "$missing" -eq 0 ] || return 2
+  echo "marathon-preflight: PASS ($hooks_dir)"
 }
 
 # Executed rather than sourced → tiny CLI, so the marathon skill has one
@@ -484,8 +754,11 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     ignore-here) marathon_ignore_here "${2:-}" ;;
     allow-here) marathon_allow_here "${2:-}" ;;
     session-status) marathon_session_status ;;
+    bind-here) marathon_bind_here "${2:-}" ;;
+    unbind-here) marathon_unbind_here ;;
+    preflight) marathon_preflight ;;
     *)
-      echo "usage: $0 {register <run-dir>|unregister <run-dir>|locate [root] [runs-dir]|pause [<until>] [reason...]|resume|status|ignore-here [run-dir]|allow-here [run-dir]|session-status}" >&2
+      echo "usage: $0 {register <run-dir>|unregister <run-dir>|locate [root] [runs-dir]|pause [<until>] [reason...]|resume|status|bind-here <run-dir>|unbind-here|ignore-here [run-dir]|allow-here [run-dir]|session-status|preflight}" >&2
       exit 64
       ;;
   esac

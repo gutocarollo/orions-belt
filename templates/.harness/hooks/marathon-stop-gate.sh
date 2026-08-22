@@ -49,6 +49,16 @@ try: print(str(json.load(sys.stdin).get("session_id", "")))
 except Exception: print("")' <<<"$IN")"
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 
+LOCATOR="$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
+if [ ! -r "$LOCATOR" ]; then
+  echo "marathon-stop-gate: required dependency missing: $LOCATOR" >&2
+  exit 2
+fi
+if ! . "$LOCATOR" || ! declare -F marathon_locate >/dev/null 2>&1; then
+  echo "marathon-stop-gate: required dependency invalid: $LOCATOR" >&2
+  exit 2
+fi
+
 CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
 _conf_get() {
   local val
@@ -70,13 +80,21 @@ RUNS_DIR="$(_conf_get HARNESS_RUNS_DIR .harness/runs)"
 MAX_STRIKES="$(_conf_int HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS 3)"
 export HARNESS_MARATHON_STALE_DAYS="$(_conf_int HARNESS_MARATHON_STALE_DAYS 7)"
 
-. "$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
-marathon_locate "$ROOT" "$RUNS_DIR" || exit 0
 SESSION_ID="$(marathon_session_id "$HOOK_SESSION_ID")" || SESSION_ID=""
+[ -n "$SESSION_ID" ] || {
+  echo "marathon-stop-gate: missing valid session_id; refusing to select a global marathon" >&2
+  exit 2
+}
+marathon_locate_for_session "$ROOT" "$RUNS_DIR" "$SESSION_ID"
+LOCATE_RC=$?
+[ "$LOCATE_RC" -eq 1 ] && exit 0
+[ "$LOCATE_RC" -eq 0 ] || exit 2
 [ -n "$SESSION_ID" ] && marathon_session_is_ignored "$SESSION_ID" "$MARATHON_RUN_DIR" && exit 0
 SLUG="$MARATHON_SLUG"
 RUN="$MARATHON_RUN_MD"
 TEARDOWN="$(marathon_teardown_hint)"
+STOP_POLICY="$(awk -F: '/^stop_policy:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print tolower($2); exit }' "$RUN")"
+case "$STOP_POLICY" in hard|soft) ;; *) STOP_POLICY=soft ;; esac
 
 # Open = "[ ]" (todo) or "[~]" (in progress), at ANY indentation. The old
 # anchor was '^- \[ \]', which silently ignored every NESTED item — a RUN.md
@@ -137,16 +155,22 @@ STAMP=$( (cksum < "$RUN") 2>/dev/null | awk '{print $1"-"$2}' )
 [ -n "$STAMP" ] || STAMP=0
 read -r COUNT LAST < <(cat "$STRIKES" 2>/dev/null || echo "0 0")
 [ "$STAMP" != "$LAST" ] && COUNT=0   # RUN.md content changed = progress
-if [ "$COUNT" -ge "$MAX_STRIKES" ]; then
+if [ "$STOP_POLICY" = "soft" ] && [ "$COUNT" -ge "$MAX_STRIKES" ]; then
   rm -f "$STRIKES"
   echo '{"systemMessage":"marathon-stop-gate: '"$MAX_STRIKES"' blocks without progress in RUN.md — releasing the stop. Marathon still ACTIVE ('"$SLUG"'); resume with the marathon skill or end it with: '"$TEARDOWN"'"}'
   exit 0
+fi
+if [ "$STOP_POLICY" = "hard" ]; then
+  rm -f "$STRIKES"
+  COUNT=0
 fi
 echo "$((COUNT + 1)) $STAMP" > "$STRIKES"
 
 cat >&2 <<EOF
 MARATHON ACTIVE ($SLUG): $OPEN open item(s) in the checklist — the stop was blocked.
 Run directory: $MARATHON_RUN_DIR (located via: $MARATHON_SOURCE_KIND)
+Run ID: $MARATHON_RUN_ID
+Stop policy: $STOP_POLICY
 Recorded next action: ${NEXT:-"(empty — update RUN.md)"}
 Keep executing (marathon skill §2: close item → mark [x] → update the "Next action" section).
 If you are genuinely blocked on a user decision: write "WAITING: <question>" in the "Next action" section and stop.

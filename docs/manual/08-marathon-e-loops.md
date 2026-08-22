@@ -2,14 +2,20 @@
 
 Uma execução longa (plano multi-fase, migração em ondas, "termine tudo") tem dois inimigos: a **compactação de contexto** (o runtime resume a conversa e o agente esquece onde estava) e a **parada prematura** (o agente declara o turno encerrado com metade do checklist aberto). O subsistema **marathon** resolve os dois com um princípio: o estado da execução vive em ARQUIVO durável, não no contexto da conversa.
 
-## A anatomia: ACTIVE + RUN.md
+## A anatomia: registry + binding de sessão + RUN.md
 
 Tudo vive sob `HARNESS_RUNS_DIR` (default `.harness/runs`):
 
-- **`ACTIVE`** — arquivo de 1 linha com o slug da maratona em andamento. Existe = há maratona ativa; `rm` nele = encerra.
-- **`<slug>/RUN.md`** — o estado durável: objetivo, checklist (`- [ ]` / `- [x]`), a seção **"Próxima ação"** (a instrução exata do que fazer a seguir — é o que o agente executa ao retomar, sem re-planejar) e um journal de eventos.
+- **`$HOME/.harness/marathon-active`** — inventário de runs vivas; pode conter várias linhas e vários repositórios.
+- **`$HOME/.harness/marathon-session-bindings/<runtime>/<session_id>`** — vínculo positivo e exclusivo entre uma conversa e um `run_id`. É a autoridade usada pelos hooks.
+- **`$HOME/.harness/marathon-runs/<run_id>`** — índice `UUIDv4 → caminho canônico`; mover a run não muda sua identidade.
+- **`ACTIVE`** — ponteiro local legado de uma linha, mantido para compatibilidade de inventário; não seleciona a run de uma conversa.
+- **`<slug>/RUN.md`** — o estado durável: `run_id` UUIDv4 imutável, objetivo, checklist (`- [ ]` / `- [x]`), a seção **"Próxima ação"** (a instrução exata do que fazer a seguir — é o que o agente executa ao retomar, sem re-planejar) e um journal de eventos.
+- **`stop_policy`** — `soft` mantém o escape anti-prisão; `hard` é obrigatório quando o dono declara uma condição terminal como “termine tudo” ou “não pare”.
 
-O contrato de escrita é da skill `marathon` ([template](<../../templates/{% if use_claude %}.claude{% endif %}/skills/marathon/SKILL.md.jinja>)): invocada quando a tarefa é estimada longa (mais de ~1h ou 3+ fases) ou quando `ACTIVE` já existe ao abrir a sessão. O ciclo por item: fechar o item → marcar `[x]` → atualizar "Próxima ação" → seguir.
+O contrato de escrita é da skill `marathon` ([template](<../../templates/{% if use_claude %}.claude{% endif %}/skills/marathon/SKILL.md.jinja>)): invocada quando a tarefa é estimada longa (mais de ~1h ou 3+ fases) ou quando existe vínculo para a sessão ao abrir a conversa. O bootstrap cria o RUN.md, registra a run e executa `bind-here <run-dir>`. O ciclo por item: fechar o item → marcar `[x]` → atualizar "Próxima ação" → seguir.
+
+O isolamento é 1:1: uma sessão tem no máximo uma run, e uma run tem no máximo uma sessão. O identificador da conversa é `runtime:session_id`, evitando colisão entre Codex, Claude e Antigravity; o binding armazena o `run_id`, não o path. Duas maratonas simultâneas usam dois arquivos de binding diferentes. Sessão sem binding não recebe reinject, não escreve journal e não é bloqueada, mesmo que o registry contenha outras runs. Os hooks não fazem fallback por repositório, ordem ou mtime; essa proibição elimina a mistura silenciosa entre chats. Runs e bindings legados baseados em path são migrados na primeira resolução.
 
 ## Os três hooks que o sustentam
 
@@ -19,7 +25,7 @@ O subsistema é sustentado por três hooks já registrados (capítulos 02 e 06),
 |---|---|---|
 | Contexto vai compactar | [marathon-precompact.sh](../../templates/.harness/hooks/marathon-precompact.sh) (`PreCompact`) | Registra a compactação no journal do RUN.md — o estado já está em disco, o hook só marca o evento |
 | Sessão abre (qualquer origem: `startup`, `compact`, `resume`) | [marathon-reinject.sh](../../templates/.harness/hooks/marathon-reinject.sh) (`SessionStart`) | Reinjeta as primeiras 150 linhas do RUN.md no contexto: "execute a Próxima ação, não re-planeje" — ou, se a run está pausada, só o aviso de pausa |
-| Agente tenta parar | [marathon-stop-gate.sh](../../templates/.harness/hooks/marathon-stop-gate.sh) (`Stop`) | Bloqueia a parada com itens abertos, devolvendo a "Próxima ação"; anti-prisão de 3 strikes sem progresso; inerte se a run está pausada |
+| Agente tenta parar | [marathon-stop-gate.sh](../../templates/.harness/hooks/marathon-stop-gate.sh) (`Stop`) | Bloqueia a parada com itens abertos, devolvendo a "Próxima ação"; política `soft` ou `hard`; inerte se a run está pausada |
 
 O reinject era registrado só com matcher `compact|resume`. Uma sessão NOVA
 (`source=startup`) portanto abria sem saber que existia maratona — o estado
@@ -30,7 +36,7 @@ o que dá à pergunta de pausa-expirada (abaixo) um lugar confiável para aconte
 
 ```mermaid
 flowchart TD
-    A["tarefa longa comeca: skill marathon cria runs/slug/RUN.md + ACTIVE"] --> B["agente executa item a item: fecha, marca x, atualiza Proxima acao"]
+    A["tarefa longa comeca: skill cria RUN.md + register + bind-here(session_id)"] --> B["agente executa item a item: fecha, marca x, atualiza Proxima acao"]
     B --> C{"contexto compacta no meio?"}
     C -- "sim" --> D["PreCompact marca no journal"]
     D --> E["sessao reabre: marathon-reinject injeta o RUN.md"]
@@ -45,10 +51,13 @@ flowchart TD
     I -- "sim" --> H
     I -- "nao" --> J["stop-gate bloqueia e devolve a Proxima acao"]
     J --> B
-    J -. "3 bloqueios sem o RUN.md mudar" .-> K["anti-prisao: libera com aviso; maratona segue ATIVA"]
+    J -. "soft + 3 bloqueios sem o RUN.md mudar" .-> K["anti-prisao: libera com aviso; maratona segue ATIVA"]
+    J -. "hard" .-> B
 ```
 
-As paradas legítimas são explícitas: checklist zerado, "Próxima ação" começando com `AGUARDANDO: <pergunta>` (bloqueado em decisão humana), ou a run pausada (abaixo). O anti-prisão usa um **checksum do conteúdo** do RUN.md como detector de progresso — mtime era errado nas duas direções (granularidade de 1s fazia duas edições reais no mesmo segundo lerem como "sem progresso", e um `touch` seco zerava o contador sem nada ter mudado): bloqueios consecutivos sem o conteúdo mudar até o limite `HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS` (default 3) liberam com aviso — cobrar progresso, não manter refém.
+As paradas legítimas são explícitas: checklist zerado, "Próxima ação" começando com `AGUARDANDO: <pergunta>` (bloqueado em decisão humana), ou a run pausada (abaixo). Em `stop_policy: soft`, o anti-prisão usa um **checksum do conteúdo** do RUN.md como detector de progresso e libera após `HARNESS_MARATHON_MAX_BLOCKS_WITHOUT_PROGRESS` tentativas sem mudança. Em `stop_policy: hard`, esse escape fica desabilitado: enquanto houver trabalho executável, o Stop continua bloqueado; `pause`, `AGUARDANDO:` ou encerramento explícito continuam sendo as saídas controladas.
+
+Antes de iniciar ou retomar, `bash .harness/hooks/marathon-locate.sh preflight` deve passar. O comando valida a presença e a sintaxe de `stop-gate`, `reinject` e `precompact`; os consumidores também falham fechados se a biblioteca compartilhada desaparecer.
 
 ## Pausar sem perder o estado (e sem voltar a executar sozinho)
 
@@ -72,11 +81,11 @@ Enquanto a pausa vale, dois comportamentos mudam:
 
 **Expirar não é retomar.** Quando a janela fecha, o estado vira `pause-expired`: o stop-gate continua sem bloquear e avisa o dono de que a janela acabou; o reinject injeta o estado com a instrução explícita de PERGUNTAR antes de qualquer trabalho — retomar, adiar para uma data nova, ou encerrar. Re-armar o gate na expiração colocaria o agente de volta a executar sozinho, que é exatamente o comportamento que este mecanismo existe para impedir. Data ilegível ou ausente também mantém pausado: o fail-safe aponta para perguntar, nunca para executar.
 
-## Ignorar uma run apenas na sessão atual
+## Ignorar temporariamente a run vinculada à sessão atual
 
-`pause` muda o estado da run para todas as sessões. Quando a run deve continuar
-ativa em outra conversa, mas não pertence à sessão atual, use a blocklist por
-sessão:
+O binding positivo já impede que uma run de outra conversa apareça aqui. A
+blocklist existe somente para silenciar temporariamente a própria run vinculada
+sem pausar seu estado global:
 
 ```bash
 bash .harness/hooks/marathon-locate.sh ignore-here
@@ -84,11 +93,11 @@ bash .harness/hooks/marathon-locate.sh session-status
 bash .harness/hooks/marathon-locate.sh allow-here
 ```
 
-`ignore-here` grava o par exato `session_id + caminho canônico da run` em
-`$HOME/.harness/marathon-session-blocklist/`. Os três consumidores consultam a
+`ignore-here` grava o par exato `runtime:session_id + caminho canônico da run` em
+`$HOME/.harness/marathon-session-blocklist/<runtime>/`. Os três consumidores consultam a
 mesma exceção: `SessionStart` não reinjeta, `PreCompact` não escreve no journal
-e `Stop` não bloqueia. Outra sessão continua enxergando a run. Não há inferência
-por assunto nem pausa implícita; `allow-here` remove somente a exceção corrente.
+e `Stop` não bloqueia. Não há inferência por assunto nem pausa implícita;
+`allow-here` remove somente a exceção corrente.
 
 Prova executável: [engine/hooks/tests/test_marathon_pause.sh](../../engine/hooks/tests/test_marathon_pause.sh) (13 cenários dirigindo os hooks reais como subprocessos).
 

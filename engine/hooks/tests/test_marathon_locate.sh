@@ -20,6 +20,7 @@ LOCATE="$HOOKS_DIR/marathon-locate.sh"
 FAIL=0
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+export MARATHON_RUN_INDEX_DIR="$TMP/run-index-default"
 
 assert() {
   # $1 = description, $2 = obtained, $3 = expected
@@ -108,7 +109,8 @@ mk_run "$RUN_REG" "register twice"
 REG6="$TMP/home-reg/.harness/marathon-active"
 MARATHON_REGISTRY="$REG6" bash "$LOCATE" register "$RUN_REG" >/dev/null 2>&1
 MARATHON_REGISTRY="$REG6" bash "$LOCATE" register "$RUN_REG" >/dev/null 2>&1
-COUNT="$(grep -cxF "$RUN_REG" "$REG6" 2>/dev/null || echo 0)"
+RUN_REG_CANON="$(cd "$RUN_REG" && pwd -P)"
+COUNT="$(grep -cxF "$RUN_REG_CANON" "$REG6" 2>/dev/null || true)"; COUNT="${COUNT:-0}"
 assert "register twice writes exactly one line" "$COUNT" "1"
 MARATHON_REGISTRY="$REG6" bash "$LOCATE" unregister "$RUN_REG" >/dev/null 2>&1
 COUNT="$(grep -cxF "$RUN_REG" "$REG6" 2>/dev/null)"; COUNT="${COUNT:-0}"
@@ -125,8 +127,13 @@ assert "register without RUN.md fails" "$RC" "1"
 echo
 echo "=== Scenario 8: ignore-here is exact to one session and one run ==="
 BLOCKS="$TMP/session-blocklist"
+BINDINGS8="$TMP/session-bindings-8"
+SESSION_ROOT="$TMP/session-root"
+mkdir -p "$SESSION_ROOT"
 CODEX_THREAD_ID="session-a" MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" \
   MARATHON_REGISTRY="$REG6" bash "$LOCATE" register "$RUN_REG" >/dev/null
+CODEX_THREAD_ID="session-a" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS8" \
+  bash "$LOCATE" bind-here "$RUN_REG" >/dev/null
 CODEX_THREAD_ID="session-a" MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" \
   MARATHON_REGISTRY="$REG6" bash "$LOCATE" ignore-here "$RUN_REG" >/dev/null
 . "$LOCATE"
@@ -140,10 +147,16 @@ if MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" marathon_session_is_ignored "session
 else
   echo "PASS: a different session remains allowed"
 fi
+if env -u CODEX_THREAD_ID CLAUDE_SESSION_ID="session-a" MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" \
+  bash -c '. "$1"; marathon_session_is_ignored "session-a" "$2"' _ "$LOCATE" "$RUN_REG"; then
+  echo "FAIL: Claude inherited Codex ignore state for the same raw session id"; FAIL=1
+else
+  echo "PASS: ignore state is isolated by runtime namespace"
+fi
 STATUS="$(CODEX_THREAD_ID="session-a" MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" \
-  MARATHON_REGISTRY="$REG6" bash "$LOCATE" session-status)"
+  MARATHON_SESSION_BINDINGS_DIR="$BINDINGS8" MARATHON_REGISTRY="$REG6" CLAUDE_PROJECT_DIR="$SESSION_ROOT" bash "$LOCATE" session-status)"
 assert "session-status reports ignored" "$STATUS" \
-  "marathon: idempotent | session=session-a | ignored | dir=$RUN_REG"
+  "marathon: idempotent | session=session-a | ignored | dir=$RUN_REG_CANON"
 CODEX_THREAD_ID="session-a" MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" \
   MARATHON_REGISTRY="$REG6" bash "$LOCATE" allow-here "$RUN_REG" >/dev/null
 if MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" marathon_session_is_ignored "session-a" "$RUN_REG"; then
@@ -151,6 +164,133 @@ if MARATHON_SESSION_BLOCKLIST_DIR="$BLOCKS" marathon_session_is_ignored "session
 else
   echo "PASS: allow-here restores the session"
 fi
+
+echo
+echo "=== Scenario 9: positive session bindings isolate concurrent marathons ==="
+BINDINGS="$TMP/session-bindings"
+RUN_INDEX="$TMP/run-index"
+RUN_A="$TMP/concurrent/run-a"; RUN_B="$TMP/concurrent/run-b"
+mk_run "$RUN_A" "owned by session-a"
+mk_run "$RUN_B" "owned by session-b"
+RUN_A="$(cd "$RUN_A" && pwd -P)"
+RUN_B="$(cd "$RUN_B" && pwd -P)"
+CODEX_THREAD_ID="session-a" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" \
+  bash "$LOCATE" bind-here "$RUN_A" >/dev/null
+assert "session-a binding succeeds" "$?" "0"
+CODEX_THREAD_ID="session-b" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" \
+  bash "$LOCATE" bind-here "$RUN_B" >/dev/null
+assert "session-b binding succeeds" "$?" "0"
+. "$LOCATE"
+RUN_ID_A="$(awk -F: '/^run_id:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print $2; exit }' "$RUN_A/RUN.md")"
+RUN_ID_B="$(awk -F: '/^run_id:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print $2; exit }' "$RUN_B/RUN.md")"
+case "$RUN_ID_A" in
+  ????????-????-4???-[89ab]???-????????????) echo "PASS: run-a receives an immutable UUIDv4" ;;
+  *) echo "FAIL: run-a has invalid run_id [$RUN_ID_A]"; FAIL=1 ;;
+esac
+assert "binding stores run_id instead of a mutable path" "$(cat "$BINDINGS/codex/session-a")" "$RUN_ID_A"
+assert "run index maps run_id to canonical path" "$(cat "$RUN_INDEX/$RUN_ID_A")" "$RUN_A"
+RUN_DUP="$TMP/concurrent/run-duplicate-id"
+mkdir -p "$RUN_DUP"
+cp "$RUN_A/RUN.md" "$RUN_DUP/RUN.md"
+CODEX_THREAD_ID="duplicate-owner" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" \
+  bash "$LOCATE" bind-here "$RUN_DUP" >/dev/null 2>&1
+assert "a live run_id cannot identify two directories" "$?" "1"
+
+MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" CODEX_THREAD_ID="session-a" marathon_locate_for_session "$TMP" ".harness/runs" "session-a"
+assert "session-a resolves only run-a" "$MARATHON_RUN_DIR" "$RUN_A"
+MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" CODEX_THREAD_ID="session-b" marathon_locate_for_session "$TMP" ".harness/runs" "session-b"
+assert "session-b resolves only run-b" "$MARATHON_RUN_DIR" "$RUN_B"
+MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" CODEX_THREAD_ID="session-c" marathon_locate_for_session "$TMP" ".harness/runs" "session-c" >/dev/null 2>&1
+assert "unbound session does not inherit the freshest run" "$?" "1"
+CODEX_THREAD_ID="session-c" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" \
+  bash "$LOCATE" bind-here "$RUN_A" >/dev/null 2>&1
+assert "one run cannot be bound to a second session" "$?" "1"
+CODEX_THREAD_ID="session-a" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" \
+  bash "$LOCATE" bind-here "$RUN_B" >/dev/null 2>&1
+assert "one session cannot be rebound without explicit unbind" "$?" "1"
+CODEX_THREAD_ID="session-a" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" \
+  bash "$LOCATE" unbind-here >/dev/null
+MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" CODEX_THREAD_ID="session-a" marathon_locate_for_session "$TMP" ".harness/runs" "session-a" >/dev/null 2>&1
+assert "unbind removes only session-a ownership" "$?" "1"
+MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" CODEX_THREAD_ID="session-b" marathon_locate_for_session "$TMP" ".harness/runs" "session-b"
+assert "unbind leaves session-b ownership intact" "$MARATHON_RUN_DIR" "$RUN_B"
+
+# Runtime is part of the ownership key. Equal raw IDs from different agent
+# runtimes are independent conversations and must not collide.
+RUN_CLAUDE="$TMP/concurrent/run-claude"
+mk_run "$RUN_CLAUDE" "owned by claude session-a"
+RUN_CLAUDE="$(cd "$RUN_CLAUDE" && pwd -P)"
+env -u CODEX_THREAD_ID CLAUDE_SESSION_ID="session-a" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" \
+  MARATHON_RUN_INDEX_DIR="$RUN_INDEX" bash "$LOCATE" bind-here "$RUN_CLAUDE" >/dev/null
+assert "same raw session id can exist in another runtime namespace" "$?" "0"
+RUN_ID_CLAUDE="$(awk -F: '/^run_id:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print $2; exit }' "$RUN_CLAUDE/RUN.md")"
+assert "claude binding is namespaced" "$(cat "$BINDINGS/claude/session-a")" "$RUN_ID_CLAUDE"
+env -u CODEX_THREAD_ID CLAUDE_SESSION_ID="session-a" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" \
+  MARATHON_RUN_INDEX_DIR="$RUN_INDEX" bash -c '. "$1"; marathon_locate_for_session "$2" ".harness/runs" "session-a"; printf "%s" "$MARATHON_RUN_DIR"' _ "$LOCATE" "$TMP" > "$TMP/claude-located"
+assert "claude session resolves only its own run" "$(cat "$TMP/claude-located")" "$RUN_CLAUDE"
+
+RUN_LEGACY="$TMP/concurrent/run-legacy"
+mk_run "$RUN_LEGACY" "legacy path binding"
+RUN_LEGACY="$(cd "$RUN_LEGACY" && pwd -P)"
+printf '%s\n' "$RUN_LEGACY" > "$BINDINGS/legacy-session"
+CODEX_THREAD_ID="legacy-session" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" \
+  MARATHON_RUN_INDEX_DIR="$RUN_INDEX" bash -c '. "$1"; marathon_locate_for_session "$2" ".harness/runs" "legacy-session"; printf "%s" "$MARATHON_RUN_DIR"' _ "$LOCATE" "$TMP" > "$TMP/legacy-located"
+assert "legacy path binding resolves during migration" "$(cat "$TMP/legacy-located")" "$RUN_LEGACY"
+RUN_ID_LEGACY="$(awk -F: '/^run_id:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print $2; exit }' "$RUN_LEGACY/RUN.md")"
+assert "legacy RUN.md receives a run_id once" "$(cat "$BINDINGS/codex/legacy-session")" "$RUN_ID_LEGACY"
+[ ! -f "$BINDINGS/legacy-session" ] && echo "PASS: legacy path binding is removed after migration" \
+  || { echo "FAIL: legacy path binding survived migration"; FAIL=1; }
+
+RUN_LEGACY_STALE="$TMP/concurrent/run-legacy-stale"
+mk_run "$RUN_LEGACY_STALE" "stale legacy path binding"
+RUN_LEGACY_STALE="$(cd "$RUN_LEGACY_STALE" && pwd -P)"
+touch -d "30 days ago" "$RUN_LEGACY_STALE/RUN.md" 2>/dev/null || touch -t 202601010000 "$RUN_LEGACY_STALE/RUN.md"
+printf '%s\n' "$RUN_LEGACY_STALE" > "$BINDINGS/legacy-stale"
+CODEX_THREAD_ID="legacy-stale" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" \
+  MARATHON_RUN_INDEX_DIR="$RUN_INDEX" bash -c '. "$1"; marathon_locate_for_session "$2" ".harness/runs" "legacy-stale"' _ "$LOCATE" "$TMP" >/dev/null 2>&1
+assert "stale legacy binding is pruned instead of refreshed by migration" "$?" "1"
+if grep -q '^run_id:' "$RUN_LEGACY_STALE/RUN.md"; then
+  echo "FAIL: stale legacy RUN.md was mutated during migration"; FAIL=1
+else
+  echo "PASS: stale legacy RUN.md remains untouched"
+fi
+
+RUN_RACE="$TMP/concurrent/run-race"
+mk_run "$RUN_RACE" "concurrent bind race"
+RACE_BINDINGS="$TMP/session-bindings-race"
+(CODEX_THREAD_ID="race-a" MARATHON_SESSION_BINDINGS_DIR="$RACE_BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" \
+  bash "$LOCATE" bind-here "$RUN_RACE" >/dev/null 2>&1) & PID_A=$!
+(CODEX_THREAD_ID="race-b" MARATHON_SESSION_BINDINGS_DIR="$RACE_BINDINGS" MARATHON_RUN_INDEX_DIR="$RUN_INDEX" \
+  bash "$LOCATE" bind-here "$RUN_RACE" >/dev/null 2>&1) & PID_B=$!
+wait "$PID_A"; RC_A=$?
+wait "$PID_B"; RC_B=$?
+SUCCESS_COUNT=0
+[ "$RC_A" -eq 0 ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+[ "$RC_B" -eq 0 ] && SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+assert "simultaneous claims produce exactly one owner" "$SUCCESS_COUNT" "1"
+OWNER_COUNT="$(find "$RACE_BINDINGS" -type f ! -path '*/.locks/*' 2>/dev/null | wc -l | tr -d ' ')"
+assert "race leaves exactly one binding file" "$OWNER_COUNT" "1"
+RACE_RUN_ID_COUNT="$(grep -c '^run_id:' "$RUN_RACE/RUN.md" 2>/dev/null || true)"
+assert "race assigns exactly one immutable run_id" "$RACE_RUN_ID_COUNT" "1"
+RACE_RUN_ID="$(awk -F: '/^run_id:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print $2; exit }' "$RUN_RACE/RUN.md")"
+RACE_BOUND_ID="$(find "$RACE_BINDINGS" -type f ! -path '*/.locks/*' -exec sed -n '1p' {} \; 2>/dev/null)"
+assert "race winner binds the run_id persisted in RUN.md" "$RACE_BOUND_ID" "$RACE_RUN_ID"
+
+echo
+echo "=== Scenario 10: preflight proves the complete four-hook runtime bundle ==="
+PREFLIGHT_LOCATE="$HERE/../../../templates/.harness/hooks/marathon-locate.sh"
+bash "$LOCATE" preflight > /tmp/marathon-locate-out-$$ 2>&1
+assert "authoring locator resolves the rendered runtime bundle" "$?" "0"
+bash "$PREFLIGHT_LOCATE" preflight > /tmp/marathon-locate-out-$$ 2>&1
+assert "complete hook bundle passes preflight" "$?" "0"
+INCOMPLETE="$TMP/incomplete-hooks"
+mkdir -p "$INCOMPLETE"
+cp "$PREFLIGHT_LOCATE" "$INCOMPLETE/marathon-locate.sh"
+bash "$INCOMPLETE/marathon-locate.sh" preflight > /tmp/marathon-locate-out-$$ 2>&1
+RC=$?
+assert "incomplete hook bundle fails preflight" "$RC" "2"
+MISSING_COUNT="$(grep -c 'required hook missing' /tmp/marathon-locate-out-$$ 2>/dev/null || true)"
+assert "preflight names all three missing consumers" "$MISSING_COUNT" "3"
 
 rm -f /tmp/marathon-locate-out-$$
 

@@ -50,6 +50,7 @@ HOOKS_SRC="${MARATHON_HOOKS_SRC:-$REPO/templates/.harness/hooks}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+export MARATHON_RUN_INDEX_DIR="$TMP/run-index"
 
 FAIL=0
 assert_exit() { # $1 desc, $2 got, $3 want
@@ -72,8 +73,12 @@ chmod +x "$PROJ/.harness/hooks/"*.sh
 
 RUNMD="$WORK/.harness/runs/my-run/RUN.md"
 write_run() { # $1 = next-action line
+  local run_id
+  run_id="$(awk -F: '/^run_id:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print $2; exit }' "$RUNMD" 2>/dev/null)"
+  [ -n "$run_id" ] || run_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
   cat > "$RUNMD" <<EOF
 # RUN: my-run
+run_id: $run_id
 goal: fixture
 
 ## Checklist (source of truth)
@@ -87,36 +92,62 @@ $1
 EOF
 }
 write_run "keep going"
+RUN_ID_MAIN="$(awk -F: '/^run_id:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print $2; exit }' "$RUNMD")"
 
 REG="$TMP/marathon-active"
+BINDINGS="$TMP/session-bindings"
 GATE="$PROJ/.harness/hooks/marathon-stop-gate.sh"
 OUT="$TMP/out"
 
+bind_session() { # $1 session id, $2 run dir
+  CODEX_THREAD_ID="$1" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" \
+    bash "$PROJ/.harness/hooks/marathon-locate.sh" bind-here "$2" >/dev/null
+}
+
 run_gate() {
-  MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" \
-    bash "$GATE" <<< '{"stop_hook_active":false}' >"$OUT" 2>&1
+  MARATHON_REGISTRY="$REG" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" CLAUDE_PROJECT_DIR="$PROJ" \
+    bash "$GATE" <<< '{"session_id":"session-a","stop_hook_active":false}' >"$OUT" 2>&1
 }
 
 run_gate_session() { # $1 session id
-  MARATHON_REGISTRY="$REG" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
+  MARATHON_REGISTRY="$REG" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
     CLAUDE_PROJECT_DIR="$PROJ" bash "$GATE" \
     <<< "{\"session_id\":\"$1\",\"stop_hook_active\":false}" >"$OUT" 2>&1
 }
 
+echo "=== Scenario 0: missing shared locator fails CLOSED in every consumer ==="
+mv "$PROJ/.harness/hooks/marathon-locate.sh" "$PROJ/.harness/hooks/marathon-locate.sh.saved"
+run_gate; rc=$?
+assert_exit "stop gate rejects a missing locator" "$rc" 2
+assert_grep "stop gate names the missing dependency" "required dependency missing" "$OUT"
+MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" \
+  bash "$PROJ/.harness/hooks/marathon-reinject.sh" >"$OUT" 2>&1
+assert_exit "reinject rejects a missing locator" "$?" 1
+assert_grep "reinject names the missing dependency" "required dependency missing" "$OUT"
+MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" \
+  bash "$PROJ/.harness/hooks/marathon-precompact.sh" >"$OUT" 2>&1
+assert_exit "precompact rejects a missing locator" "$?" 1
+assert_grep "precompact names the missing dependency" "required dependency missing" "$OUT"
+mv "$PROJ/.harness/hooks/marathon-locate.sh.saved" "$PROJ/.harness/hooks/marathon-locate.sh"
+
+echo
+
 echo "=== Scenario 1: no marathon anywhere → gate stays inert (the common case) ==="
 : > "$REG"
+rm -rf "$BINDINGS"
 run_gate; assert_exit "no marathon must not block" "$?" 0
 
 echo
 echo "=== Scenario 2: marathon in ANOTHER root, registered → gate BLOCKS (the bug) ==="
 echo "$WORK/.harness/runs/my-run" > "$REG"
+bind_session session-a "$WORK/.harness/runs/my-run"
 run_gate; rc=$?
 assert_exit "cross-repo marathon with open items must block" "$rc" 2
 assert_grep "message names the run directory" "$WORK/.harness/runs/my-run" "$OUT"
 assert_grep "message carries the recorded next action" "keep going" "$OUT"
 # The teardown hint must name a command that EXISTS. Built from "$0" it pointed
 # at the sourcing hook, which has no unregister verb.
-assert_grep "teardown hint points at marathon-locate.sh" "marathon-locate.sh unregister" "$OUT"
+assert_grep "teardown hint removes this chat binding" "marathon-locate.sh unbind-here" "$OUT"
 [ -f "$WORK/.harness/runs/my-run/.stop-strikes" ] \
   && echo "PASS: strike file written in the run directory (not under CLAUDE_PROJECT_DIR)" \
   || { echo "FAIL: no .stop-strikes in the run directory"; FAIL=1; }
@@ -128,8 +159,9 @@ echo "=== Scenario 3: local ACTIVE holding an ABSOLUTE PATH → cross-repo point
 : > "$REG"
 mkdir -p "$PROJ/.harness/runs"
 echo "$WORK/.harness/runs/my-run" > "$PROJ/.harness/runs/ACTIVE"
+rm -rf "$BINDINGS"; bind_session session-a "$WORK/.harness/runs/my-run"
 run_gate; assert_exit "absolute-path pointer must block" "$?" 2
-assert_grep "pointer is reported as a local source" "located via: local" "$OUT"
+assert_grep "pointer is reported as a session binding" "located via: binding" "$OUT"
 rm -rf "$PROJ/.harness/runs"
 
 echo
@@ -137,7 +169,11 @@ echo "=== Scenario 4: local ACTIVE holding a SLUG → historical behaviour intac
 : > "$REG"
 mkdir -p "$PROJ/.harness/runs/local-run"
 cp "$RUNMD" "$PROJ/.harness/runs/local-run/RUN.md"
+LOCAL_RUN_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+sed "s/^run_id:.*/run_id: $LOCAL_RUN_ID/" "$PROJ/.harness/runs/local-run/RUN.md" > "$PROJ/.harness/runs/local-run/RUN.md.tmp" && \
+  mv "$PROJ/.harness/runs/local-run/RUN.md.tmp" "$PROJ/.harness/runs/local-run/RUN.md"
 echo "local-run" > "$PROJ/.harness/runs/ACTIVE"
+rm -rf "$BINDINGS"; bind_session session-a "$PROJ/.harness/runs/local-run"
 run_gate; assert_exit "slug in ACTIVE must still block" "$?" 2
 assert_grep "slug run is the one reported" "local-run" "$OUT"
 rm -rf "$PROJ/.harness/runs"
@@ -145,6 +181,7 @@ rm -rf "$PROJ/.harness/runs"
 echo
 echo "=== Scenario 5: WAITING/AGUARDANDO → legitimate stop, still honoured cross-repo ==="
 echo "$WORK/.harness/runs/my-run" > "$REG"
+rm -rf "$BINDINGS"; bind_session session-a "$WORK/.harness/runs/my-run"
 write_run "WAITING: which option does the owner want?"
 run_gate; assert_exit "WAITING must release the stop" "$?" 0
 write_run "AGUARDANDO: qual opção?"
@@ -168,8 +205,9 @@ echo "=== Scenario 6b: NESTED and in-progress items count as open ==="
 # remaining work lived under a parent item reported zero open items and the
 # gate released. Measured on the real graph-loop-fechar RUN.md: 1 counted,
 # 5 actually open.
-cat > "$RUNMD" <<'EOF'
+cat > "$RUNMD" <<EOF
 # RUN: my-run
+run_id: $RUN_ID_MAIN
 goal: fixture
 
 ## Checklist (source of truth)
@@ -182,8 +220,9 @@ keep going
 ## Journal
 EOF
 run_gate; assert_exit "a nested open item must block" "$?" 2
-cat > "$RUNMD" <<'EOF'
+cat > "$RUNMD" <<EOF
 # RUN: my-run
+run_id: $RUN_ID_MAIN
 goal: fixture
 
 ## Checklist (source of truth)
@@ -195,8 +234,9 @@ keep going
 ## Journal
 EOF
 run_gate; assert_exit "an in-progress [~] item must block" "$?" 2
-cat > "$RUNMD" <<'EOF'
+cat > "$RUNMD" <<EOF
 # RUN: my-run
+run_id: $RUN_ID_MAIN
 goal: fixture
 
 ## Checklist (source of truth)
@@ -220,6 +260,19 @@ run_gate; assert_exit "block 3" "$?" 2
 run_gate; rc=$?
 assert_exit "block 4 releases (3 strikes without progress)" "$rc" 0
 assert_grep "release message explains the marathon is still active" "still ACTIVE" "$OUT"
+
+echo
+echo "=== Scenario 7b: stop_policy hard never releases while executable work remains ==="
+write_run "keep going"
+awk '{ print; if ($0 == "goal: fixture") print "stop_policy: hard" }' "$RUNMD" > "$RUNMD.tmp" && mv "$RUNMD.tmp" "$RUNMD"
+rm -f "$WORK/.harness/runs/my-run/.stop-strikes"
+run_gate; assert_exit "hard block 1" "$?" 2
+run_gate; assert_exit "hard block 2" "$?" 2
+run_gate; assert_exit "hard block 3" "$?" 2
+run_gate; assert_exit "hard block 4 remains blocked" "$?" 2
+run_gate; assert_exit "hard block 5 remains blocked" "$?" 2
+assert_nogrep "hard policy never emits the soft release" "releasing the stop" "$OUT"
+write_run "keep going"
 
 echo
 echo "=== Scenario 8: progress on RUN.md RESETS the strikes (the anti-lockup must not eat a live run) ==="
@@ -248,30 +301,35 @@ run_gate; assert_exit "block 3 despite the touch" "$?" 2
 run_gate; assert_exit "release: touching is not progress" "$?" 0
 
 echo
-echo "=== Scenario 9: registry prunes entries whose RUN.md died or went stale ==="
+echo "=== Scenario 9: a bound session never scans unrelated registry rows; stale binding is pruned ==="
 rm -f "$WORK/.harness/runs/my-run/.stop-strikes"
 printf '%s\n%s\n' "$TMP/ghost-run" "$WORK/.harness/runs/my-run" > "$REG"
 run_gate; assert_exit "a ghost line must not stop the live entry from arming" "$?" 2
-assert_nogrep "ghost line pruned from the registry" "ghost-run" "$REG"
+assert_grep "unrelated ghost row is not inspected by a bound hook" "ghost-run" "$REG"
 assert_grep "live line kept in the registry" "$WORK/.harness/runs/my-run" "$REG"
 
 touch -d "30 days ago" "$RUNMD"
 echo "$WORK/.harness/runs/my-run" > "$REG"
 run_gate; assert_exit "a run untouched for 30 days must not block" "$?" 0
-assert_nogrep "stale entry pruned from the registry" "my-run" "$REG"
+[ ! -f "$BINDINGS/codex/session-a" ] && echo "PASS: stale session binding pruned" \
+  || { echo "FAIL: stale session binding survived"; FAIL=1; }
 write_run "keep going"   # revive it for the remaining scenarios
+bind_session session-a "$WORK/.harness/runs/my-run"
 
 echo
 echo "=== Scenario 10: reinject and precompact see the cross-repo run too ==="
 echo "$WORK/.harness/runs/my-run" > "$REG"
 MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" \
-  bash "$PROJ/.harness/hooks/marathon-reinject.sh" >"$OUT" 2>&1
+  MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" bash "$PROJ/.harness/hooks/marathon-reinject.sh" \
+  <<< '{"session_id":"session-a"}' >"$OUT" 2>&1
 assert_grep "reinject emits the run state block" "<marathon-run-state" "$OUT"
+assert_grep "reinject exposes the immutable run id" "run_id=\"$RUN_ID_MAIN\"" "$OUT"
 assert_grep "reinject carries the checklist" "open item" "$OUT"
 
 BEFORE=$(wc -l < "$RUNMD")
 MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" \
-  bash "$PROJ/.harness/hooks/marathon-precompact.sh" >/dev/null 2>&1
+  MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" bash "$PROJ/.harness/hooks/marathon-precompact.sh" \
+  <<< '{"session_id":"session-a"}' >/dev/null 2>&1
 AFTER=$(wc -l < "$RUNMD")
 [ "$AFTER" -gt "$BEFORE" ] && echo "PASS: precompact stamped the cross-repo journal" \
   || { echo "FAIL: precompact did not touch the RUN.md ($BEFORE -> $AFTER)"; FAIL=1; }
@@ -286,26 +344,39 @@ CODEX_THREAD_ID="session-a" MARATHON_REGISTRY="$REG" \
   MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" CLAUDE_PROJECT_DIR="$PROJ" \
   bash "$PROJ/.harness/hooks/marathon-locate.sh" ignore-here "$WORK/.harness/runs/my-run" >/dev/null
 run_gate_session "session-a"; assert_exit "ignored session no longer blocks" "$?" 0
-run_gate_session "session-b"; assert_exit "different session still blocks" "$?" 2
+run_gate_session "session-b"; assert_exit "unbound session stays inert" "$?" 0
 
-MARATHON_REGISTRY="$REG" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
+# A second live run can coexist, but it must have a different owner session.
+mkdir -p "$WORK/.harness/runs/other-run"
+sed 's/# RUN: my-run/# RUN: other-run/' "$RUNMD" > "$WORK/.harness/runs/other-run/RUN.md"
+OTHER_RUN_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+sed "s/^run_id:.*/run_id: $OTHER_RUN_ID/" "$WORK/.harness/runs/other-run/RUN.md" > "$WORK/.harness/runs/other-run/RUN.md.tmp" && \
+  mv "$WORK/.harness/runs/other-run/RUN.md.tmp" "$WORK/.harness/runs/other-run/RUN.md"
+printf '%s\n%s\n' "$WORK/.harness/runs/my-run" "$WORK/.harness/runs/other-run" > "$REG"
+bind_session session-b "$WORK/.harness/runs/other-run"
+run_gate_session "session-b"; assert_exit "session-b blocks on its own concurrent run" "$?" 2
+assert_grep "session-b gate names only its own run" "other-run" "$OUT"
+assert_nogrep "session-b gate never inherits session-a run" "my-run" "$OUT"
+
+MARATHON_REGISTRY="$REG" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
   CLAUDE_PROJECT_DIR="$PROJ" bash "$PROJ/.harness/hooks/marathon-reinject.sh" \
   <<< '{"session_id":"session-a"}' >"$OUT" 2>&1
 [ ! -s "$OUT" ] && echo "PASS: ignored session receives no reinjection" \
   || { echo "FAIL: ignored session received: $(cat "$OUT")"; FAIL=1; }
 
 BEFORE=$(wc -l < "$RUNMD")
-MARATHON_REGISTRY="$REG" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
+MARATHON_REGISTRY="$REG" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
   CLAUDE_PROJECT_DIR="$PROJ" bash "$PROJ/.harness/hooks/marathon-precompact.sh" \
   <<< '{"session_id":"session-a"}' >/dev/null 2>&1
 AFTER=$(wc -l < "$RUNMD")
 [ "$AFTER" -eq "$BEFORE" ] && echo "PASS: ignored session does not stamp the run journal" \
   || { echo "FAIL: ignored precompact changed RUN.md ($BEFORE -> $AFTER)"; FAIL=1; }
 
-MARATHON_REGISTRY="$REG" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
+MARATHON_REGISTRY="$REG" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" \
   CLAUDE_PROJECT_DIR="$PROJ" bash "$PROJ/.harness/hooks/marathon-reinject.sh" \
   <<< '{"session_id":"session-b"}' >"$OUT" 2>&1
-assert_grep "different session still receives reinjection" "<marathon-run-state" "$OUT"
+assert_grep "session-b receives its own reinjection" "slug=\"other-run\"" "$OUT"
+assert_nogrep "session-b reinjection excludes session-a checklist identity" "# RUN: my-run" "$OUT"
 
 CODEX_THREAD_ID="session-a" MARATHON_REGISTRY="$REG" \
   MARATHON_SESSION_BLOCKLIST_DIR="$TMP/session-blocklist" CLAUDE_PROJECT_DIR="$PROJ" \

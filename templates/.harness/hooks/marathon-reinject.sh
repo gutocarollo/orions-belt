@@ -23,6 +23,16 @@ set -uo pipefail
 IN=$(cat)
 ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 
+LOCATOR="$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
+if [ ! -r "$LOCATOR" ]; then
+  echo "marathon-reinject: required dependency missing: $LOCATOR" >&2
+  exit 1
+fi
+if ! . "$LOCATOR" || ! declare -F marathon_locate >/dev/null 2>&1; then
+  echo "marathon-reinject: required dependency invalid: $LOCATOR" >&2
+  exit 1
+fi
+
 CONF_PY="$ROOT/.harness/lib/_tooling_conf.py"
 RUNS_DIR=".harness/runs"
 if command -v python3 >/dev/null 2>&1 && [ -f "$CONF_PY" ]; then
@@ -30,12 +40,18 @@ if command -v python3 >/dev/null 2>&1 && [ -f "$CONF_PY" ]; then
   [ -n "$v" ] && RUNS_DIR="$v"
 fi
 
-. "$(dirname "${BASH_SOURCE[0]}")/marathon-locate.sh"
-marathon_locate "$ROOT" "$RUNS_DIR" || exit 0
 HOOK_SESSION_ID="$(python3 -c 'import json,sys
 try: print(str(json.load(sys.stdin).get("session_id", "")))
 except Exception: print("")' <<<"$IN" 2>/dev/null || true)"
 SESSION_ID="$(marathon_session_id "$HOOK_SESSION_ID")" || SESSION_ID=""
+[ -n "$SESSION_ID" ] || {
+  echo "marathon-reinject: missing valid session_id; refusing to select a global marathon" >&2
+  exit 1
+}
+marathon_locate_for_session "$ROOT" "$RUNS_DIR" "$SESSION_ID"
+LOCATE_RC=$?
+[ "$LOCATE_RC" -eq 1 ] && exit 0
+[ "$LOCATE_RC" -eq 0 ] || exit 1
 [ -n "$SESSION_ID" ] && marathon_session_is_ignored "$SESSION_ID" "$MARATHON_RUN_DIR" && exit 0
 HOOKS_DIR="$(dirname "${BASH_SOURCE[0]}")"
 marathon_pause_state
@@ -48,7 +64,7 @@ marathon_pause_state
 # that resuming is the helpful thing to do.
 if [ "$MARATHON_PAUSE_STATUS" = "paused" ]; then
   cat <<EOF
-<marathon-run-state slug="$MARATHON_SLUG" dir="$MARATHON_RUN_DIR" status="paused">
+<marathon-run-state run_id="$MARATHON_RUN_ID" slug="$MARATHON_SLUG" dir="$MARATHON_RUN_DIR" status="paused">
 Marathon PAUSED until $MARATHON_PAUSE_UNTIL (paused at ${MARATHON_PAUSE_AT:-unknown}).
 Reason: ${MARATHON_PAUSE_REASON:-(not given)}
 DO NOT resume it, DO NOT execute its "Next action", DO NOT re-plan it and do not
@@ -68,7 +84,7 @@ fi
 # a to-do list.
 if [ "$MARATHON_PAUSE_STATUS" = "expired" ]; then
   cat <<EOF
-<marathon-run-state slug="$MARATHON_SLUG" dir="$MARATHON_RUN_DIR" status="pause-expired">
+<marathon-run-state run_id="$MARATHON_RUN_ID" slug="$MARATHON_SLUG" dir="$MARATHON_RUN_DIR" status="pause-expired">
 Marathon PAUSE EXPIRED — the window ran to $MARATHON_PAUSE_UNTIL and this run is
 still ACTIVE with open items. Reason it was paused: ${MARATHON_PAUSE_REASON:-(not given)}
 
@@ -85,7 +101,7 @@ EOF
   exit 0
 fi
 
-echo "<marathon-run-state slug=\"$MARATHON_SLUG\" dir=\"$MARATHON_RUN_DIR\">"
+echo "<marathon-run-state run_id=\"$MARATHON_RUN_ID\" slug=\"$MARATHON_SLUG\" dir=\"$MARATHON_RUN_DIR\">"
 echo "Marathon ACTIVE. Durable state below (source of truth — marathon skill §3: execute the \"Próxima ação\", do not re-plan):"
 head -150 "$MARATHON_RUN_MD"
 echo "</marathon-run-state>"

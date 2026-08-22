@@ -47,27 +47,33 @@ mensagens entre sessões).
 ```bash
 SLUG=<kebab-curto-da-missao>   # ex: migracao-tokens
 mkdir -p {{ harness_runs_dir }}/$SLUG
-echo "$SLUG" > {{ harness_runs_dir }}/ACTIVE
-# ...escreva o RUN.md (esqueleto abaixo) e SÓ ENTÃO registre:
+# ...escreva o RUN.md (esqueleto abaixo) e SÓ ENTÃO registre e vincule:
 bash .harness/hooks/marathon-locate.sh register "$(pwd)/{{ harness_runs_dir }}/$SLUG"
+bash .harness/hooks/marathon-locate.sh bind-here "$(pwd)/{{ harness_runs_dir }}/$SLUG"
+bash .harness/hooks/marathon-locate.sh preflight
 ```
 
-**O `register` não é opcional.** O `ACTIVE` local só é enxergado pelos hooks
-quando o run vive dentro do diretório-projeto DA SESSÃO
-(`$CLAUDE_PROJECT_DIR`, ou o equivalente `git rev-parse --show-toplevel` no
-Codex). Trabalhando em outro working directory — sessão aberta num repo,
-trabalho de fato acontecendo em outro — os três hooks viram no-op silencioso:
-o gate não bloqueia, o reinject não reinjeta e a maratona "sempre para". O
-registro (`$HOME/.harness/marathon-active`) é o que torna o run localizável de
-qualquer diretório-projeto. É idempotente e recusa diretório sem RUN.md,
-então rode-o DEPOIS de escrever o RUN.md.
+**`register` e `bind-here` não são opcionais.** O registro
+(`$HOME/.harness/marathon-active`) declara que a run existe; o vínculo positivo
+(`$HOME/.harness/marathon-session-bindings/<session_id>`) declara qual conversa
+é sua dona. `register` atribui um UUIDv4 uma única vez, grava-o como `run_id` no
+RUN.md e indexa `run_id → caminho canônico`; o binding guarda o ID imutável, não
+o caminho móvel. Os vínculos têm namespace de runtime (`codex`, `claude`,
+`antigravity`). Os hooks nunca escolhem por `ACTIVE`, diretório, ordem do registro
+ou frescor: sessão sem vínculo fica inerte, e uma run já vinculada não pode ser
+tomada por outra sessão. Isso permite várias maratonas simultâneas sem mistura.
+Ambos recusam diretório sem RUN.md, então rode-os DEPOIS de escrever o RUN.md.
+`ACTIVE` permanece apenas como compatibilidade legada para comandos de
+inventário; não é a autoridade de continuidade de uma conversa.
 
 Criar `{{ harness_runs_dir }}/$SLUG/RUN.md` com EXATAMENTE este esqueleto (hard cap
 ~150 linhas — é reinjetado no contexto após compactação):
 
 ```markdown
 # RUN: <slug>
+run_id: <UUIDv4; gerado uma vez por register em RUN.md legado, nunca editado>
 goal: <1 frase — o estado final verificável; DEVE bater com a âncora do pedido original (.harness/requests/CURRENT-TASK.md / ANCHOR do session-*.md), NÃO uma paráfrase dela. No resume/compact é esta linha que sobrevive, então um goal derivado aqui substitui o objetivo em silêncio — cite o alvo da âncora verbatim.>
+stop_policy: <hard quando o dono disse explicitamente termine tudo/não pare; senão soft>
 started: <YYYY-MM-DD HH:MM>
 
 ## Checklist (fonte da verdade — atualizar após CADA item)
@@ -107,8 +113,8 @@ Exceção: se o bloco injetado vier com `status="paused"` ou
 ## 4. Fim de maratona
 
 1. Rodar `prova-de-conclusao` contra o Checklist.
-2. `bash .harness/hooks/marathon-locate.sh unregister "$(pwd)/{{ harness_runs_dir }}/$SLUG"`
-3. `rm {{ harness_runs_dir }}/ACTIVE && mkdir -p {{ harness_runs_dir }}/done && mv {{ harness_runs_dir }}/$SLUG {{ harness_runs_dir }}/done/`
+2. `bash .harness/hooks/marathon-locate.sh unregister "$(pwd)/{{ harness_runs_dir }}/$SLUG"` (remove registro e qualquer vínculo)
+3. `mkdir -p {{ harness_runs_dir }}/done && mv {{ harness_runs_dir }}/$SLUG {{ harness_runs_dir }}/done/`
 4. O que virou conhecimento permanente (gotcha, padrão canônico) → memória
    ou doc, não fica só no RUN.md arquivado.
 
@@ -167,8 +173,8 @@ bash .harness/hooks/marathon-locate.sh session-status   # confirma ignored/allow
 bash .harness/hooks/marathon-locate.sh allow-here       # desfaz a exceção
 ```
 
-A exceção é o par `session_id + caminho canônico da run`, persistido fora do
-repositório em `$HOME/.harness/marathon-session-blocklist/`. Ela silencia
+A exceção é o par `runtime:session_id + caminho canônico da run`, persistido fora do
+repositório em `$HOME/.harness/marathon-session-blocklist/<runtime>/`. Ela silencia
 reinject, precompact e stop-gate somente nessa sessão. Outra sessão continua
 recebendo a run normalmente. `pause` continua sendo global para a run;
 `ignore-here` é local à conversa.
@@ -177,8 +183,9 @@ recebendo a run normalmente. `pause` continua sendo global para a run;
 
 - `marathon-stop-gate` (Stop): com a maratona localizada + itens abertos,
   bloqueia a parada e devolve a Próxima ação
-  ({{ harness_marathon_max_blocks_without_progress }} strikes sem progresso →
-  libera com aviso, não prende para sempre). Item aberto conta `[ ]` e `[~]`,
+  (`stop_policy: soft`: {{ harness_marathon_max_blocks_without_progress }} strikes sem progresso →
+  libera com aviso; `stop_policy: hard`: nunca libera enquanto houver item
+  executável aberto). Item aberto conta `[ ]` e `[~]`,
   em QUALQUER indentação. Encerrar na marra: o próprio bloqueio imprime o
   comando. Inerte enquanto a run está pausada (§5).
 - `marathon-reinject` (SessionStart, qualquer origem): injeta o RUN.md — ou o
@@ -191,3 +198,5 @@ recebendo a run normalmente. `pause` continua sendo global para a run;
   maratona — `ACTIVE` local (slug OU caminho absoluto), senão o registro do
   usuário em `$HOME/.harness/marathon-active`, podando entrada morta. Sem ele
   os hooks só enxergam o próprio repo.
+  O comando `preflight` prova que os quatro arquivos do runtime existem e
+  parseiam; iniciar ou retomar sem essa prova é proibido.

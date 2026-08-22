@@ -36,6 +36,7 @@ HOOKS_SRC="${MARATHON_HOOKS_SRC:-$REPO/templates/.harness/hooks}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+export MARATHON_RUN_INDEX_DIR="$TMP/run-index"
 
 FAIL=0
 assert_exit() { # $1 desc, $2 got, $3 want
@@ -66,11 +67,16 @@ GATE="$HOOKS/marathon-stop-gate.sh"
 RUNDIR="$WORK/.harness/runs/my-run"
 RUNMD="$RUNDIR/RUN.md"
 REG="$TMP/marathon-active"
+BINDINGS="$TMP/session-bindings"
 OUT="$TMP/out"
 
 write_run() { # $1 = checklist body
+  local run_id
+  run_id="$(awk -F: '/^run_id:[[:space:]]*/ { sub(/^[[:space:]]+/, "", $2); print $2; exit }' "$RUNMD" 2>/dev/null)"
+  [ -n "$run_id" ] || run_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
   cat > "$RUNMD" <<EOF
 # RUN: my-run
+run_id: $run_id
 goal: fixture
 
 ## Checklist (source of truth)
@@ -85,16 +91,21 @@ EOF
 }
 write_run "- [ ] UNIQUEOPENITEM"
 echo "$RUNDIR" > "$REG"
+CODEX_THREAD_ID="session-pause" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" \
+  bash "$LOCATE" bind-here "$RUNDIR" >/dev/null
 
 run_gate() {
-  MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" \
-    bash "$GATE" <<< '{"stop_hook_active":false}' >"$OUT" 2>&1
+  MARATHON_REGISTRY="$REG" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" CLAUDE_PROJECT_DIR="$PROJ" \
+    bash "$GATE" <<< '{"session_id":"session-pause","stop_hook_active":false}' >"$OUT" 2>&1
 }
 run_reinject() {
-  MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" \
-    bash "$HOOKS/marathon-reinject.sh" >"$OUT" 2>&1
+  MARATHON_REGISTRY="$REG" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" CLAUDE_PROJECT_DIR="$PROJ" \
+    bash "$HOOKS/marathon-reinject.sh" <<< '{"session_id":"session-pause"}' >"$OUT" 2>&1
 }
-cli() { MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" bash "$LOCATE" "$@"; }
+cli() {
+  CODEX_THREAD_ID="session-pause" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" \
+    MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" bash "$LOCATE" "$@"
+}
 
 echo "=== Scenario 1: baseline (not paused) — gate blocks, reinject pushes the checklist ==="
 rm -f "$RUNDIR/PAUSED"
@@ -215,8 +226,8 @@ write_run "- [ ] UNIQUEOPENITEM"
 echo
 echo "=== Scenario 11: precompact stamps the pause state in the journal ==="
 cli pause 2099-01-01 "parada longa" >/dev/null 2>&1
-MARATHON_REGISTRY="$REG" CLAUDE_PROJECT_DIR="$PROJ" \
-  bash "$HOOKS/marathon-precompact.sh" >/dev/null 2>&1
+MARATHON_REGISTRY="$REG" MARATHON_SESSION_BINDINGS_DIR="$BINDINGS" CLAUDE_PROJECT_DIR="$PROJ" \
+  bash "$HOOKS/marathon-precompact.sh" <<< '{"session_id":"session-pause"}' >/dev/null 2>&1
 assert_grep "journal says the compaction happened while paused" "run PAUSED until 2099-01-01T00:00" "$RUNMD"
 rm -f "$RUNDIR/PAUSED"
 
